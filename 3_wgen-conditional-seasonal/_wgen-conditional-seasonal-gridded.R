@@ -234,24 +234,28 @@ for(m in models) {
 
 rm(first_model);
 
-# length(models_coefficients)
-coefocc <- t(models_coefficients$coefocc)
 
 # estimate model coefficients on grid using ordinary kriging (OK)
 # occurrence
-coefocc.sim <- matrix(NA,nrow=nrow(coefocc), ncol=nrow(predloc))
-for(kk in 1:nrow(coefocc.sim)){
-    coefocc.sim[kk,] = suppressWarnings(predict(Krig(lon.lat,coefocc[kk,]),predloc))
+coefocc.sim <- matrix(NA, nrow = nrow(predloc),
+                     ncol = ncol(models_coefficients$coefocc),
+                     dimnames = list(NULL, colnames(models_coefficients$coefocc)))
+for(covariat in 1:ncol(coefocc.sim)){
+    coefocc.sim[, covariat] = suppressWarnings(predict(Krig(lon.lat, models_coefficients$coefocc[, covariat]), predloc))
 }
 # minimum temperature
-coefmin.sim <- matrix(NA,nrow=nrow(coefmin),ncol=nrow(predloc))
-for(kk in 1:nrow(coefmin.sim)){
-    coefmin.sim[kk,] = suppressWarnings(predict(Krig(lon.lat,coefmin[kk,]),predloc))
+coefmin.sim <- matrix(NA, nrow = nrow(predloc),
+                      ncol = ncol(models_coefficients$coefmin),
+                      dimnames = list(NULL, colnames(models_coefficients$coefmin)))
+for(covariat in 1:ncol(coefmin.sim)){
+    coefmin.sim[, covariat] = suppressWarnings(predict(Krig(lon.lat, models_coefficients$coefmin[, covariat]), predloc))
 }
 # maximum temperature
-coefmax.sim <- matrix(NA,nrow=nrow(coefmax),ncol=nrow(predloc))
-for(kk in 1:nrow(coefmax.sim)){
-    coefmax.sim[kk,] = suppressWarnings(predict(Krig(lon.lat,coefmax[kk,]),predloc))
+coefmax.sim <- matrix(NA, nrow = nrow(predloc),
+                      ncol = ncol(models_coefficients$coefmax),
+                      dimnames = list(NULL, colnames(models_coefficients$coefmax)))
+for(covariat in 1:ncol(coefmax.sim)){
+    coefmax.sim[, covariat] = suppressWarnings(predict(Krig(lon.lat, models_coefficients$coefmax[, covariat]), predloc))
 }
 
 # rm(models); invisible(gc());
@@ -266,8 +270,6 @@ partially_apply_LS <- function(variogram, base_p=c()) {
     }
     return(LS)
 }
-
-m <- 1
 
 month_params <- foreach(m=1:12) %dopar% {
     month_residuals <- models_residuals %>% filter(month(date) == m) %>% arrange(station, date)
@@ -330,53 +332,57 @@ month_params <- foreach(m=1:12) %dopar% {
     ))
 }
 
-## estimate kriging parameters
-PRCPvario <- TMAXvario <- TMINvario <- list()
-params <- params.max <- params.min <- matrix(NA,nrow=12,ncol=3)
 
 ##########################################
 ##
 ## Simulations
 ##
 ##########################################
+start_date <- '2015-10-01'
+end_date <- '2015-12-31'
+# number of realizations 
+NT=2#00
+
+## if you wish to neglect temperature trends, and be centered on the mean of 1961-2013 
+## temperatures, set Rt.sim = 0 for all days
+
+#Rt.sim <- rep(1,length(yr.sim)) # if you want simulated temperatures to be high
+#Rt.sim <- rep(-1,length(yr.sim)) # if you want simulated temperatures to be low
+# Rt.sim <- rep(0,length(yr.sim))
+
+simulation_dates <- data.frame(date=seq.Date(from=as.Date(start_date), to=as.Date(end_date), by = 'days')) %>%
+    mutate(year_fraction=2*pi*lubridate::yday(date) / ifelse(leap_year(date), 366, 365),
+           ct=cos(year_fraction),
+           st=sin(year_fraction),
+           Rt=seq(from=-1, to=1, length.out=n()),
+           season=ceiling(month(date)/3),
+           ST1=0, ST2=0, ST3=0, ST4=0,
+           SMX1=0, SMX2=0, SMX3=0, SMX4=0,
+           SMN1=0, SMN2=0, SMN3=0, SMN4=0)
+
+
 # simulation metadata
 x_coords = unique(predloc.GK[,1]) * 1000 # convert back to meters (original form)
 y_coords = unique(predloc.GK[,2]) * 1000 # convert back to meters (original form)
 n.x_coords <- length(x_coords)
 n.y_coords <- length(y_coords)
 # elevation at each grid cell 
-elev <- as.matrix(read.table("../1_setup/data/Salado-Abasin-elevation-meters.dat",header=F))
-## in this tutorial we simulate an arbitrary number of trajectories of OND 2015
-## 
-OND.length <- 31+30+31
-yr.sim <- rep(2015,OND.length)
-mo.sim <- c(rep(10,31),rep(11,30),rep(12,31))
-da.sim <- c(1:31,1:30,1:31)
-ct.sim <- ct[(nt-OND.length+1):nt]
-st.sim <- st[(nt-OND.length+1):nt]
-## if you wish to neglect temperature trends, and be centered on the mean of 1961-2013 
-## temperatures, set Rt.sim = 0 for all days
-Rt.sim <- rep(0,length(yr.sim))
-#Rt.sim <- rep(1,length(yr.sim)) # if you want simulated temperatures to be high
-#Rt.sim <- rep(-1,length(yr.sim)) # if you want simulated temperatures to be low
+# elev <- as.matrix(read.table("../1_setup/data/Salado-Abasin-elevation-meters.dat",header=F))
+
+
 
 # number of days to simulate
-nt.sim <- length(Rt.sim)
+nt.sim <- nrow(simulation_dates)
 
 ## years to simulate (just for convenience, they are in fact arbitrary years)
 uyr.sim <- unique(yr.sim)
 ## number of years to simulate (also arbitrary)
 nyr.sim <- length(uyr.sim)
 
-# simulating 1 Jan 2017 -- 31 Dec 2018
-sim.start.date <- as.Date(paste(yr.sim[1],"-",mo.sim[1],"-",da.sim[1],sep=""))   # Beginning of simulated series
-sim.end.date <- as.Date(paste(yr.sim[length(yr.sim)],"-",mo.sim[length(mo.sim)],"-",da.sim[length(da.sim)],sep=""))     # End of simulated series
-sim.dates <- seq(from = sim.start.date, to = sim.end.date, by = "days")
 # julian days (for .nc file)
-Times <- julian(sim.dates, origin = as.Date("1961-01-01"))
-n.times <- length(Times)    # Number of simulated days
-# number of realizations 
-NT=2#00
+# Times <- julian(sim.dates, origin = as.Date("1961-01-01"))
+# n.times <- length(Times)    # Number of simulated days
+
 RNum <- 1:NT
 n.realizations <- length(RNum)
 # id for missing data
@@ -388,97 +394,187 @@ mv <- -9999
 # see corresponding gif files for IRI forecasts
 
 # sample NT different OND precip totals with IRI probability (B, N, A) = (0.1, 0.2, 0.7)
-st.samp = sample(1:3, NT, prob=c(0.1, 0.2, 0.70), replace=TRUE)
+# st.samp = sample(1:3, NT, prob=c(0.1, 0.2, 0.70), replace=TRUE)
 
-st.levels = list()
-st.levels[[1]] = seatot[,4][seatot[,4] <= quantile(seatot[,4],(1/3))]
-st.levels[[2]] = seatot[,4][seatot[,4] <= quantile(seatot[,4],(2/3)) & seatot[,4] > quantile(seatot[,4],(1/3))]
-st.levels[[3]] = seatot[,4][seatot[,4] >  quantile(seatot[,4],(2/3))]
+# ordered_rainfall <- d_seatot %>% dplyr::group_by(season) %>% 
+#     dplyr::do(data.frame(q = seq(1, length(.$seatot)) %/% ((length(.$seatot)+1)/3),
+#                          seatot = sort(.$seatot),
+#                          seamax = sort(.$seamax),
+#                          seamin = sort(.$seamin)))
+# ordered_rainfall <- data.frame(ordered_rainfall)
 
-# we are only simulating ST4 (OND), so ST1 = ST2 = ST3 = rep(0, season.length) ... where season.length differs between ST1, ST2, and ST3
-ST1.sim = ST2.sim = ST3.sim = ST4.sim = matrix(0,nrow=NT,ncol=length(ct.sim))
-for(k in 1:NT) ST4.sim[k,] = rep(sample(st.levels[[st.samp[k]]],1),length(ct.sim))
 
-# sample NT different OND max and min temp totals with IRI probability (B, N, A) = (0.25, 0.35, 0.40)
-tmp.samp = sample(1:3, NT, prob=c(0.25, 0.35, 0.40), replace=TRUE)
-mx.levels = list()
-mx.levels[[1]] = seamax[,4][seamax[,4] <= quantile(seamax[,4],(1/3))]
-mx.levels[[2]] = seamax[,4][seamax[,4] <= quantile(seamax[,4],(2/3)) & seamax[,4] > quantile(seamax[,4],(1/3))]
-mx.levels[[3]] = seamax[,4][seamax[,4] >  quantile(seamax[,4],(2/3))]
 
-# we are only simulating SMX4 (OND), so SMX1 = SMX2 = SMX3 = rep(0, season.length) ... where season.length differs between SMX1, SMX2, and SMX3
-SMX1.sim = SMX2.sim = SMX3.sim = SMX4.sim = matrix(0,nrow=NT,ncol=length(ct.sim))
-for(k in 1:NT) SMX4.sim[k,] = rep(sample(mx.levels[[tmp.samp[k]]],1),length(ct.sim))
+# get_seasonal_covariat <- function(season_number, season_values) {
+#     return(mean(season_values))
+# }
 
-mn.levels = list()
-mn.levels[[1]] = seamin[,4][seamin[,4] <= quantile(seamin[,4],(1/3))]
-mn.levels[[2]] = seamin[,4][seamin[,4] <= quantile(seamin[,4],(2/3)) & seamin[,4] > quantile(seamin[,4],(1/3))]
-mn.levels[[3]] = seamin[,4][seamin[,4] >  quantile(seamin[,4],(2/3))]
-
-# we are only simulating SMN4 (OND), so SMN1 = SMN2 = SMN3 = rep(0, season.length) ... where season.length differs between SMN1, SMN2, and SMN3
-SMN1.sim = SMN2.sim = SMN3.sim = SMN4.sim = matrix(0,nrow=NT,ncol=length(ct.sim))
-for(k in 1:NT) SMN4.sim[k,] = rep(sample(mn.levels[[tmp.samp[k]]],1),length(ct.sim))
-
-# Gamma shape and scale
-SH <- numeric(np)
-SC <- array(data=NA,dim=c(nt.sim,np,NT))
-
-for(k in 1:np) SH[k] <- gamma.shape(GAMMA[[k]])$alpha
-
-for(i in 1:NT){
-    for(k in 1:np){
-        SC[,k,i] <- exp(apply(GAMMA[[k]]$coef*rbind(1,ct.sim,st.sim,ST1.sim[i,],ST2.sim[i,],ST3.sim[i,],ST4.sim[i,]),FUN=sum,MAR=2,na.rm=T))/SH[k]
-        
-    }
+get_seasonal_covariat <- function(season_number, season_values, break_quantiles=c(0, 0.33, 0.66, 1), levels_probabilities=c(1/3, 1/3, 1/3)) {
+    splitted <- cut(season_values, breaks=quantile(season_values, probs=break_quantiles), include.lowest = T)
+    values_level <- sample(levels(splitted), 1, prob=levels_probabilities)
+    return(sample(season_values[splitted == values_level], 1))
 }
 
-SH.sim <- suppressWarnings(predict(Krig(lon.lat,SH),predloc))
+get_rainfall_seasonal_covariat <- get_seasonal_covariat
+get_temperatures_seasonal_covariat <- function(season_number, season_tx_values, season_tn_values, break_quantiles=c(0, 0.33, 0.66, 1), levels_probabilities=c(0.25, 0.35, 0.40)) {
+    splitted_tx <- cut(season_tx_values, breaks=quantile(season_tx_values, probs=break_quantiles), include.lowest = T)
+    splitted_tn <- cut(season_tn_values, breaks=quantile(season_tn_values, probs=break_quantiles), include.lowest = T)
+    
+    values_level_index <- sample(seq_along(levels(splitted_tx)), 1, prob=levels_probabilities)
+    tx_sampled_level <- levels(splitted_tx)[values_level_index]
+    tn_sampled_level <- levels(splitted_tn)[values_level_index]
+    return(list(tx=sample(season_tx_values[splitted_tx == tx_sampled_level], 1),
+             tn=sample(season_tn_values[splitted_tn == tn_sampled_level], 1))
+    )
+}
+
+
+# Gamma shape and scale
+SH <- c()
+
+for(station in as.character(unique_stations)) SH[station] <- gamma.shape(GAMMA[[station]])$alpha
+SH.sim <- suppressWarnings(predict(Krig(lon.lat, SH), predloc))
 
 
 # define arrays for simulated series
-SIMamt.sim <- SIMocc.sim <- SIMmax.sim <- SIMmin.sim <- array(dim=c(nt.sim,nrow(predloc),NT))
+SIMamt.sim <- SIMocc.sim <- SIMmax.sim <- SIMmin.sim <- array(dim=c(nrow(simulation_dates), nrow(predloc), NT))
+SIMamt.sim2 <- SIMocc.sim2 <- SIMmax.sim2 <- SIMmin.sim2 <- array(dim=c(nrow(simulation_dates), nrow(predloc), NT))
 
+invisible(gc());
+# TODO: remove this.
+d <- 1; i <- 1  # For debugging purposes.
 
 # progress bar
 pb <- txtProgressBar(min = 0, max = NT, style = 3)
 ## occurrences
-for(i in 1:NT){
+gen_climate <- foreach(i=1:NT) %dopar% {
+    simulation_start <- as.Date(start_date) - 1
+    
     # initialize with climatology of Sept 30
-    w2 <- suppressWarnings(grf(nrow(predloc),grid=predloc,cov.model="exponential",
-                               cov.pars=c(params[9,2],params[9,3]),nugget=params[9,1],mean=rep(0,nrow(predloc)),messages=FALSE))
+    w2 <- suppressWarnings(grf(nrow(predloc), grid=predloc, cov.model="exponential",
+                               cov.pars=month_params[[month(simulation_start)]]$prcp[c(2,3)],
+                               nugget=month_params[[month(simulation_start)]]$prcp[1], mean=rep(0, nrow(predloc)), messages=FALSE))
     SIMocc.old <- (w2$data > 0) + 0
     
-    tmin.points = apply(MN[da==30 & mo==9,],2,mean,na.rm=T)
-    tmax.points = apply(MX[da==30 & mo==9,],2,mean,na.rm=T)
-    SIMmin.old <- as.vector(predict(Krig(lon.lat,tmin.points),predloc))
-    SIMmax.old <- as.vector(predict(Krig(lon.lat,tmax.points),predloc))
+    start_climatology <- climate %>% filter(month(date) == month(simulation_start), day(date) == day(simulation_start)) %>%
+                            group_by(station) %>% summarise(tx = mean(tx, na.rm=T), tn = mean(tn, na.rm=T))
     
-    for(d in 1:nt.sim){
-        # X.OCC <- cbind(POCC[,i],ct,st,ST1,ST2,ST3,ST4)
-        mu.occ <- apply(rbind(1,SIMocc.old,ct.sim[d],st.sim[d],ST1.sim[i,d],ST2.sim[i,d],ST3.sim[i,d],ST4.sim[i,d])*coefocc.sim,2,sum,na.rm=T)
-        w.occ  <- suppressWarnings(grf(nrow(predloc.GK),grid=predloc.GK,cov.model="exponential",
-                                       cov.pars=c(params[mo.sim[d],2],params[mo.sim[d],3]),nugget=params[mo.sim[d],1],mean=rep(0,nrow(predloc.GK)),messages=FALSE)$data)
-        SIMocc.sim[d,,i] <- ((mu.occ+w.occ) > 0) + 0
-        # X.MIN <- X.MAX <- cbind(PMN[,i], PMX[,i], ct, st, OCC[,i], Rt, SMN1, SMN2, SMN3, SMN4, SMX1, SMX2, SMX3, SMX4)
-        mu.min <- apply(rbind(1,SIMmin.old,SIMmax.old,ct.sim[d],st.sim[d],SIMocc.sim[d,,i],Rt.sim[d],SMN1.sim[i,d],SMN2.sim[i,d],SMN3.sim[i,d],SMN4.sim[i,d],SMX1.sim[i,d],SMX2.sim[i,d],SMX3.sim[i,d],SMX4.sim[i,d])*coefmin.sim,2,sum,na.rm=T)
-        mu.max <- apply(rbind(1,SIMmin.old,SIMmax.old,ct.sim[d],st.sim[d],SIMocc.sim[d,,i],Rt.sim[d],SMN1.sim[i,d],SMN2.sim[i,d],SMN3.sim[i,d],SMN4.sim[i,d],SMX1.sim[i,d],SMX2.sim[i,d],SMX3.sim[i,d],SMX4.sim[i,d])*coefmax.sim,2,sum,na.rm=T)
+    SIMmin.old <- suppressWarnings(as.vector(predict(Krig(lon.lat,start_climatology$tn),predloc)))
+    SIMmax.old <- suppressWarnings(as.vector(predict(Krig(lon.lat,start_climatology$tx),predloc)))
+    
+    SC <- array(data=NA, dim=c(nrow(simulation_dates), nrow(lon.lat)))
+    colnames(SC) <- unique_stations
+    
+    for(season_number in unique(simulation_dates$season)) {
+        season_indexes <- simulation_dates$season == season_number
+        season_values <- d_seatot[d_seatot$season == season_number, ]
+        temp_covariats <- get_temperatures_seasonal_covariat(season_indexes, season_values$seamax, season_values$seamin)
         
+        simulation_dates[season_indexes, paste0('ST', season_number)] <- get_seasonal_covariat(season_number, season_values$seatot)
+        simulation_dates[season_indexes, paste0('SMX', season_number)] <- temp_covariats$tx
+        simulation_dates[season_indexes, paste0('SMN', season_number)] <- temp_covariats$tn
+    }
+    
+    daily_covariats <- as.matrix(t(simulation_dates[, c(3:5, 7:18)]))
+    
+    daily_covariats <- rbind(1, daily_covariats)
+    rownames(daily_covariats)[1] <- '(Intercept)'
+    
+    for(station in as.character(unique_stations)){
+        # SC[,station] <- apply(cbind(1, simulation_dates[, c('ct', 'st', 'ST1', 'ST2', 'ST3', 'ST4')]), 
+        #                       1,
+        #                       FUN=function(r) exp(sum(r*GAMMA[[station]]$coef, na.rm=T)) / SH[station] )
+        gamma_coef <- GAMMA[[station]]$coef
+        # microbenchmark(f1=exp(apply(daily_covariats[names(gamma_coef), ] * gamma_coef, FUN=sum, MAR=2, na.rm=T)) / SH[station],
+        #                f2=exp(apply(daily_covariats[c('(Intercept)', 'ct', 'st', 'ST1', 'ST2', 'ST3', 'ST4'), ] * gamma_coef, FUN=sum, MAR=2, na.rm=T)) / SH[station],
+        #                f3=exp(apply(daily_covariats[c('(Intercept)', 'ct', 'st', 'ST1', 'ST2', 'ST3', 'ST4'), ] * GAMMA[[station]]$coef, FUN=sum, MAR=2, na.rm=T)) / SH[station],
+        #                f4=exp(apply(daily_covariats[coef_names, ] * GAMMA[[station]]$coef, FUN=sum, MAR=2, na.rm=T)) / SH[station],
+        #                f5=exp(apply(daily_covariats[names(GAMMA[[station]]$coef), ] * GAMMA[[station]]$coef, FUN=sum, MAR=2, na.rm=T)) / SH[station],
+        #                control=list(warmup=50),
+        #                times=1000)
+        SC[, station] <- exp(apply(daily_covariats[names(gamma_coef), ] * gamma_coef, FUN=sum, MAR=2, na.rm=T)) / SH[station]
+    }
+    
+    temps_retries <- 0
+    for(d in 1:ncol(daily_covariats)){
+        p <- month_params[[month(simulation_dates[d, 'date'])]]
+        simulation_matrix <- cbind(SIMocc.old, SIMmin.old, SIMmax.old, matrix(daily_covariats[, d], ncol=nrow(daily_covariats), nrow=length(SIMmax.old), byrow = T))
+        colnames(simulation_matrix) <- c('prcp_occ_prev', 'tn_prev', 'tx_prev', rownames(daily_covariats))
+        # X.OCC <- cbind(POCC[,i],ct,st,ST1,ST2,ST3,ST4)
+        # TODO: <WARN> coefocc.sim no longer has the same dimension, it's transposed.
+        mu.occ <- apply(simulation_matrix[, colnames(coefocc.sim)]*coefocc.sim, 1, sum, na.rm=T)
+        
+        # require(microbenchmark)
+        # microbenchmark(mu_occ=apply(simulation_matrix[, colnames(coefocc.sim)]*coefocc.sim, 1, sum, na.rm=T),
+        #                w_occ=suppressWarnings(grf(nrow(predloc.GK),grid=predloc.GK,cov.model="exponential",
+        #                                           cov.pars=c(p$prcp[2],p$prcp[3]),nugget=p$prcp[1],mean=rep(0,nrow(predloc.GK)),messages=FALSE)$data))
+        
+        
+        seed_number <- 18455
+        seed_number <- runif(1, min=0, max=99999)
+        
+        set.seed(seed_number)
+        w.occ  <- suppressWarnings(grf(nrow(predloc.GK),grid=predloc.GK,cov.model="exponential",
+                                       cov.pars=c(p$prcp[2],p$prcp[3]),nugget=p$prcp[1],mean=rep(0,nrow(predloc.GK)),messages=FALSE)$data)
+        set.seed(seed_number)
+        w.occ2  <- suppressWarnings(grf(nrow(predloc.GK),grid=predloc.GK,cov.model="exponential",
+                                       cov.pars=c(p$prcp2[2],p$prcp2[3]),nugget=p$prcp2[1],mean=rep(0,nrow(predloc.GK)),messages=FALSE)$data)
+        SIMocc.sim[d,,i] <- ((mu.occ+w.occ) > 0) + 0
+        SIMocc.sim2[d,,i] <- ((mu.occ+w.occ2) > 0) + 0
+        
+        SIMocc.sim2 <- ((mu.occ+w.occ2) > 0) + 0
+        # SIMocc.sim1 <- ((mu.occ+w.occ) > 0) + 0
+        
+        simulation_matrix <- cbind(prcp_occ=SIMocc.sim[d,,i], simulation_matrix)
+        
+        # quilt.plot(predloc, SIMocc.sim1, main='W1')
+        # quilt.plot(predloc, SIMocc.sim2, main='W2')
+        
+        # X.MIN <- X.MAX <- cbind(PMN[,i], PMX[,i], ct, st, OCC[,i], Rt, SMN1, SMN2, SMN3, SMN4, SMX1, SMX2, SMX3, SMX4)
+        # mu.min <- apply(rbind(1,SIMmin.old,SIMmax.old,ct.sim[d],st.sim[d],SIMocc.sim[d,,i],Rt.sim[d],SMN1.sim[i,d],SMN2.sim[i,d],SMN3.sim[i,d],SMN4.sim[i,d],SMX1.sim[i,d],SMX2.sim[i,d],SMX3.sim[i,d],SMX4.sim[i,d])*coefmin.sim,2,sum,na.rm=T)
+        mu.min <- apply(simulation_matrix[, colnames(coefmin.sim)]*coefmin.sim, 1, sum, na.rm=T)
+        # mu.max <- apply(rbind(1,SIMmin.old,SIMmax.old,ct.sim[d],st.sim[d],SIMocc.sim[d,,i],Rt.sim[d],SMN1.sim[i,d],SMN2.sim[i,d],SMN3.sim[i,d],SMN4.sim[i,d],SMX1.sim[i,d],SMX2.sim[i,d],SMX3.sim[i,d],SMX4.sim[i,d])*coefmax.sim,2,sum,na.rm=T)
+        mu.max <- apply(simulation_matrix[, colnames(coefmax.sim)]*coefmax.sim, 1, sum, na.rm=T)
+        
+        set.seed(seed_number)
         w.min <- suppressWarnings(grf(nrow(predloc.GK),grid=predloc.GK,cov.model="exponential",
-                                      cov.pars=c(params.min[mo.sim[d],2],params.min[mo.sim[d],3]),nugget=params.min[mo.sim[d],1],mean=rep(0,nrow(predloc.GK)),messages=FALSE)$data)
+                                      cov.pars=c(p$tn[2],p$tn[3]),nugget=p$tn[1],mean=rep(0,nrow(predloc.GK)),messages=FALSE)$data)
+        set.seed(seed_number)
+        w.min2 <- suppressWarnings(grf(nrow(predloc.GK),grid=predloc.GK,cov.model="exponential",
+                                      cov.pars=c(p$tn2[2],p$tn2[3]),nugget=p$tn2[1],mean=rep(0,nrow(predloc.GK)),messages=FALSE)$data)
+        set.seed(seed_number)
         w.max <- suppressWarnings(grf(nrow(predloc.GK),grid=predloc.GK,cov.model="exponential",
-                                      cov.pars=c(params.max[mo.sim[d],2],params.max[mo.sim[d],3]),nugget=params.max[mo.sim[d],1],mean=rep(0,nrow(predloc.GK)),messages=FALSE)$data)
+                                      cov.pars=c(p$tx[2],p$tx[3]),nugget=p$tx[1],mean=rep(0,nrow(predloc.GK)),messages=FALSE)$data)
+        set.seed(seed_number)
+        w.max2 <- suppressWarnings(grf(nrow(predloc.GK),grid=predloc.GK,cov.model="exponential",
+                                      cov.pars=c(p$tx2[2],p$tx2[3]),nugget=p$tx2[1],mean=rep(0,nrow(predloc.GK)),messages=FALSE)$data)
         
         SIMmin.sim[d,,i] <- signif(mu.min+w.min,digits=4)
         SIMmax.sim[d,,i] <- signif(mu.max+w.max,digits=4)
+        SIMmin.sim2[d,,i] <- signif(mu.min+w.min2,digits=4)
+        SIMmax.sim2[d,,i] <- signif(mu.max+w.max2,digits=4)
         
+        # 1/10000
         while(min(SIMmax.sim[d,,i] - SIMmin.sim[d,,i]) < 0.5){
+            temps_retries <- temps_retries + 1
+            new_seed_number <- runif(1, min=0, max=99999)
+            set.seed(new_seed_number)
             w.min <- suppressWarnings(grf(nrow(predloc.GK),grid=predloc.GK,cov.model="exponential",
-                                          cov.pars=c(params.min[mo.sim[d],2],params.min[mo.sim[d],3]),nugget=params.min[mo.sim[d],1],mean=rep(0,nrow(predloc.GK)),messages=FALSE)$data)
+                                          cov.pars=c(p$tn[2],p$tn[3]),nugget=p$tn[1],mean=rep(0,nrow(predloc.GK)),messages=FALSE)$data)
+            set.seed(new_seed_number)
+            w.min2 <- suppressWarnings(grf(nrow(predloc.GK),grid=predloc.GK,cov.model="exponential",
+                                           cov.pars=c(p$tn2[2],p$tn2[3]),nugget=p$tn2[1],mean=rep(0,nrow(predloc.GK)),messages=FALSE)$data)
+            set.seed(new_seed_number)
             w.max <- suppressWarnings(grf(nrow(predloc.GK),grid=predloc.GK,cov.model="exponential",
-                                          cov.pars=c(params.max[mo.sim[d],2],params.max[mo.sim[d],3]),nugget=params.max[mo.sim[d],1],mean=rep(0,nrow(predloc.GK)),messages=FALSE)$data)
+                                          cov.pars=c(p$tx[2],p$tx[3]),nugget=p$tx[1],mean=rep(0,nrow(predloc.GK)),messages=FALSE)$data)
+            set.seed(new_seed_number)
+            w.max2 <- suppressWarnings(grf(nrow(predloc.GK),grid=predloc.GK,cov.model="exponential",
+                                           cov.pars=c(p$tx2[2],p$tx2[3]),nugget=p$tx2[1],mean=rep(0,nrow(predloc.GK)),messages=FALSE)$data)
             
             SIMmin.sim[d,,i] <- signif(mu.min+w.min,digits=4)
             SIMmax.sim[d,,i] <- signif(mu.max+w.max,digits=4)
+            SIMmin.sim2[d,,i] <- signif(mu.min+w.min2,digits=4)
+            SIMmax.sim2[d,,i] <- signif(mu.max+w.max2,digits=4)
         }
         
         SIMocc.old <- SIMocc.sim[d,,i]
@@ -486,12 +582,18 @@ for(i in 1:NT){
         SIMmin.old <- SIMmin.sim[d,,i]
         
         ## amounts
-        SC.sim <- suppressWarnings(predict(Krig(lon.lat,SC[d,,i]),predloc))
+        SC.sim <- suppressWarnings(predict(Krig(lon.lat,SC[d,]), predloc))
         
+        set.seed(seed_number)
         w3 <- suppressWarnings(grf(nrow(predloc.GK),grid=predloc.GK,cov.model="exponential",
-                                   cov.pars=c(params[mo.sim[d],2],params[mo.sim[d],3]),nugget=params[mo.sim[d],1],mean=rep(0,nrow(predloc.GK)),messages=FALSE)$data)
+                                   cov.pars=c(p$prcp[2],p$prcp[3]),nugget=p$prcp[1],mean=rep(0,nrow(predloc.GK)),messages=FALSE)$data)
+        set.seed(seed_number)
+        w32 <- suppressWarnings(grf(nrow(predloc.GK),grid=predloc.GK,cov.model="exponential",
+                                   cov.pars=c(p$prcp2[2],p$prcp2[3]),nugget=p$prcp2[1],mean=rep(0,nrow(predloc.GK)),messages=FALSE)$data)
         SIMamt.sim[d,,i] <- signif(qgamma(pnorm(w3), shape=SH.sim, scale=SC.sim),digits=4)
+        SIMamt.sim2[d,,i] <- signif(qgamma(pnorm(w32), shape=SH.sim, scale=SC.sim),digits=4)
         
+        cat(paste0('\r', d,'/', ncol(daily_covariats), '. Retries: ', temps_retries))
     }
     setTxtProgressBar(pb, i)
 }
