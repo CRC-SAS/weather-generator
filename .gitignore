@@ -1,5 +1,8 @@
-.Rproj.user
-.Rhistory
-.RData
-.Ruserdata
-.DS_Store
+*.Rproj.user
+*.Rhistory
+*.RData
+*.RData
+*.Ruserdata
+*.DS_Store
+*.nc
+_workshop/data*
