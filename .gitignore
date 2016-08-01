@@ -6,3 +6,4 @@
 *.DS_Store
 *.nc
 _workshop/data*
+.Rproj.user

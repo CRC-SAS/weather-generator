@@ -22,7 +22,7 @@
 
 \item{end_date}{an end date in text format (will be converted using as.Date) or a date object.}
 
-\item{simulation_locations}{a SpatialPointsDataFrame with the points at which weather should be simulated.
+\item{simulation_locations}{a SpatialPoints object with the points at which weather should be simulated.
 If not set, the locations used to fit the model will be used.}
 
 \item{control}{a glmwgen simulation control list.}

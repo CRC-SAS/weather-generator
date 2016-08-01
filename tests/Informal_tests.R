@@ -1,3 +1,5 @@
+rm(list=objects()); gc();
+
 library(glmwgen)
 require(sp)
 projections <- list(
@@ -30,8 +32,10 @@ glmgen_fit_gk <- calibrate.glmwgen(climate, stations_gk)
 # grid_gk <- expand.grid(x=seq(min(unique_x), max(unique_x), by = 10000), y=seq(min(unique_y), max(unique_y), by = 10000))
 
 grid <- read.csv('_workshop/1_setup/data/grids.txt', sep ='\t')
-grid_gk <- grid[, c(1, 2)]
-grid <- grid[, c(3, 4)]
+grid_gk <- SpatialPoints(grid[, c(1, 2)], proj4string = stations_gk@proj4string)
+grid <- SpatialPoints(grid[, c(3, 4)], proj4string = stations@proj4string)
+
+# plot(make_distance_grid(grid), pch = '.')
 
 microbenchmark::microbenchmark({
     simulated_climate <- simulate(glmgen_fit, start_date = '2016-01-01', end_date = '2016-02-01')
@@ -46,16 +50,39 @@ microbenchmark::microbenchmark({
 # }, times = 10)
 
 
-system.time(simulated_climate <- simulate(glmgen_fit, start_date = '2016-01-01', end_date = '2016-02-01',
-                                          simulation_locations = grid))
-system.time(simulated_climate <- simulate(glmgen_fit_gk, start_date = '2016-01-01', end_date = '2016-02-01',
-                                          simulation_locations = grid_gk))
+system.time(simulated_climate_latlon <- simulate(glmgen_fit, start_date = '2016-06-01', end_date = '2016-06-15',
+                                          simulation_locations = grid, seed = 123))
+system.time(simulated_climate_gk <- simulate(glmgen_fit_gk, start_date = '2016-06-01', end_date = '2016-06-15',
+                                          simulation_locations = grid_gk, seed = 123))
+# system.time(simulated_climate_gk2 <- simulate(glmgen_fit_gk, start_date = '2016-01-01', end_date = '2016-02-01',
+#                                           simulation_locations = grid_gk, seed = 1234))
 
 # system.time(simulated_climate_chol <- simulate(glmgen_fit, start_date = '2016-01-01', end_date = '2016-06-01',
 #                                                simulation_locations = grid,
 #                                                control = glmwgenSimulationControl(random_fields_method = 'chol')))
 
-fields::quilt.plot(grid_gk, simulated_climate[[1]]$tx[1,])
+# fields::quilt.plot(coordinates(grid_gk), simulated_climate_gk[[1]]$prcp[1,])
+#
+# fields::quilt.plot(grid, simulated_climate_latlon[[1]]$tx[12,])
+#
+# fields::quilt.plot(grid, simulated_climate_latlon[[1]]$prcp[2,])
+# fields::quilt.plot(grid, simulated_climate_latlon[[1]]$tx[2,])
+# fields::quilt.plot(grid, simulated_climate_latlon[[1]]$prcp[12,])
+# fields::quilt.plot(grid, simulated_climate_latlon[[1]]$tx[12,])
+
+# fields::quilt.plot(grid, simulated_climate_latlon[[1]]$tx[14,])
+# fields::quilt.plot(grid_gk, simulated_climate_gk2[[1]]$tx[1,])
+
+
+for(i in 1:15) {
+    fields::quilt.plot(coordinates(grid_gk), simulated_climate_gk[[1]]$prcp[i,], main = paste('GK Day', i))
+    fields::quilt.plot(coordinates(grid), simulated_climate_latlon[[1]]$prcp[i,], main = paste('LatLong Day', i))
+}
+
+
+fields::quilt.plot(grid_gk, simulated_climate2[[1]]$tx[2,])
+fields::quilt.plot(grid_gk, simulated_climate[[1]]$tx[2,])
+
 fields::quilt.plot(grid_gk, simulated_climate[[1]]$tn[1,])
 fields::quilt.plot(grid_gk, simulated_climate[[1]]$prcp[1,])
 

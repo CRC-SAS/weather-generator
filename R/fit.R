@@ -30,6 +30,7 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgenControl(), ver
     # distance matrix of station locations converts longitude and latitude to KILOMETERS
     # dist.mat <- fields::rdist.earth(coordinates(stations), miles = F)
     dist.mat <- sp::spDists(stations)
+    # dist.mat <- sp::spDists(spTransform(stations, CRS("+proj=longlat +datum=WGS84")))
     colnames(dist.mat) <- stations$id
     rownames(dist.mat) <- stations$id
     # diagonal element is not explicitly equal to zero, so define as such
@@ -42,7 +43,9 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgenControl(), ver
 
     model[["distance_matrix"]] <- dist.mat
     model[["seasonal"]] <- seasonal_covariats
+    model[['stations_proj4string']] <- stations@proj4string
     model[["stations"]] <- stations
+    # model[["stations"]] <- sp::spTransform(stations, CRS("+proj=longlat +datum=WGS84"))
 
     model[["start_climatology"]] <- climate %>%
         group_by(station, month = lubridate::month(date), day = lubridate::day(date)) %>%

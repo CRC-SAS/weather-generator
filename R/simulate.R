@@ -58,7 +58,7 @@ glmwgen_simulation_control <- function(seasonal_temps_covariats_getter = get_tem
 #'          If set, the value is saved as the "seed" attribute of the returned value. The default, NULL will not change the random generator state.
 #' @param start_date a start date in text format (will be converted using as.Date) or a date object.
 #' @param end_date an end date in text format (will be converted using as.Date) or a date object.
-#' @param simulation_locations a SpatialPointsDataFrame with the points at which weather should be simulated.
+#' @param simulation_locations a SpatialPoints object with the points at which weather should be simulated.
 #'          If not set, the locations used to fit the model will be used.
 #' @param control a glmwgen simulation control list.
 #' @import dplyr
@@ -79,6 +79,15 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
     if (is.null(simulation_locations)) {
         simulation_locations <- coordinates(model$stations)
     }
+
+    if(!('proj4string' %in% names(attributes(simulation_locations)))) {
+        warning('simulation_locations is not a spacial points object, attempting to convert it with stations projection string.')
+        simulation_locations <- SpatialPoints(simulation_locations, proj4string=model$stations_proj4string)
+    }
+
+    # sim_locations_latlon <- coordinates(sp::spTransform(simulation_locations, CRS("+proj=longlat +datum=WGS84")))
+    simulation_locations_grid <- make_distance_grid(simulation_locations)
+    simulation_locations <- coordinates(simulation_locations)
 
     simulation_dates <- data.frame(date = seq.Date(from = as.Date(start_date), to = as.Date(end_date), by = "days"))
 
@@ -111,7 +120,8 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
     for (covariat in 1:ncol(coefocc.sim)) {
         coefocc.sim[, covariat] <- suppressWarnings(fields::predict.Krig(fields::Krig(coordinates(model$stations),
                                                                          model$coefficients$coefocc[, covariat]),
-                                                            simulation_locations))
+                                                                         # sim_locations_latlon))
+                                                                         simulation_locations))
     }
 
     # minimum temperature
@@ -120,7 +130,8 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
     for (covariat in 1:ncol(coefmin.sim)) {
         coefmin.sim[, covariat] <- suppressWarnings(fields::predict.Krig(fields::Krig(coordinates(model$stations),
                                                                          model$coefficients$coefmin[, covariat]),
-                                                            simulation_locations))
+                                                                         # sim_locations_latlon))
+                                                                         simulation_locations))
     }
 
     # maximum temperature
@@ -129,22 +140,24 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
     for (covariat in 1:ncol(coefmax.sim)) {
         coefmax.sim[, covariat] <- suppressWarnings(fields::predict.Krig(fields::Krig(coordinates(model$stations),
                                                                          model$coefficients$coefmax[, covariat]),
-                                                            simulation_locations))
+                                                                         # sim_locations_latlon))
+                                                                         simulation_locations))
     }
 
     # Gamma shape and scale
     SH <- c()
 
     for (station in as.character(model$stations$id)) SH[station] <- model$gamma[[station]]$alpha
+    # SH.sim <- suppressWarnings(fields::predict.Krig(fields::Krig(coordinates(model$stations), SH), sim_locations_latlon))
     SH.sim <- suppressWarnings(fields::predict.Krig(fields::Krig(coordinates(model$stations), SH), simulation_locations))
     # SH.sim <- fields::predict.Krig(fields::Krig(coordinates(coordinates(model$stations)), SH), grid_test)
-    if(verbose) cat('Kriged coefficients..\n')
+    if(verbose) cat('Kriged coefficients.\n')
 
 
     if(identical(control$random_fields_method, cholesky_random_field)) {
         cat('Calculate cSigma matrixes.\n')
         # cSigma_list <- list()
-        # # grid     <- list(x = unique(coordinates(simulation_locations)[,1]), y = unique(coordinates(simulation_locations)[,2]))
+        # # grid     <- list(x = unique(coordinates(simulation_locations_grid)[,1]), y = unique(coordinates(simulation_locations_grid)[,2]))
         # # xg       <- fields::make.surface.grid(grid)
         #
         # model$cSigma <- foreach(month_number=1:12, .multicombine = T) %do% {
@@ -153,7 +166,7 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
         #     for(var_name in names(month_params)) {
         #
         #         # bigSigma <- fields::stationary.cov(xg, theta=month_params[[var_name]][3])
-        #         bigSigma <- fields::stationary.cov(simulation_locations, theta=month_params[[var_name]][3])
+        #         bigSigma <- fields::stationary.cov(simulation_locations_grid, theta=month_params[[var_name]][3])
         #         cSigma_list[[var_name]] <- t(chol(bigSigma))
         #     }
         #     print(paste0('Chol transform. Month = ', month, '. Variable = ', var_name))
@@ -173,13 +186,13 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
         simulation_start <- as.Date(start_date) - 1
 
         # initialize with climatology of the previous day
-        # w2 <- suppressWarnings(geoR::grf(nrow(simulation_locations),
-        #                                  grid = simulation_locations,
+        # w2 <- suppressWarnings(geoR::grf(nrow(simulation_locations_grid),
+        #                                  grid = simulation_locations_grid,
         #                                  cov.model = "exponential",
         #                                  cov.pars = model$month_params[[lubridate::month(simulation_start)]]$prcp[c(2,3)],
         #                                  nugget = model$month_params[[lubridate::month(simulation_start)]]$prcp[1],
-        #                                  mean = rep(0, nrow(simulation_locations)), messages = FALSE))
-        w2 <- control$random_fields_method(model, simulation_locations, control, lubridate::month(simulation_start), 'prcp')
+        #                                  mean = rep(0, nrow(simulation_locations_grid)), messages = FALSE))
+        w2 <- control$random_fields_method(model, simulation_locations_grid, control, lubridate::month(simulation_start), 'prcp')
         SIMocc.old <- (w2 > 0) + 0
 
         start_climatology <- model$start_climatology %>% filter(month == lubridate::month(simulation_start), day == lubridate::day(simulation_start))
@@ -213,7 +226,7 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
             SC[, station] <- exp(apply(daily_covariats[names(gamma_coef), ] * gamma_coef, FUN = sum, MAR = 2, na.rm = T))/SH[station]
         }
 
-        simulated_occurrence <- simulated_tx <- simulated_tn <- simulated_prcp <- array(dim = c(nrow(simulation_dates), nrow(simulation_locations)))
+        simulated_occurrence <- simulated_tx <- simulated_tn <- simulated_prcp <- array(dim = c(nrow(simulation_dates), nrow(simulation_locations_grid)))
         # dimnames = list(c('date', 'location')))
 
         if(verbose) cat('Simulated start climatology.\n')
@@ -229,9 +242,9 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
 
 
             mu.occ <- apply(simulation_matrix[, colnames(coefocc.sim)] * coefocc.sim, 1, sum, na.rm = T)
-            # w.occ <- suppressWarnings(geoR::grf(nrow(simulation_locations), grid = simulation_locations, cov.model = "exponential", cov.pars = c(p$prcp[2], p$prcp[3]), nugget = p$prcp[1],
-            #     mean = rep(0, nrow(simulation_locations)), messages = FALSE)$data)
-            w.occ <- control$random_fields_method(model, simulation_locations, control, month_number, 'prcp')
+            # w.occ <- suppressWarnings(geoR::grf(nrow(simulation_locations_grid), grid = simulation_locations_grid, cov.model = "exponential", cov.pars = c(p$prcp[2], p$prcp[3]), nugget = p$prcp[1],
+            #     mean = rep(0, nrow(simulation_locations_grid)), messages = FALSE)$data)
+            w.occ <- control$random_fields_method(model, simulation_locations_grid, control, month_number, 'prcp')
 
             simulated_occurrence[d, ] <- ((mu.occ + w.occ) > 0) + 0
 
@@ -240,22 +253,22 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
             mu.min <- apply(simulation_matrix[, colnames(coefmin.sim)] * coefmin.sim, 1, sum, na.rm = T)
             mu.max <- apply(simulation_matrix[, colnames(coefmax.sim)] * coefmax.sim, 1, sum, na.rm = T)
 
-            # w.min <- suppressWarnings(geoR::grf(nrow(simulation_locations),
-            #                                     grid = simulation_locations,
+            # w.min <- suppressWarnings(geoR::grf(nrow(simulation_locations_grid),
+            #                                     grid = simulation_locations_grid,
             #                                     cov.model = "exponential",
             #                                     cov.pars = c(p$tn[2], p$tn[3]),
             #                                     nugget = p$tn[1],
-            #                                     mean = rep(0, nrow(simulation_locations)),
+            #                                     mean = rep(0, nrow(simulation_locations_grid)),
             #                                     messages = FALSE)$data)
-            w.min <- control$random_fields_method(model, simulation_locations, control, month_number, 'tn')
-            w.max <- control$random_fields_method(model, simulation_locations, control, month_number, 'tx')
+            w.min <- control$random_fields_method(model, simulation_locations_grid, control, month_number, 'tn')
+            w.max <- control$random_fields_method(model, simulation_locations_grid, control, month_number, 'tx')
 
-            # w.max <- suppressWarnings(geoR::grf(nrow(simulation_locations),
-            #                                     grid = simulation_locations,
+            # w.max <- suppressWarnings(geoR::grf(nrow(simulation_locations_grid),
+            #                                     grid = simulation_locations_grid,
             #                                     cov.model = "exponential",
             #                                     cov.pars = c(p$tx[2], p$tx[3]),
             #                                     nugget = p$tx[1],
-            #                                     mean = rep(0, nrow(simulation_locations)),
+            #                                     mean = rep(0, nrow(simulation_locations_grid)),
             #                                     messages = FALSE)$data)
 
             simulated_tn[d, ] <- signif(mu.min + w.min, digits = 4)
@@ -263,18 +276,18 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
 
             # 1/10000
             while (min(simulated_tx[d, ] - simulated_tn[d, ]) < 0.5) {
-                # if(verbose) print(paste('Retrying min and max temperatures simulation.', 'Min difference: ', min(simulated_tx[d, ] - simulated_tn[d, ])))
+                if(verbose) cat(paste('\nRetrying min and max temperatures simulation.', 'Min difference: ', min(simulated_tx[d, ] - simulated_tn[d, ]), '\n'))
                 temps_retries <- temps_retries + 1
 
-                # w.min <- suppressWarnings(geoR::grf(nrow(simulation_locations), grid = simulation_locations, cov.model = "exponential", cov.pars = c(p$tn[2], p$tn[3]), nugget = p$tn[1],
-                #   mean = rep(0, nrow(simulation_locations)), messages = FALSE)$data)
+                # w.min <- suppressWarnings(geoR::grf(nrow(simulation_locations_grid), grid = simulation_locations_grid, cov.model = "exponential", cov.pars = c(p$tn[2], p$tn[3]), nugget = p$tn[1],
+                #   mean = rep(0, nrow(simulation_locations_grid)), messages = FALSE)$data)
                 #
                 #
-                # w.max <- suppressWarnings(geoR::grf(nrow(simulation_locations), grid = simulation_locations, cov.model = "exponential", cov.pars = c(p$tx[2], p$tx[3]), nugget = p$tx[1],
-                #   mean = rep(0, nrow(simulation_locations)), messages = FALSE)$data)
+                # w.max <- suppressWarnings(geoR::grf(nrow(simulation_locations_grid), grid = simulation_locations_grid, cov.model = "exponential", cov.pars = c(p$tx[2], p$tx[3]), nugget = p$tx[1],
+                #   mean = rep(0, nrow(simulation_locations_grid)), messages = FALSE)$data)
 
-                w.min <- control$random_fields_method(model, simulation_locations, control, month_number, 'tn')
-                w.max <- control$random_fields_method(model, simulation_locations, control, month_number, 'tx')
+                w.min <- control$random_fields_method(model, simulation_locations_grid, control, month_number, 'tn')
+                w.max <- control$random_fields_method(model, simulation_locations_grid, control, month_number, 'tx')
 
                 simulated_tn[d, ] <- signif(mu.min + w.min, digits = 4)
                 simulated_tx[d, ] <- signif(mu.max + w.max, digits = 4)
@@ -287,9 +300,9 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
             ## amounts
             SC.sim <- suppressWarnings(fields::predict.Krig(fields::Krig(coordinates(model$stations), SC[d, ]), simulation_locations))
 
-            # w3 <- suppressWarnings(geoR::grf(nrow(simulation_locations), grid = simulation_locations, cov.model = "exponential", cov.pars = c(p$prcp[2], p$prcp[3]), nugget = p$prcp[1], mean = rep(0,
-            #     nrow(simulation_locations)), messages = FALSE)$data)
-            w3 <- control$random_fields_method(model, simulation_locations, control, month_number, 'prcp')
+            # w3 <- suppressWarnings(geoR::grf(nrow(simulation_locations_grid), grid = simulation_locations_grid, cov.model = "exponential", cov.pars = c(p$prcp[2], p$prcp[3]), nugget = p$prcp[1], mean = rep(0,
+            #     nrow(simulation_locations_grid)), messages = FALSE)$data)
+            w3 <- control$random_fields_method(model, simulation_locations_grid, control, month_number, 'prcp')
 
             simulated_prcp[d, ] <- signif(qgamma(pnorm(w3), shape = SH.sim, scale = SC.sim), digits = 4)
             if(verbose) cat(paste0("\r", nsim, ": ", d, "/", ncol(daily_covariats), ". Retries: ", temps_retries))
