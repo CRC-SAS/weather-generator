@@ -1,5 +1,7 @@
 rm(list=objects()); gc();
 
+Sys.setenv(OPENBLAS_NUM_THREADS = 2)
+
 library(glmwgen)
 require(sp)
 projections <- list(
@@ -21,6 +23,9 @@ stations_gk <- sp::spTransform(stations, CRS(projections$gk))
 
 glmgen_fit <- calibrate.glmwgen(climate, stations)
 glmgen_fit_gk <- calibrate.glmwgen(climate, stations_gk)
+
+# Ver probabilidad de días lluviosos en cada mes.
+# Asegurarnos que las medias de tn y tx y totales de lluvias caigan dentro
 
 # unique_lon <- unique(coordinates(stations)[,1])
 # unique_lat <- unique(coordinates(stations)[,2])
@@ -76,7 +81,7 @@ system.time(simulated_climate_gk <- simulate(glmgen_fit_gk, start_date = '2016-0
 
 for(i in 1:15) {
     fields::quilt.plot(coordinates(grid_gk), simulated_climate_gk[[1]]$prcp[i,], main = paste('GK Day', i))
-    fields::quilt.plot(coordinates(grid), simulated_climate_latlon[[1]]$prcp[i,], main = paste('LatLong Day', i))
+    # fields::quilt.plot(coordinates(grid), simulated_climate_latlon[[1]]$prcp[i,], main = paste('LatLong Day', i))
 }
 
 

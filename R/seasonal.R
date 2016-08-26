@@ -1,5 +1,5 @@
 
-estimate_seasonal_covariats <- function(climate) {
+estimate_seasonal_covariates <- function(climate) {
     ## compute regional average seasonal total precip to use as predictor
     d_montot <- climate %>% group_by(station, year = lubridate::year(date), month = lubridate::month(date)) %>%
         summarise(montot = sum(prcp), maxmean = mean(tx), minmean = mean(tn))
@@ -21,9 +21,9 @@ estimate_seasonal_covariats <- function(climate) {
     season_len = c(sum(c(31, 28, 31)), sum(c(30, 31, 30)), sum(c(31, 31, 30)), sum(c(31, 30, 31)))
     season_len_leap = c(sum(c(31, 29, 31)), sum(c(30, 31, 30)), sum(c(31, 31, 30)), sum(c(31, 30, 31)))
 
-    season_rainfall_covariats <- list(c(), c(), c(), c())
-    season_max_temp_covariats <- list(c(), c(), c(), c())
-    season_min_temp_covariats <- list(c(), c(), c(), c())
+    season_rainfall_covariates <- list(c(), c(), c(), c())
+    season_max_temp_covariates <- list(c(), c(), c(), c())
+    season_min_temp_covariates <- list(c(), c(), c(), c())
 
     # ST1 = ST2 = ST3 = ST4 = c() SMX1 = SMX2 = SMX3 = SMX4 = c() SMN1 = SMN2 = SMN3 = SMN4 = c()
 
@@ -37,15 +37,15 @@ estimate_seasonal_covariats <- function(climate) {
             values_after <- if (season < 4)
                 rep(0, times = sum(season_len_data[(season + 1):4])) else NULL
 
-            season_rainfall_covariats[[season]] <- c(season_rainfall_covariats[[season]], values_before, rep(season_data$seatot, times = season_len_data[season]), values_after)
+            season_rainfall_covariates[[season]] <- c(season_rainfall_covariates[[season]], values_before, rep(season_data$seatot, times = season_len_data[season]), values_after)
 
-            season_max_temp_covariats[[season]] <- c(season_max_temp_covariats[[season]], values_before, rep(season_data$seamax, times = season_len_data[season]), values_after)
+            season_max_temp_covariates[[season]] <- c(season_max_temp_covariates[[season]], values_before, rep(season_data$seamax, times = season_len_data[season]), values_after)
 
-            season_min_temp_covariats[[season]] <- c(season_min_temp_covariats[[season]], values_before, rep(season_data$seamin, times = season_len_data[season]), values_after)
+            season_min_temp_covariates[[season]] <- c(season_min_temp_covariates[[season]], values_before, rep(season_data$seamin, times = season_len_data[season]), values_after)
         }
     }
 
-    return(list(tx = season_max_temp_covariats, tn = season_min_temp_covariats, prcp = season_rainfall_covariats))
+    return(list(tx = season_max_temp_covariates, tn = season_min_temp_covariates, prcp = season_rainfall_covariates))
 }
 
 

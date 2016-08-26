@@ -1,13 +1,13 @@
 #' @title Weather model fit configuration
 #' @description Provides fine control of different parameters that will be used to fit a weather model.
 #' @export
-glmwgenControl <- function(prcp_occurrence_threshold = 0.1, use_seasonal_covariats = F, seasonal_covariats = c("tx", "tn", "prcp")) {
-    if (!all(seasonal_covariats %in% c("tx", "tn", "prcp"))) {
-        stop("The seasonal_covariats parameter should list the variables names that will be fitted with seasonal averages as covariats.")
+glmwgenControl <- function(prcp_occurrence_threshold = 0.1, use_seasonal_covariates = F, seasonal_covariates = c("tx", "tn", "prcp")) {
+    if (!all(seasonal_covariates %in% c("tx", "tn", "prcp"))) {
+        stop("The seasonal_covariates parameter should list the variables names that will be fitted with seasonal averages as covariates.")
     }
     return(list(prcp_occurrence_threshold = prcp_occurrence_threshold,
-                use_seasonal_covariats = use_seasonal_covariats,
-                seasonal_covariats = seasonal_covariats))
+                use_seasonal_covariates = use_seasonal_covariates,
+                seasonal_covariates = seasonal_covariates))
 }
 
 
@@ -36,13 +36,13 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgenControl(), ver
     # diagonal element is not explicitly equal to zero, so define as such
     diag(dist.mat) <- 0
 
-    seasonal_covariats <- estimate_seasonal_covariats(climate)
+    seasonal_covariates <- estimate_seasonal_covariates(climate)
 
     ## TODO: check control variables.
     model[["control"]] <- control
 
     model[["distance_matrix"]] <- dist.mat
-    model[["seasonal"]] <- seasonal_covariats
+    model[["seasonal"]] <- seasonal_covariates
     model[['stations_proj4string']] <- stations@proj4string
     model[["stations"]] <- stations
     # model[["stations"]] <- sp::spTransform(stations, CRS("+proj=longlat +datum=WGS84"))
@@ -53,12 +53,18 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgenControl(), ver
                   tn = mean(tn, na.rm = T),
                   prcp = mean(prcp, na.rm = T))
 
-    prcp_covariats <- c("ct", "st")
-    temps_covariats <- c("tn_prev", "tx_prev", "ct", "st", "prcp_occ", "Rt")
+    prcp_covariates <- c("ct", "st")
+    temps_covariates <- c("tn_prev", "tx_prev", "ct", "st", "prcp_occ", "Rt")
 
-    if (control$use_seasonal_covariats) {
-        prcp_covariats <- c(prcp_covariats, "ST1", "ST2", "ST3", "ST4")
-        temps_covariats <- c(temps_covariats, "SMN1", "SMN2", "SMN3", "SMN4", "SMX1", "SMX2", "SMX3", "SMX4")
+    if (control$use_seasonal_covariates) {
+        prcp_covariates <- c(prcp_covariates, "ST1", "ST2", "ST3", "ST4")
+        temps_covariates <- c(temps_covariates, "SMN1", "SMN2", "SMN3", "SMN4", "SMX1", "SMX2", "SMX3", "SMX4")
+    }
+
+    # Register a sequential backend if the user didn't register a parallel
+    # in order to avoid a warning message if we use %dopar%.
+    if(!foreach::getDoParRegistered()) {
+        foreach::registerDoSEQ()
     }
 
     models <- foreach::foreach(station = unique_stations, .multicombine = T) %dopar% {
@@ -67,7 +73,6 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgenControl(), ver
             mutate(prcp_occ = (prcp > control$prcp_occurrence_threshold) + 0,
                    prcp_intensity = ifelse(prcp < control$prcp_occurrence_threshold, NA, prcp),
                    prcp_occ_prev = lag(prcp_occ),
-                   prcp_prev = lag(prcp),
                    tx_prev = lag(tx),
                    tn_prev = lag(tn),
                    year_fraction = 2 * pi * lubridate::yday(date)/ifelse(lubridate::leap_year(date), 366, 365),
@@ -78,26 +83,26 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgenControl(), ver
 
 
 
-        if (control$use_seasonal_covariats) {
+        if (control$use_seasonal_covariates) {
             station_climate <- data.frame(station_climate,
-                                          ST1 = seasonal_covariats$prcp[[1]],
-                                          ST2 = seasonal_covariats$prcp[[2]],
-                                          ST3 = seasonal_covariats$prcp[[3]],
-                                          ST4 = seasonal_covariats$prcp[[4]],
-                                          SMX1 = seasonal_covariats$tx[[1]],
-                                          SMX2 = seasonal_covariats$tx[[2]],
-                                          SMX3 = seasonal_covariats$tx[[3]],
-                                          SMX4 = seasonal_covariats$tx[[4]],
-                                          SMN1 = seasonal_covariats$tn[[1]],
-                                          SMN2 = seasonal_covariats$tn[[2]],
-                                          SMN3 = seasonal_covariats$tn[[3]],
-                                          SMN4 = seasonal_covariats$tn[[4]])
+                                          ST1 = seasonal_covariates$prcp[[1]],
+                                          ST2 = seasonal_covariates$prcp[[2]],
+                                          ST3 = seasonal_covariates$prcp[[3]],
+                                          ST4 = seasonal_covariates$prcp[[4]],
+                                          SMX1 = seasonal_covariates$tx[[1]],
+                                          SMX2 = seasonal_covariates$tx[[2]],
+                                          SMX3 = seasonal_covariates$tx[[3]],
+                                          SMX4 = seasonal_covariates$tx[[4]],
+                                          SMN1 = seasonal_covariates$tn[[1]],
+                                          SMN2 = seasonal_covariates$tn[[2]],
+                                          SMN3 = seasonal_covariates$tn[[3]],
+                                          SMN4 = seasonal_covariates$tn[[4]])
         }
 
         # Fit model for precipitation occurrence.
-        probit_indexes <- na.omit(station_climate[, c("prcp_occ", "row_num", "prcp_occ_prev", prcp_covariats)])$row_num
+        probit_indexes <- na.omit(station_climate[, c("prcp_occ", "row_num", "prcp_occ_prev", prcp_covariates)])$row_num
 
-        occ_fit <- stats::glm(formula(paste0("prcp_occ", "~", "prcp_occ_prev +", paste0(prcp_covariats, collapse = "+"))),
+        occ_fit <- stats::glm(formula(paste0("prcp_occ", "~", "prcp_occ_prev +", paste0(prcp_covariates, collapse = "+"))),
                              data = station_climate[probit_indexes, ],
                              family = stats::binomial(probit))
 
@@ -105,23 +110,23 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgenControl(), ver
         station_climate[probit_indexes, "probit_residuals"] <- occ_fit$residuals
 
         # Fit model for precipitation amounts.
-        gamma_indexes <- na.omit(station_climate[, c("prcp_intensity", "row_num", prcp_covariats)])$row_num
+        gamma_indexes <- na.omit(station_climate[, c("prcp_intensity", "row_num", prcp_covariates)])$row_num
         # save model in list element 'i'
-        prcp_fit <- stats::glm(formula(paste0("prcp_intensity", "~", paste0(prcp_covariats, collapse = "+"))),
+        prcp_fit <- stats::glm(formula(paste0("prcp_intensity", "~", paste0(prcp_covariates, collapse = "+"))),
                               data = station_climate[gamma_indexes, ],
                               family = stats::Gamma(link = log))
 
         # coefamt <- prcp_fit$coefficients
 
-        tx_indexes <- na.omit(station_climate[, c("tx", "row_num", temps_covariats)])$row_num
-        tn_indexes <- na.omit(station_climate[, c("tn", "row_num", temps_covariats)])$row_num
+        tx_indexes <- na.omit(station_climate[, c("tx", "row_num", temps_covariates)])$row_num
+        tn_indexes <- na.omit(station_climate[, c("tn", "row_num", temps_covariates)])$row_num
         # Fit
 
-        tx_fit <- stats::lm(formula(paste0("tx", "~", paste0(temps_covariats, collapse = "+"))), data = station_climate[tx_indexes, ])
+        tx_fit <- stats::lm(formula(paste0("tx", "~", paste0(temps_covariates, collapse = "+"))), data = station_climate[tx_indexes, ])
         coefmax <- tx_fit$coefficients
         station_climate[tx_indexes, "tx_residuals"] <- tx_fit$residuals
 
-        tn_fit <- stats::lm(formula(paste0("tn", "~", paste0(temps_covariats, collapse = "+"))), data = station_climate[tn_indexes, ])
+        tn_fit <- stats::lm(formula(paste0("tn", "~", paste0(temps_covariates, collapse = "+"))), data = station_climate[tn_indexes, ])
         coefmin <- tn_fit$coefficients
         station_climate[tn_indexes, "tn_residuals"] <- tn_fit$residuals
 
