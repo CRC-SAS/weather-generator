@@ -67,7 +67,7 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgenControl(), ver
         foreach::registerDoSEQ()
     }
 
-    models <- foreach::foreach(station = unique_stations, .multicombine = T) %dopar% {
+    models <- foreach::foreach(station = unique_stations, .multicombine = T, .packages = c('dplyr')) %dopar% {
         # system.time(replicate(500, {
         station_climate <- climate[climate$station == station, ] %>%
             mutate(prcp_occ = (prcp > control$prcp_occurrence_threshold) + 0,
@@ -170,7 +170,7 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgenControl(), ver
 
     rm(first_model, models, m)
 
-    month_params <- foreach(m = 1:12, .multicombine = T) %dopar% {
+    month_params <- foreach(m = 1:12, .multicombine = T, .export = c('partially_apply_LS'), .packages = c('dplyr')) %dopar% {
         month_residuals <- models_residuals %>% filter(lubridate::month(date) == m) %>% arrange(station, date)
         month_climate <- climate %>% filter(lubridate::month(date) == m)
 

@@ -5,24 +5,33 @@ partial <- function(f, ...) {
     }
 }
 
-get_seasonal_covariate <- function(season_number, season_values, quantile_probs = c(0, 0.33, 0.66, 1), levels_probabilities = c(1/3, 1/3, 1/3)) {
-    splitted <- cut(season_values, breaks = quantile(season_values, probs = quantile_probs), include.lowest = T)
-    values_level <- season_values[splitted == sample(levels(splitted), 1, prob = levels_probabilities)]
-    if(length(values_level) == 1) return(values_level)
-    return(base::sample(values_level, 1))
+# get_seasonal_covariate <- function(year, season_number, season_values, quantile_probs = c(0, 0.33, 0.66, 1), levels_probabilities = c(1/3, 1/3, 1/3)) {
+#     splitted <- cut(season_values, breaks = quantile(season_values, probs = quantile_probs), include.lowest = T)
+#     values_level <- season_values[splitted == sample(levels(splitted), 1, prob = levels_probabilities)]
+#     if(length(values_level) == 1) return(values_level)
+#     return(base::sample(values_level, 1))
+# }
+
+get_seasonal_covariate <- function(years, season_number, season_values) {
+    return(season_values[1:length(years)])
 }
 
 get_rainfall_seasonal_covariate <- get_seasonal_covariate
-get_temperatures_seasonal_covariate <- function(season_number, season_tx_values, season_tn_values, quantile_probs = c(0, 0.33, 0.66, 1),
-                                               levels_probabilities = c(0.25, 0.35, 0.4)) {
-    splitted_tx <- cut(season_tx_values, breaks = quantile(season_tx_values, probs = quantile_probs), include.lowest = T)
-    splitted_tn <- cut(season_tn_values, breaks = quantile(season_tn_values, probs = quantile_probs), include.lowest = T)
 
-    values_level_index <- sample(seq_along(levels(splitted_tx)), 1, prob = levels_probabilities)
-    tx_sampled_level <- season_tx_values[splitted_tx == levels(splitted_tx)[values_level_index]]
-    tn_sampled_level <- season_tn_values[splitted_tn == levels(splitted_tn)[values_level_index]]
-    return(list(tx = ifelse(length(tx_sampled_level) > 1, sample(tx_sampled_level, 1), tx_sampled_level),
-                tn = ifelse(length(tn_sampled_level) > 1, sample(tn_sampled_level, 1), tn_sampled_level)))
+# get_temperatures_seasonal_covariate <- function(year, season_number, season_tx_values, season_tn_values, quantile_probs = c(0, 0.33, 0.66, 1),
+#                                                levels_probabilities = c(0.25, 0.35, 0.4)) {
+#     splitted_tx <- cut(season_tx_values, breaks = quantile(season_tx_values, probs = quantile_probs), include.lowest = T)
+#     splitted_tn <- cut(season_tn_values, breaks = quantile(season_tn_values, probs = quantile_probs), include.lowest = T)
+#
+#     values_level_index <- sample(seq_along(levels(splitted_tx)), 1, prob = levels_probabilities)
+#     tx_sampled_level <- season_tx_values[splitted_tx == levels(splitted_tx)[values_level_index]]
+#     tn_sampled_level <- season_tn_values[splitted_tn == levels(splitted_tn)[values_level_index]]
+#     return(list(tx = ifelse(length(tx_sampled_level) > 1, sample(tx_sampled_level, 1), tx_sampled_level),
+#                 tn = ifelse(length(tn_sampled_level) > 1, sample(tn_sampled_level, 1), tn_sampled_level)))
+# }
+get_temperatures_seasonal_covariate <- function(years, season_number, season_tx_values, season_tn_values) {
+    return(list(tx = season_tx_values[1:length(years)],
+                tn = season_tn_values[1:length(years)]))
 }
 
 #' @title Simulations control configuration
@@ -33,7 +42,7 @@ glmwgen_simulation_control <- function(seasonal_temps_covariates_getter = get_te
                                      random_fields_method = 'gaussian',
                                      Rt = NULL,
                                      grf_method = NULL,
-                                     multicombine = T) {
+                                     multicombine = F) {
     rf_function <- NULL
     if(!is.function(random_fields_method)) {
         if(startsWith(random_fields_method, 'gauss')) rf_function <- gaussian_random_field
@@ -94,17 +103,19 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
 
     if (is.null(control$Rt)) {
         # TODO: shouldn't this be = 1 once we start simulating?
-        Rt <- seq(from = -1, to = 1, length.out = length(simulation_dates))
+        Rt <- seq(from = -1, to = 1, length.out = nrow(simulation_dates))
     } else {
         Rt <- control$Rt
         if (length(Rt) == 1)
-            Rt <- rep(Rt, times = length(simulation_dates))
-        if (length(Rt) != length(simulation_dates))
+            Rt <- rep(Rt, times = nrow(simulation_dates))
+        if (length(Rt) != nrow(simulation_dates))
             stop("The specified Rt parameter length differs from the simulation dates series length.")
     }
 
     simulation_dates <- simulation_dates %>%
-        mutate(year_fraction = 2 * pi * lubridate::yday(date) / ifelse(lubridate::leap_year(date), 366, 365),
+        mutate(year = lubridate::year(date),
+               month = lubridate::month(date),
+               year_fraction = 2 * pi * lubridate::yday(date) / ifelse(lubridate::leap_year(date), 366, 365),
                ct = cos(year_fraction),
                st = sin(year_fraction),
                Rt = Rt,
@@ -186,64 +197,104 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
     if(!foreach::getDoParRegistered()) {
         foreach::registerDoSEQ()
     }
+    process_pid <- Sys.getpid()
     # foreach::getDoParWorkers()
 
+    combine_function <- function(...) {
+        invisible(gc())
+        abind::abind(..., along = 1)
+    }
 
-    gen_climate <- foreach(i = 1:nsim, .combine = list, .multicombine = control$multicombine) %dopar% {
+    simulation_start <- as.Date(start_date) - 1
+
+    # initialize with climatology of the previous day
+    # w2 <- suppressWarnings(geoR::grf(nrow(simulation_locations_grid),
+    #                                  grid = simulation_locations_grid,
+    #                                  cov.model = "exponential",
+    #                                  cov.pars = model$month_params[[lubridate::month(simulation_start)]]$prcp[c(2,3)],
+    #                                  nugget = model$month_params[[lubridate::month(simulation_start)]]$prcp[1],
+    #                                  mean = rep(0, nrow(simulation_locations_grid)), messages = FALSE))
+    w2 <- control$random_fields_method(model, simulation_locations_grid, control, lubridate::month(simulation_start), 'prcp')
+    SIMocc.old <- (w2 > 0) + 0
+
+    rm(w2)
+
+    start_climatology <- model$start_climatology %>% filter(month == lubridate::month(simulation_start), day == lubridate::day(simulation_start))
+
+    SIMmin.old <- suppressWarnings(as.vector(fields::predict.Krig(fields::Krig(coordinates(model$stations), start_climatology$tn), simulation_locations)))
+    SIMmax.old <- suppressWarnings(as.vector(fields::predict.Krig(fields::Krig(coordinates(model$stations), start_climatology$tx), simulation_locations)))
+
+    rm(start_climatology)
+
+    for (season_number in unique(simulation_dates$season)) {
+        season_indexes <- simulation_dates$season == season_number
+        # season_values <- d_seatot[d_seatot$season == season_number, ]
+        season_tx <- unique(model$seasonal$tx[[season_number]])
+        season_tn <- unique(model$seasonal$tn[[season_number]])
+        season_prcp <- unique(model$seasonal$prcp[[season_number]])
+
+        years <- unique(simulation_dates$year[season_indexes])
+
+        temp_covariates <- control$seasonal_temps_covariates_getter(years, season_number, season_tx[season_tx > 0], season_tn[season_tn > 0])
+        smx_covariates <- temp_covariates[['tx']]
+        smn_covariates <- temp_covariates[['tn']]
+        st_covariates <- control$seasonal_prcp_covariates_getter(years, season_number, season_prcp[season_prcp > 0])
+
+        # temp_covariates <- data.frame(year = years, temp_covariates)
+        # prcp_covariates <- data.frame(year = years,
+        #                               ST = )
+
+        simulation_dates[season_indexes, paste0("ST", season_number)] <- st_covariates[match(simulation_dates[season_indexes, 'year'], years)]
+        simulation_dates[season_indexes, paste0("SMX", season_number)] <- smx_covariates[match(simulation_dates[season_indexes, 'year'], years)]
+        simulation_dates[season_indexes, paste0("SMN", season_number)] <- smn_covariates[match(simulation_dates[season_indexes, 'year'], years)]
+    }
+
+    # daily_covariates <- as.matrix(t(simulation_dates[, c(5:8, 11:ncol(simulation_dates))]))
+    daily_covariates <- as.matrix(t(simulation_dates[, !colnames(simulation_dates) %in% c('date', 'year', 'year_fraction', 'month', 'season')]))
+
+    daily_covariates <- rbind(1, daily_covariates)
+    rownames(daily_covariates)[1] <- "(Intercept)"
+
+    SC <- array(data = NA, dim = c(nrow(simulation_dates), nrow(coordinates(model$stations))))
+    colnames(SC) <- model$stations$id
+
+    for (station in as.character(model$stations$id)) {
+        gamma_coef <- model$gamma[[station]]$coef
+        SC[, station] <- exp(apply(daily_covariates[names(gamma_coef), ] * gamma_coef, FUN = sum, MAR = 2, na.rm = T))/SH[station]
+    }
+
+    rm(gamma_coef)
+
+    # simulated_occurrence <- simulated_tx <- simulated_tn <- simulated_prcp <- array(dim = c(nrow(simulation_dates), nrow(simulation_locations_grid)))
+
+    # simulated_climate[1, , , ] <- i
+    # simulated_climate[, 1:nrow(simulation_dates), , ] <- 1:nrow(simulation_dates)
+    # simulated_climate[, , 1:nrow(simulation_locations_grid), ] <- 1:nrow(simulation_locations_grid)
+
+    # dimnames = list(c('date', 'location')))
+
+    if(verbose) cat('Simulated start climatology.\n')
+
+    simulation_dates <- simulation_dates[, c(1, 2, 3)]
+
+    invisible(gc())
+
+    # gen_climate <- foreach(i = 1:nsim, .combine = list, .multicombine = control$multicombine) %dopar% {
+    gen_climate <- foreach(i = 1:nsim, .combine = combine_function, .multicombine = control$multicombine, .packages = c('sp')) %dopar% {
     # gen_climate <- foreach(i = 1:nsim, .combine = list, .multicombine = control$multicombine) %do% {
-        simulation_start <- as.Date(start_date) - 1
-
-        # initialize with climatology of the previous day
-        # w2 <- suppressWarnings(geoR::grf(nrow(simulation_locations_grid),
-        #                                  grid = simulation_locations_grid,
-        #                                  cov.model = "exponential",
-        #                                  cov.pars = model$month_params[[lubridate::month(simulation_start)]]$prcp[c(2,3)],
-        #                                  nugget = model$month_params[[lubridate::month(simulation_start)]]$prcp[1],
-        #                                  mean = rep(0, nrow(simulation_locations_grid)), messages = FALSE))
-        w2 <- control$random_fields_method(model, simulation_locations_grid, control, lubridate::month(simulation_start), 'prcp')
-        SIMocc.old <- (w2 > 0) + 0
-
-        start_climatology <- model$start_climatology %>% filter(month == lubridate::month(simulation_start), day == lubridate::day(simulation_start))
-
-        SIMmin.old <- suppressWarnings(as.vector(fields::predict.Krig(fields::Krig(coordinates(model$stations), start_climatology$tn), simulation_locations)))
-        SIMmax.old <- suppressWarnings(as.vector(fields::predict.Krig(fields::Krig(coordinates(model$stations), start_climatology$tx), simulation_locations)))
-
-        SC <- array(data = NA, dim = c(nrow(simulation_dates), nrow(coordinates(model$stations))))
-        colnames(SC) <- model$stations$id
-
-        for (season_number in unique(simulation_dates$season)) {
-            season_indexes <- simulation_dates$season == season_number
-            # season_values <- d_seatot[d_seatot$season == season_number, ]
-            season_tx <- unique(model$seasonal$tx[[season_number]])
-            season_tn <- unique(model$seasonal$tn[[season_number]])
-            season_prcp <- unique(model$seasonal$prcp[[season_number]])
-            temp_covariates <- control$seasonal_temps_covariates_getter(season_indexes, season_tx[season_tx > 0], season_tn[season_tn > 0])
-
-            simulation_dates[season_indexes, paste0("ST", season_number)] <- control$seasonal_prcp_covariates_getter(season_number, season_prcp[season_prcp > 0])
-            simulation_dates[season_indexes, paste0("SMX", season_number)] <- temp_covariates$tx
-            simulation_dates[season_indexes, paste0("SMN", season_number)] <- temp_covariates$tn
-        }
-
-        daily_covariates <- as.matrix(t(simulation_dates[, c(3:5, 7:18)]))
-
-        daily_covariates <- rbind(1, daily_covariates)
-        rownames(daily_covariates)[1] <- "(Intercept)"
-
-        for (station in as.character(model$stations$id)) {
-            gamma_coef <- model$gamma[[station]]$coef
-            SC[, station] <- exp(apply(daily_covariates[names(gamma_coef), ] * gamma_coef, FUN = sum, MAR = 2, na.rm = T))/SH[station]
-        }
-
-        simulated_occurrence <- simulated_tx <- simulated_tn <- simulated_prcp <- array(dim = c(nrow(simulation_dates), nrow(simulation_locations_grid)))
-        # dimnames = list(c('date', 'location')))
-
-        if(verbose) cat('Simulated start climatology.\n')
+        simulated_climate <- array(data = 0.0, dim = c(1, nrow(simulation_dates), nrow(simulation_locations_grid), 3))
+        # dimnames = list('realization'=i,
+        #                 'day'=1:nrow(simulation_dates),
+        #                 'location'=1:nrow(simulation_locations_grid),
+        #                 'variable'=c('tx', 'tn', 'prcp', 'prcp_occ')))
+        dimnames(simulated_climate)[4] <- list('variables' = c('tx', 'tn', 'prcp'))
 
         temps_retries <- 0
         for (d in 1:nrow(simulation_dates)) {
-            # month_params <- model$month_params[[lubridate::month(simulation_start)]]
-            month_number <- lubridate::month(simulation_dates[d, "date"])
-            # p <- model$month_params[[lubridate::month(simulation_dates[d, "date"])]]
+
+            # month_number <- lubridate::month(simulation_dates[d, "date"])
+            month_number <- simulation_dates$month[d]
+
 
             simulation_matrix <- cbind(SIMocc.old, SIMmin.old, SIMmax.old, matrix(daily_covariates[, d], ncol = nrow(daily_covariates), nrow = length(SIMmax.old), byrow = T))
             colnames(simulation_matrix) <- c("prcp_occ_prev", "tn_prev", "tx_prev", rownames(daily_covariates))
@@ -254,9 +305,10 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
             #     mean = rep(0, nrow(simulation_locations_grid)), messages = FALSE)$data)
             w.occ <- control$random_fields_method(model, simulation_locations_grid, control, month_number, 'prcp')
 
-            simulated_occurrence[d, ] <- ((mu.occ + w.occ) > 0) + 0
+            # simulated_occurrence[d, ] <- ((mu.occ + w.occ) > 0) + 0
+            simulated_climate[1, d, , 'prcp'] <- ((mu.occ + w.occ) > 0) + 0
 
-            simulation_matrix <- cbind(prcp_occ = simulated_occurrence[d, ], simulation_matrix)
+            simulation_matrix <- cbind(prcp_occ = simulated_climate[1, d, , 'prcp'], simulation_matrix)
 
             mu.min <- apply(simulation_matrix[, colnames(coefmin.sim)] * coefmin.sim, 1, sum, na.rm = T)
             mu.max <- apply(simulation_matrix[, colnames(coefmax.sim)] * coefmax.sim, 1, sum, na.rm = T)
@@ -279,12 +331,14 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
             #                                     mean = rep(0, nrow(simulation_locations_grid)),
             #                                     messages = FALSE)$data)
 
-            simulated_tn[d, ] <- signif(mu.min + w.min, digits = 4)
-            simulated_tx[d, ] <- signif(mu.max + w.max, digits = 4)
+            simulated_climate[1, d, , 'tn'] <- signif(mu.min + w.min, digits = 4)
+            simulated_climate[1, d, , 'tx'] <- signif(mu.max + w.max, digits = 4)
+            # simulated_tn[d, ] <- signif(mu.min + w.min, digits = 4)
+            # simulated_tx[d, ] <- signif(mu.max + w.max, digits = 4)
 
             # 1/10000
-            while (min(simulated_tx[d, ] - simulated_tn[d, ]) < 0.5) {
-                if(verbose) cat(paste('\nRetrying min and max temperatures simulation.', 'Min difference: ', min(simulated_tx[d, ] - simulated_tn[d, ]), '\n'))
+            while (min(simulated_climate[1, d, , 'tx'] - simulated_climate[1, d, , 'tn']) < 0.5) {
+                # if(verbose) cat(paste('\nRetrying min and max temperatures simulation.', 'Min difference: ', min(simulated_tx[d, ] - simulated_tn[d, ]), '\n'))
                 temps_retries <- temps_retries + 1
 
                 # w.min <- suppressWarnings(geoR::grf(nrow(simulation_locations_grid), grid = simulation_locations_grid, cov.model = "exponential", cov.pars = c(p$tn[2], p$tn[3]), nugget = p$tn[1],
@@ -297,38 +351,55 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
                 w.min <- control$random_fields_method(model, simulation_locations_grid, control, month_number, 'tn')
                 w.max <- control$random_fields_method(model, simulation_locations_grid, control, month_number, 'tx')
 
-                simulated_tn[d, ] <- signif(mu.min + w.min, digits = 4)
-                simulated_tx[d, ] <- signif(mu.max + w.max, digits = 4)
+                simulated_climate[1, d, , 'tn'] <- signif(mu.min + w.min, digits = 4)
+                simulated_climate[1, d, , 'tx'] <- signif(mu.max + w.max, digits = 4)
+                # simulated_tn[d, ] <- signif(mu.min + w.min, digits = 4)
+                # simulated_tx[d, ] <- signif(mu.max + w.max, digits = 4)
             }
 
-            SIMocc.old <- simulated_occurrence[d, ]
-            SIMmax.old <- simulated_tx[d, ]
-            SIMmin.old <- simulated_tn[d, ]
+            # SIMocc.old <- simulated_occurrence[d, ]
+            # SIMmax.old <- simulated_tx[d, ]
+            # SIMmin.old <- simulated_tn[d, ]
+            SIMocc.old <- simulated_climate[1, d, , 'prcp']
+            SIMmax.old <- simulated_climate[1, d, , 'tx']
+            SIMmin.old <- simulated_climate[1, d, , 'tn']
 
             ## amounts
             SC.sim <- suppressWarnings(fields::predict.Krig(fields::Krig(coordinates(model$stations), SC[d, ]), simulation_locations))
 
             # w3 <- suppressWarnings(geoR::grf(nrow(simulation_locations_grid), grid = simulation_locations_grid, cov.model = "exponential", cov.pars = c(p$prcp[2], p$prcp[3]), nugget = p$prcp[1], mean = rep(0,
             #     nrow(simulation_locations_grid)), messages = FALSE)$data)
-            w3 <- control$random_fields_method(model, simulation_locations_grid, control, month_number, 'prcp')
 
-            simulated_prcp[d, ] <- signif(qgamma(pnorm(w3), shape = SH.sim, scale = SC.sim), digits = 4)
-            if(verbose) cat(paste0("\r", nsim, ": ", d, "/", ncol(daily_covariates), ". Retries: ", temps_retries))
+
+            rainy_locations <- simulated_climate[1, d, , 'prcp'] > 0
+
+            if(any(rainy_locations)) {
+                w3 <- control$random_fields_method(model, simulation_locations_grid, control, month_number, 'prcp')
+                simulated_climate[1, d, rainy_locations, 'prcp'] <- signif(qgamma(pnorm(w3), shape = SH.sim, scale = SC.sim), digits = 4)[rainy_locations]
+            }
+            # simulated_prcp[d, ] <- signif(qgamma(pnorm(w3), shape = SH.sim, scale = SC.sim), digits = 4)
+            if(verbose) cat(paste0("\r", i, ": ", d, "/", ncol(daily_covariates), ". Retries: ", temps_retries))
+
+            if(d %% 100 == 0) invisible(gc())
         }
 
-        simulated_prcp[simulated_prcp < model$control$prcp_occurrence_threshold] <- 0
-        simulated_occurrence[simulated_prcp == 0] <- 0
-        simulated_prcp[simulated_occurrence == 0] <- 0
+        simulated_climate[1, , , 'prcp'][simulated_climate[1, , , 'prcp'] < model$control$prcp_occurrence_threshold] <- 0
 
-        return(list(prcp = simulated_prcp, tx = simulated_tx, tn = simulated_tn))
+        rm(SIMocc.old, SIMmax.old, SIMmin.old, SC.sim, w3, rainy_locations, w.min, w.max, mu.min, mu.max, w.occ, mu.occ)
+        invisible(gc())
+
+        # return(list(prcp = simulated_prcp, tx = simulated_tx, tn = simulated_tn))
+        # return(simulated_climate[, , , c('tx', 'tn', 'prcp')])
+        simulated_climate
     }
 
     # save(gen_climate, file='gen_climate.RData')
 
 
-    if (nsim == 1) {
-        gen_climate <- list(gen_climate)
-    }
+    # if (nsim == 1) {
+    #     # gen_climate <- list(gen_climate)
+    #     return(gen_climate[1, , , ])
+    # }
 
     gen_climate
 }
