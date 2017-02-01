@@ -1,13 +1,21 @@
 #' @title Weather model fit configuration
 #' @description Provides fine control of different parameters that will be used to fit a weather model.
 #' @export
-glmwgenControl <- function(prcp_occurrence_threshold = 0.1, use_seasonal_covariates = F, seasonal_covariates = c("tx", "tn", "prcp")) {
+glmwgenControl <- function(prcp_occurrence_threshold = 0.1,
+                           use_seasonal_covariates = T,
+                           use_linear_term = F,
+                           seasonal_covariates = c("tx", "tn", "prcp"),
+                           save_residuals = F,
+                           cov_mode = 'pairwise.complete') {
     if (!all(seasonal_covariates %in% c("tx", "tn", "prcp"))) {
         stop("The seasonal_covariates parameter should list the variables names that will be fitted with seasonal averages as covariates.")
     }
     return(list(prcp_occurrence_threshold = prcp_occurrence_threshold,
                 use_seasonal_covariates = use_seasonal_covariates,
-                seasonal_covariates = seasonal_covariates))
+                use_linear_term = use_linear_term,
+                seasonal_covariates = seasonal_covariates,
+                save_residuals = save_residuals,
+                cov_mode = cov_mode))
 }
 
 
@@ -20,32 +28,29 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgenControl(), ver
     model <- list()
     climate <- climate %>% arrange(station, date)
     stations <- stations[order(stations$id), ]
+    rownames(stations@data) <- stations$id
 
-    unique_stations <- unique(climate$station)
+    unique_stations <- sort(unique(climate$station))
 
     if (!all(unique_stations == stations$id)) {
         stop("Mismatch between stations ids between climate and stations datasets.")
     }
 
-    # distance matrix of station locations converts longitude and latitude to KILOMETERS
-    # dist.mat <- fields::rdist.earth(coordinates(stations), miles = F)
     dist.mat <- sp::spDists(stations)
-    # dist.mat <- sp::spDists(spTransform(stations, CRS("+proj=longlat +datum=WGS84")))
     colnames(dist.mat) <- stations$id
     rownames(dist.mat) <- stations$id
     # diagonal element is not explicitly equal to zero, so define as such
     diag(dist.mat) <- 0
 
-    seasonal_covariates <- estimate_seasonal_covariates(climate)
+    summarised_climate <- summarise_seasonal_climate(climate)
 
     ## TODO: check control variables.
     model[["control"]] <- control
 
     model[["distance_matrix"]] <- dist.mat
-    model[["seasonal"]] <- seasonal_covariates
+    model[["seasonal"]] <- as.data.frame(summarised_climate)
     model[['stations_proj4string']] <- stations@proj4string
     model[["stations"]] <- stations
-    # model[["stations"]] <- sp::spTransform(stations, CRS("+proj=longlat +datum=WGS84"))
 
     model[["start_climatology"]] <- climate %>%
         group_by(station, month = lubridate::month(date), day = lubridate::day(date)) %>%
@@ -54,7 +59,11 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgenControl(), ver
                   prcp = mean(prcp, na.rm = T))
 
     prcp_covariates <- c("ct", "st")
-    temps_covariates <- c("tn_prev", "tx_prev", "ct", "st", "prcp_occ", "Rt")
+    temps_covariates <- c("tn_prev", "tx_prev", "ct", "st", "prcp_occ")
+
+    if(control$use_linear_term) {
+        temps_covariates <- c(temps_covariates, "Rt")
+    }
 
     if (control$use_seasonal_covariates) {
         prcp_covariates <- c(prcp_covariates, "ST1", "ST2", "ST3", "ST4")
@@ -68,10 +77,9 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgenControl(), ver
     }
 
     models <- foreach::foreach(station = unique_stations, .multicombine = T, .packages = c('dplyr')) %dopar% {
-        # system.time(replicate(500, {
         station_climate <- climate[climate$station == station, ] %>%
-            mutate(prcp_occ = (prcp > control$prcp_occurrence_threshold) + 0,
-                   prcp_intensity = ifelse(prcp < control$prcp_occurrence_threshold, NA, prcp),
+            mutate(prcp_occ = (prcp >= control$prcp_occurrence_threshold) + 0,
+                   prcp_intensity = ifelse(prcp <= control$prcp_occurrence_threshold, NA, prcp),
                    prcp_occ_prev = lag(prcp_occ),
                    tx_prev = lag(tx),
                    tn_prev = lag(tn),
@@ -84,6 +92,8 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgenControl(), ver
 
 
         if (control$use_seasonal_covariates) {
+            seasonal_covariates <- create_seasonal_covariates(summarised_climate)
+
             station_climate <- data.frame(station_climate,
                                           ST1 = seasonal_covariates$prcp[[1]],
                                           ST2 = seasonal_covariates$prcp[[2]],
@@ -133,9 +143,16 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgenControl(), ver
         return(list(coefficients = list(coefocc = coefocc, coefmin = coefmin, coefmax = coefmax),
                     gamma = list(coef = prcp_fit$coef, alpha = MASS::gamma.shape(prcp_fit)$alpha),
                     residuals = station_climate[, c("date", "station", "probit_residuals", "tx_residuals", "tn_residuals")],
+                    metrics = data.frame(station = station,
+                                           metric = 'R²',
+                                           # model = c('tx', 'tn', 'prcp'),
+                                           # value = c(summary(tx_fit)$r.squared,
+                                           #           summary(tn_fit)$r.squared,
+                                           #           summary(occ_fit)$r.squared)),
+                                           model = c('tx', 'tn'),
+                                           value = c(summary(tx_fit)$r.squared,
+                                                     summary(tn_fit)$r.squared)),
                     station = station))
-
-        # }))
     }
 
     first_model <- models[[1]]
@@ -165,55 +182,94 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgenControl(), ver
         models_residuals <- rbind(models_residuals, m$residuals)
     }
 
+    model[['fit_metrics']] <- do.call(rbind, lapply(models, '[[', 'metrics'))
     model[["coefficients"]] <- models_coefficients
     model[["gamma"]] <- GAMMA
 
     rm(first_model, models, m)
 
+
+
     month_params <- foreach(m = 1:12, .multicombine = T, .export = c('partially_apply_LS'), .packages = c('dplyr')) %dopar% {
         month_residuals <- models_residuals %>% filter(lubridate::month(date) == m) %>% arrange(station, date)
         month_climate <- climate %>% filter(lubridate::month(date) == m)
 
+        tx_residuals_matrix <- reshape2::acast(month_residuals, date ~ station, value.var = 'tx_residuals')
+        tn_residuals_matrix <- reshape2::acast(month_residuals, date ~ station, value.var = 'tn_residuals')
+        probit_residuals_matrix <- reshape2::acast(month_residuals, date ~ station, value.var = 'probit_residuals')
+
+        tx_matrix <- reshape2::acast(month_climate, date ~ station, value.var = 'tx')
+        tn_matrix <- reshape2::acast(month_climate, date ~ station, value.var = 'tn')
+
         n_stations <- length(unique_stations)
 
-        tx_res_matrix <- matrix(month_residuals$tx_residuals, ncol = n_stations)
-        tn_res_matrix <- matrix(month_residuals$tn_residuals, ncol = n_stations)
-        probit_res_matrix <- matrix(month_residuals$probit_residuals, ncol = n_stations)
+        # tx_res_matrix <- matrix(month_residuals$tx_residuals, ncol = n_stations)
+        # tn_res_matrix <- matrix(month_residuals$tn_residuals, ncol = n_stations)
+        # probit_res_matrix <- matrix(month_residuals$probit_residuals, ncol = n_stations)
+
+        # tx_matrix <- matrix(month_climate$tx, ncol = n_stations)
+        # tn_matrix <- matrix(month_climate$tn, ncol = n_stations)
 
         # tx_matrix <- matrix(month_climate$tx, ncol=n_stations) tn_matrix <- matrix()
 
-        colnames(tx_res_matrix) <- colnames(tn_res_matrix) <- colnames(probit_res_matrix) <- unique_stations
+        # colnames(tx_residuals_matrix) <- colnames(tn_residuals_matrix) <- colnames(probit_residuals_matrix) <- colnames(tx_matrix) <- colnames(tn_matrix) <- unique_stations
 
+        prcp_cor <- stats::cor(probit_residuals_matrix, use = control$cov_mode)
 
-        # all(na.omit(tx_matrix[, '87448']) == na.omit(month_climate[month_climate$station == 87448, 'tx']))
-        # all(na.omit(tx_res_matrix[,1]) == na.omit(month_residuals[month_residuals$station == 87448, 'tx_residuals']))
-
-        prcp_cor <- stats::cor(probit_res_matrix, use = "pairwise.complete")
-
-        PRCPvario <- stats::var(probit_res_matrix, use = "pairwise.complete") * (1 - prcp_cor)
-        TMAXvario <- stats::cov(tx_res_matrix, use = "pairwise.complete")
-        TMINvario <- stats::cov(tn_res_matrix, use = "pairwise.complete")
+        prcp_vario <- stats::var(probit_residuals_matrix, use = control$cov_mode) * (1 - prcp_cor)
+        tx_vario <- stats::cov(tx_residuals_matrix, use = control$cov_mode)
+        tn_vario <- stats::cov(tn_residuals_matrix, use = control$cov_mode)
 
         # Assert that the column and row names of the variograms equal the ones of the distance matrix.
-        stopifnot(all(colnames(TMAXvario) == colnames(dist.mat)), all(rownames(TMAXvario) == rownames(dist.mat)))
+        stopifnot(all(colnames(tx_vario) == colnames(dist.mat)), all(rownames(tx_vario) == rownames(dist.mat)))
 
-        params <- stats::optimize(interval = c(0, max(dist.mat)), f = partially_apply_LS(PRCPvario, dist.mat, base_p = c(0, 1)))$minimum
-        params <- c(0, 1, params)
+        prcp_params <- stats::optimize(interval = c(0, max(dist.mat)), f = partially_apply_LS(prcp_vario, dist.mat, base_p = c(0, 1)))$minimum
+        prcp_params <- c(0, 1, prcp_params)
+        # prcp_params <- stats::optim(par = c(0.01, 1, max(dist.mat)), f = partially_apply_LS(prcp_vario, dist.mat))$par
+        # prcp_params[params < 0] <- 0
+        # prcp_params <- c(0, 1, prcp_params[3])
 
-        sill_initial_value <- mean(TMAXvario[upper.tri(TMAXvario, diag = T)])
-        params.max <- stats::optim(par = c(sill_initial_value, max(dist.mat)), fn = partially_apply_LS(TMAXvario, dist.mat, base_p = c(0)))$par
-        params.max <- c(0, params.max)
+        # sill_initial_value <- mean(tx_vario[upper.tri(tx_vario, diag = T)])
+        sill_initial_value <- mean(var(tx_matrix, na.rm = T))
+        tx_params <- stats::optim(par = c(sill_initial_value, max(dist.mat)), fn = partially_apply_LS(tx_vario, dist.mat, base_p = c(0)))$par
+        tx_params <- c(0, tx_params)
+        # tx_params <- stats::optim(par = c(0.01, sill_initial_value, max(dist.mat)), fn = partially_apply_LS(tx_vario, dist.mat))$par
+        # tx_params <- c(0, tx_params[2:3])
 
-        sill_initial_value <- mean(TMINvario[upper.tri(TMINvario, diag = T)])
-        params.min <- stats::optim(par = c(sill_initial_value, max(dist.mat)), fn = partially_apply_LS(TMINvario, dist.mat, base_p = c(0)))$par
-        params.min <- c(0, params.min)
+        # sill_initial_value <- mean(tn_vario[upper.tri(tn_vario, diag = T)])
+        sill_initial_value <- mean(var(tn_matrix, na.rm = T))
+        tn_params <- stats::optim(par = c(sill_initial_value, max(dist.mat)), fn = partially_apply_LS(tn_vario, dist.mat, base_p = c(0)))$par
+        tn_params <- c(0, tn_params)
 
-        return(list(prcp = params, tx = params.max, tn = params.min))
+        # tn_params <- stats::optim(par = c(0.01, sill_initial_value, max(dist.mat)), fn = partially_apply_LS(tn_vario, dist.mat))$par
+        # tn_params <- c(0, tn_params[2:3])
+
+        variogram_parameters <- list(prcp = prcp_params, tx = tx_params, tn = tn_params)
+
+        residuals_sd <- data.frame(month_residuals %>% group_by(station) %>%
+            summarise(tx = sd(tx_residuals, na.rm = T),
+                      tn = sd(tn_residuals, na.rm = T),
+                      prcp = 1))
+
+        rownames(residuals_sd) <- residuals_sd[, 1]
+        residuals_sd <- residuals_sd[, -1]
+
+        return(list(
+            variogram_parameters = variogram_parameters,
+            residuals_sd = residuals_sd,
+            cov_matrix = list(
+                tx = tx_vario,
+                tn = tn_vario,
+                prcp = prcp_cor
+            )
+        ))
     }
 
     model[["month_params"]] <- month_params
 
-    rm(models_residuals)
+    if(control$save_residuals) {
+        model[["residuals"]] <- models_residuals
+    }
 
     class(model) <- "glmwgen"
 

@@ -11,10 +11,13 @@ Imports:
     dplyr,
     lubridate,
     fields,
-    geoR,
+    sp,
     foreach,
     MASS,
-    abind
+    abind,
+    proto,
+    reshape2,
+    RandomFields
 Suggests:
     testthat
 RoxygenNote: 5.0.1

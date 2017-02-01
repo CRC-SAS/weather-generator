@@ -4,8 +4,9 @@
 \alias{glmwgenControl}
 \title{Weather model fit configuration}
 \usage{
-glmwgenControl(prcp_occurrence_threshold = 0.1, use_seasonal_covariats = F,
-  seasonal_covariats = c("tx", "tn", "prcp"))
+glmwgenControl(prcp_occurrence_threshold = 0.1, use_seasonal_covariates = T,
+  use_linear_term = F, seasonal_covariates = c("tx", "tn", "prcp"),
+  save_residuals = F, cov_mode = "pairwise.complete")
 }
 \description{
 Provides fine control of different parameters that will be used to fit a weather model.

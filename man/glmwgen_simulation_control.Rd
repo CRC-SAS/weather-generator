@@ -5,10 +5,10 @@
 \title{Simulations control configuration}
 \usage{
 
-  glmwgen_simulation_control(seasonal_temps_covariats_getter = get_temperatures_seasonal_covariat,
-  seasonal_prcp_covariats_getter = get_rainfall_seasonal_covariat,
-  random_fields_method = "gaussian", Rt = NULL, grf_method = NULL,
-  multicombine = T)
+  glmwgen_simulation_control(seasonal_temps_covariates_getter = get_temperatures_seasonal_covariate,
+  seasonal_prcp_covariates_getter = get_rainfall_seasonal_covariate,
+  random_fields_method = "gaussian", Rt = NULL, multicombine = F,
+  always_krig_coefficients = T, cache_size = 1)
 }
 \description{
 Provides fine control of different parameters that will be used to create new weather series.
