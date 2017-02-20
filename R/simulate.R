@@ -286,7 +286,7 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
 
         `%op%` <- if(identical(control$interpolation_method, glmwgen:::idw_covariate)) `%do%` else `%dopar%`
 
-        SC_sim <- foreach(day_idx = 1:nrow(SC), .combine = rbind, .packages = c('sp', 'automap')) %op% {
+        SC_sim <- foreach(day_idx = 1:nrow(SC), .combine = rbind, .packages = c('sp')) %op% {
             control$interpolation_method(model = model,
                                          stations_locations = stations_krige_sp,
                                          simulation_locations = simulation_krige_sp,
@@ -495,6 +495,10 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
 
     attr(gen_climate, 'realizations_seeds') <- realizations_seeds
     attr(gen_climate, 'simulation_coordinates') <- simulation_coordinates
+
+    if('simulation_dist_matrix' %in% names(model)) {
+        model[['simulation_dist_matrix']] <- NULL
+    }
 
     attr(gen_climate, 'model') <- model
 
