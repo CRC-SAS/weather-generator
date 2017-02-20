@@ -10,7 +10,6 @@ LazyData: true
 Imports:
     dplyr,
     lubridate,
-    fields,
     sp,
     foreach,
     MASS,
