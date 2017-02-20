@@ -1,8 +1,27 @@
 
-plot_means <- function(in_simulated_climate, observed_climate) {
-    observed_summarised_climate <- observed_climate %>% group_by(station) %>% summarise(tx = mean(tx, na.rm = T),
-                                                                                        tn = mean(tn, na.rm = T),
-                                                                                        prcp = sum(prcp, na.rm = T))
+plot_means <- function(in_simulated_climate, observed_climate = NULL, stations = NULL, title = NULL) {
+    if(is.null(stations)) stations <- attributes(in_simulated_climate)$model$stations
+
+    if(is.null(observed_climate)) observed_climate <- attributes(in_simulated_climate)$model$start_climatology
+
+    simulation_locations <- sp::SpatialPoints(attributes(in_simulated_climate)$simulation_coordinates,
+                                              proj4string = attributes(in_simulated_climate)$model$stations_proj4string)
+
+    stations_dist <- sp::spDists(stations, simulation_locations)
+
+    nearest_simulation_location <- apply(stations_dist, 1, which.min)
+    names(nearest_simulation_location) <- stations$id
+
+
+    observed_summarised_climate <- observed_climate %>% group_by(station) %>%
+        summarise(tx = mean(tx, na.rm = T), tn = mean(tn, na.rm = T), prcp = sum(prcp, na.rm = T))
+
+    # If the amount of stations is lower than the amount of simulation points,
+    # filter only the matching locations.
+    if(length(nearest_simulation_location) < dim(in_simulated_climate)[3]) {
+        in_simulated_climate <- in_simulated_climate[, , nearest_simulation_location, ]
+    }
+    dimnames(in_simulated_climate)[[3]] <- names(nearest_simulation_location)
 
     summarised_simulated_climate <- apply(in_simulated_climate, c(1, 3, 4), mean)
     simulated_stations <- dimnames(in_simulated_climate)[[3]]
@@ -32,6 +51,7 @@ plot_means <- function(in_simulated_climate, observed_climate) {
         geom_point(data = observed_summarised_climate, aes(x = station, y = tx), colour = weather_variables_colours[['tx']]) +
         scale_y_continuous(name = 'Mean Maximum Temperature') +
         scale_x_discrete(name = NULL) +
+        ggtitle(label = title) +
         theme_light()
 
     tn_plot <- ggplot(realization_means %>% filter(variable == 'tn')) +

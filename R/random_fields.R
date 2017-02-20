@@ -121,13 +121,43 @@ noise_method <- proto::proto(
 
 random_field_noise <- function(model, simulation_locations, month_number, var_name, nsim = 1) {
     month_params <- model$month_params[[month_number]]$variogram_parameters[[var_name]]
-    RandomFields::RFsimulate(RandomFields::RMexp(var=month_params[2], scale=month_params[3]),
+    t(RandomFields::RFsimulate(RandomFields::RMexp(var=month_params[2], scale=month_params[3]),
                              distances = model$simulation_dist_matrix,
                              dim = nrow(simulation_locations),
                              n = nsim,
-                             printlevel = 0)
+                             printlevel = 0))
 }
 
+# random_field_noise <- function(model, simulation_locations, month_number, var_name, nsim = 1) {
+#     month_params <- model$month_params[[month_number]]$variogram_parameters[[var_name]]
+#     t(RandomFields::RFsimulate(model = RandomFields::RMexp(var = month_params[2], scale = month_params[3]),
+#                              x = simulation_locations,
+#                              n = nsim,
+#                              printlevel = 0)@data)
+# }
+#
+# random_field_noise_2 <- function(model, simulation_locations, month_number, var_name, nsim = 1) {
+#     month_params <- model$month_params[[month_number]]$variogram_parameters[[var_name]]
+#     replicate(nsim, RandomFields::RFsimulate(model = RandomFields::RMexp(var = month_params[2], scale = month_params[3]),
+#                                x = coordinates(simulation_locations),
+#                                printlevel = 0)@data)
+# }
+#
+# microbenchmark(
+#     nsim = random_field_noise(model, simulation_locations, 1, 'tx', 10),
+#     rep = random_field_noise_2(model, simulation_locations, 1, 'tx', 10),
+#     times = 10)
+#
+# RandomFields::RFoptions(seed = 12454565, spConform = F)
+#
+# dist_noise <- RandomFields::RFsimulate(model = RandomFields::RMexp(var = 8, scale = 6.179372e+05),
+#                          distances = d_object,
+#                          dim = nrow(simulation_coordinates),
+#                          n = 10)
+#
+# coords_noise <- RandomFields::RFsimulate(model = RandomFields::RMexp(var = 8, scale = 6.179372e+05),
+#                                          x = simulation_locations,
+#                                          n = 10)
 # cholesky_random_field <- function(model, simulation_locations, month_number, var_name, nsim = 1) {
 #     model$cSigma[[month_number]][[var_name]] %*% rnorm(nrow(simulation_locations)) * sqrt(model$month_params[[month_number]]$variogram_parameters[[var_name]][2])
 # }
