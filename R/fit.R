@@ -147,8 +147,12 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen_fit_control()
 
         station_climate[probit_indexes, "probit_residuals"] <- occ_fit$residuals
 
-        p <- ROCR::prediction(fitted(occ_fit), (na.omit(station_climate[, c("prcp_occ", "prcp_occ_prev", prcp_covariates)]))$prcp_occ)
-        prcp_auc <- ROCR::performance(p, 'auc')
+        prcp_auc <- NA
+        if("ROCR" %in% rownames(installed.packages())) {
+            p <- ROCR::prediction(fitted(occ_fit), (na.omit(station_climate[, c("prcp_occ", "prcp_occ_prev", prcp_covariates)]))$prcp_occ)
+            prcp_auc <- ROCR::performance(p, 'auc')@y.values[[1]]
+        }
+
 
         # Fit model for precipitation amounts.
         gamma_indexes <- na.omit(station_climate[, c("prcp_intensity", "row_num", prcp_covariates)])$row_num
@@ -201,7 +205,7 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen_fit_control()
                                                  model = c('tx', 'tn', 'prcp'),
                                                  value = c(summary(tx_fit)$r.squared,
                                                            summary(tn_fit)$r.squared,
-                                                           prcp_auc@y.values[[1]])),
+                                                           prcp_auc)),
                             # significance = list(coefocc = )
                             station = station)
 

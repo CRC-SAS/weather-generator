@@ -46,13 +46,13 @@ get_temperatures_seasonal_covariate <- function(years, season_number, seasonal_v
 #' @export
 glmwgen_simulation_control <- function(seasonal_temps_covariates_getter = get_temperatures_seasonal_covariate,
                                      seasonal_prcp_covariates_getter = get_rainfall_seasonal_covariate,
-                                     random_fields_method = 'gaussian',
+                                     random_fields_method = 'rf',
                                      minimum_temperatures_difference_threshold = 0.1,
                                      Rt = NULL,
                                      # grf_method = NULL,
                                      multicombine = F,
                                      always_krig_coefficients = T,
-                                     interpolation_method = c('kriging', 'idw'),
+                                     interpolation_method = c('idw', 'kriging'),
                                      cache_size = 1) {
     rf_function <- NULL
     if(!is.function(random_fields_method)) {
@@ -368,8 +368,10 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
         previous_tx <- start_climatology[matching_stations, 'tx']
         previous_tn <- start_climatology[matching_stations, 'tn']
     } else {
-        previous_tn <- suppressWarnings(as.vector(fields::predict.Krig(fields::Krig(coordinates(model$stations), start_climatology$tn), simulation_coordinates)))
-        previous_tx <- suppressWarnings(as.vector(fields::predict.Krig(fields::Krig(coordinates(model$stations), start_climatology$tx), simulation_coordinates)))
+        # previous_tn <- suppressWarnings(as.vector(fields::predict.Krig(fields::Krig(coordinates(model$stations), start_climatology$tn), simulation_coordinates)))
+        # previous_tx <- suppressWarnings(as.vector(fields::predict.Krig(fields::Krig(coordinates(model$stations), start_climatology$tx), simulation_coordinates)))
+        previous_tn <- control$interpolation_method(model = model, stations_locations = stations_krige_sp, simulation_locations = simulation_krige_sp, start_climatology$tn)
+        previous_tx <- control$interpolation_method(model = model, stations_locations = stations_krige_sp, simulation_locations = simulation_krige_sp, start_climatology$tx)
     }
 
     rm(start_climatology)

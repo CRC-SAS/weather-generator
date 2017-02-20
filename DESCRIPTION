@@ -19,5 +19,7 @@ Imports:
     reshape2,
     RandomFields
 Suggests:
-    testthat
+    testthat,
+    automap,
+    ROCR
 RoxygenNote: 5.0.1
