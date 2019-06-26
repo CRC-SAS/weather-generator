@@ -1,8 +1,8 @@
 make_distance_grid <- function(fit_stations, simulation_locations) {
-    is_projected <- is.projected(fit_stations)
+    is_projected <- sp::is.projected(fit_stations)
 
-    simulation_locations <- coordinates(simulation_locations)
-    stations_locations <- coordinates(fit_stations)
+    simulation_locations <- sp::coordinates(simulation_locations)
+    stations_locations <- sp::coordinates(fit_stations)
     bounds <- sp::bbox(rbind(simulation_locations, stations_locations))
 
     simulation_grid <- matrix(nrow = nrow(simulation_locations), ncol = 2)

@@ -7,10 +7,11 @@
 
   glmwgen_simulation_control(seasonal_temps_covariates_getter = get_temperatures_seasonal_covariate,
   seasonal_prcp_covariates_getter = get_rainfall_seasonal_covariate,
-  random_fields_method = "gaussian", Rt = NULL, multicombine = F,
-  always_krig_coefficients = T, cache_size = 1)
+  random_fields_method = "rf",
+  minimum_temperatures_difference_threshold = 0.1, Rt = NULL,
+  multicombine = F, always_krig_coefficients = T,
+  interpolation_method = c("idw", "kriging"), cache_size = 1)
 }
 \description{
 Provides fine control of different parameters that will be used to create new weather series.
 }
-

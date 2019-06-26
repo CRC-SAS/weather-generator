@@ -10,4 +10,3 @@ calibrate.glmwgen(climate, stations, control = glmwgen_fit_control(),
 \description{
 Fits a weather model from historical data.
 }
-

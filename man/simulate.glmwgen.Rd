@@ -4,8 +4,8 @@
 \alias{simulate.glmwgen}
 \title{Simulates new weather trajectories}
 \usage{
-\method{simulate}{glmwgen}(object, nsim = 1, seed = NULL, start_date = NA,
-  end_date = NA, simulation_locations = NULL,
+\method{simulate}{glmwgen}(object, nsim = 1, seed = NULL,
+  start_date = NA, end_date = NA, simulation_locations = NULL,
   control = glmwgen_simulation_control(), verbose = T)
 }
 \arguments{
@@ -30,4 +30,3 @@ If not set, the locations used to fit the model will be used.}
 \description{
 Simulates new weather trajectories.
 }
-

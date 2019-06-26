@@ -26,7 +26,7 @@
 
 
 krige_covariate_automap <- function(model, stations_locations, simulation_locations, covariate) {
-    covariate <- SpatialPointsDataFrame(coordinates(stations_locations),
+    covariate <- SpatialPointsDataFrame(sp::coordinates(stations_locations),
                                         data.frame(value = covariate),
                                         proj4string = stations_locations@proj4string)
     automap::autoKrige(value ~ 1, input_data = covariate, new_data = simulation_locations, debug.level = 0)$krige_output$var1.pred

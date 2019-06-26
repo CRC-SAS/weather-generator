@@ -5,11 +5,11 @@
 \title{Weather model fit configuration}
 \usage{
 glmwgen_fit_control(prcp_occurrence_threshold = 0.1,
-  use_seasonal_covariates = T, use_linear_term = F,
+  use_seasonal_covariates = F, use_linear_term = T,
   seasonal_covariates = c("tx", "tn", "prcp"), save_residuals = F,
-  cov_mode = "pairwise.complete")
+  cov_mode = "complete", save_lm_fits = F, use_stepwise = F,
+  use_robust_methods = F)
 }
 \description{
 Provides fine control of different parameters that will be used to fit a weather model.
 }
-
