@@ -57,17 +57,18 @@ glmwgen_simulation_control <- function(seasonal_temps_covariates_getter = get_te
     rf_function <- NULL
     if(!is.function(random_fields_method)) {
         # if(startsWith(random_fields_method, 'gauss')) rf_function <- gaussian_random_field
-        if(startsWith(random_fields_method, 'rf')) rf_function <- random_field_noise
-        if(startsWith(random_fields_method, 'chol')) rf_function <- cholesky_random_field
-        if(startsWith(random_fields_method, 'rn')) rf_function <- rnorm_noise
-        if(startsWith(random_fields_method, 'mv')) rf_function <- mvrnorm_noise
+        if(startsWith(random_fields_method, 'rf')) rf_function <- glmwgen:::random_field_noise
+        if(startsWith(random_fields_method, 'chol')) rf_function <- glmwgen:::cholesky_random_field
+        if(startsWith(random_fields_method, 'rn')) rf_function <- glmwgen:::rnorm_noise
+        if(startsWith(random_fields_method, 'mv')) rf_function <- glmwgen:::mvrnorm_noise
     } else {
         rf_function <- random_fields_method
     }
 
     interpolation_method <- match.arg(interpolation_method)
 
-    interpolation_method <- c('kriging' = krige_covariate_automap, 'idw' = idw_covariate)[[interpolation_method]]
+    interpolation_method <- c('kriging' = glmwgen:::krige_covariate_automap,
+                              'idw' = glmwgen:::idw_covariate)[[interpolation_method]]
 
     return(list(seasonal_temps_covariates_getter = seasonal_temps_covariates_getter,
                 seasonal_prcp_covariates_getter = seasonal_prcp_covariates_getter,
@@ -123,11 +124,15 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
     }
 
     # Check if all the simulation locations match a station.
-    distance_to_stations <- round(sp::spDists(simulation_locations, model$stations), 1)
     matching_stations <- NULL
+    if (no_sim_loc_provided) {
+        matching_stations <- seq_len(nrow(model$stations))
+    } else {
+        distance_to_stations <- round(sp::spDists(simulation_locations, model$stations), 1)
 
-    if(all(apply(distance_to_stations, 1, min) < 0.5)) {
-        matching_stations <- apply(distance_to_stations, 1, which.min)
+        if(all(apply(distance_to_stations, 1, min) < 0.5)) {
+            matching_stations <- apply(distance_to_stations, 1, which.min)
+        }
     }
 
     # Save info about wether the CRS is a projected one or not.
@@ -172,9 +177,9 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
     for (season_number in unique(simulation_dates$season)) {
         season_indexes <- simulation_dates$season == season_number
         # season_values <- d_seatot[d_seatot$season == season_number, ]
-        season_tx <- unique(model$seasonal$tx[[season_number]])
-        season_tn <- unique(model$seasonal$tn[[season_number]])
-        season_prcp <- unique(model$seasonal$prcp[[season_number]])
+        # season_tx <- unique(model$seasonal$tx[[season_number]])
+        # season_tn <- unique(model$seasonal$tn[[season_number]])
+        # season_prcp <- unique(model$seasonal$prcp[[season_number]])
 
         years <- unique(simulation_dates$year[season_indexes])
 
@@ -218,7 +223,7 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
 
     # Create a gridded representation of the simulation points and fitted stations.
     # This is similar to a Gauss-Kruger projection.
-    projections_grid <- make_distance_grid(model$stations, simulation_locations)
+    projections_grid <- glmwgen:::make_distance_grid(model$stations, simulation_locations)
     simulation_coordinates_grid <- projections_grid$simulation_grid
 
     # stations_in_grid <- apply(spDists(model$stations, simulation_locations), 1, which.min)
