@@ -97,8 +97,8 @@ glmwgen_simulation_control <- function(seasonal_temps_covariates_getter = get_te
 #' @import dplyr
 #' @import foreach
 #' @export
-simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end_date = NA, simulation_locations = NULL, control = glmwgen_simulation_control(),
-                             verbose = T) {
+simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end_date = NA, simulation_locations = NULL,
+                             control = glmwgen:::glmwgen_simulation_control(), verbose = T) {
     model <- object
 
     if(class(object) != 'glmwgen') {
@@ -130,7 +130,7 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
     }
 
     # Save info about wether the CRS is a projected one or not.
-    is_projected <- is.projected(simulation_locations)
+    is_projected <- sp::is.projected(simulation_locations)
 
     #########################################
 
@@ -171,9 +171,9 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
     for (season_number in unique(simulation_dates$season)) {
         season_indexes <- simulation_dates$season == season_number
         # season_values <- d_seatot[d_seatot$season == season_number, ]
-        season_tx <- unique(model$seasonal$tx[[season_number]])
-        season_tn <- unique(model$seasonal$tn[[season_number]])
-        season_prcp <- unique(model$seasonal$prcp[[season_number]])
+        # season_tx <- unique(model$seasonal$tx[[season_number]])
+        # season_tn <- unique(model$seasonal$tn[[season_number]])
+        # season_prcp <- unique(model$seasonal$prcp[[season_number]])
 
         years <- unique(simulation_dates$year[season_indexes])
 
@@ -195,7 +195,7 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
     #########################################
 
     if(identical(control$random_fields_method, glmwgen:::random_field_noise)) {
-        cat('Calculating distance matrix for simulation points\n')
+        if(verbose) cat('Calculating distance matrix for simulation points\n')
         model$simulation_dist_matrix <- as.dist(sp::spDists(simulation_locations), upper = T)
     }
 
@@ -213,11 +213,11 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
     krige_coefficients <- is.null(matching_stations) || control$always_krig_coefficients
 
     # Save original coordinates.
-    simulation_coordinates <- coordinates(simulation_locations)
+    simulation_coordinates <- sp::coordinates(simulation_locations)
 
     # Create a gridded representation of the simulation points and fitted stations.
     # This is similar to a Gauss-Kruger projection.
-    projections_grid <- make_distance_grid(model$stations, simulation_locations)
+    projections_grid <- glmwgen:::make_distance_grid(model$stations, simulation_locations)
     simulation_coordinates_grid <- projections_grid$simulation_grid
 
     # stations_in_grid <- apply(spDists(model$stations, simulation_locations), 1, which.min)
@@ -239,23 +239,23 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
         rownames(simulation_coordinates_grid) <- model$stations$id[matching_stations]
     } else {
         stations_krige_sp <- model$stations
-        simulation_krige_sp <- sp::SpatialPointsDataFrame(coordinates(simulation_locations),
+        simulation_krige_sp <- sp::SpatialPointsDataFrame(sp::coordinates(simulation_locations),
                                                           data = data.frame(loc_id = 1:nrow(simulation_locations)),
-                                                          proj4string = CRS(proj4string(simulation_locations)))
+                                                          proj4string = sp::CRS(sp::proj4string(simulation_locations)))
 
-        if(!is.projected(stations_krige_sp)) {
+        if(!sp::is.projected(stations_krige_sp)) {
             projection_string <- "+proj=tpeqd +lat_1=%f +lon_1=%f +lat_2=%f +lon_2=%f +x_0=%f +y_0=%f +ellps=intl +units=m +no_defs"
             # projection_string <- "+proj=tmerc +lat_0=%f +lon_0=%f +x_0=%f +y_0=%f +ellps=intl +datum=WGS84 +units=m +no_defs"
             # Get locations bounds.
-            bounds <- sp::bbox(rbind(coordinates(stations_krige_sp),
-                                     coordinates(simulation_krige_sp)))
+            bounds <- sp::bbox(rbind(sp::coordinates(stations_krige_sp),
+                                     sp::coordinates(simulation_krige_sp)))
             # Format projection string and make it a CRS.
             projection_crs <- sp::CRS(sprintf(projection_string, bounds[2, 'min'], bounds[1, 'min'], bounds[2, 'max'], bounds[1, 'max'], 0, 0))
             # projection_crs <- sp::CRS(sprintf(projection_string, bounds[2, 'min'], bounds[1, 'min'], 0, 0))
             .stations_krige_sp <- sp::spTransform(stations_krige_sp, projection_crs)
             .simulation_krige_sp <- sp::spTransform(simulation_krige_sp, projection_crs)
 
-            coords_offset <- max(abs(apply(rbind(coordinates(.simulation_krige_sp), coordinates(.stations_krige_sp)), 2, min))) + 1000
+            coords_offset <- max(abs(apply(rbind(sp::coordinates(.simulation_krige_sp), sp::coordinates(.stations_krige_sp)), 2, min))) + 1000
 
             projection_crs <- sp::CRS(sprintf(projection_string, bounds[2, 'min'], bounds[1, 'min'], bounds[2, 'max'], bounds[1, 'max'], ceiling(coords_offset), ceiling(coords_offset)))
             # projection_crs <- sp::CRS(sprintf(projection_string, bounds[2, 'min'], bounds[1, 'min'], min_coords[1], min_coords[2]))
@@ -263,17 +263,38 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
             simulation_krige_sp <- sp::spTransform(simulation_krige_sp, projection_crs)
 
             rm(.stations_krige_sp, .simulation_krige_sp)
-            cat('Projected stations and simulation locations to interpolate coefficients\n')
+            if(verbose) cat('Projected stations and simulation locations to interpolate coefficients\n')
         }
 
-        coefmin_sim <- apply(model$coefficients$coefmin, 2, control$interpolation_method, model = model, stations_locations = stations_krige_sp, simulation_locations = simulation_krige_sp)
-        coefocc_sim <- apply(model$coefficients$coefocc, 2, control$interpolation_method, model = model, stations_locations = stations_krige_sp, simulation_locations = simulation_krige_sp)
-        coefmax_sim <- apply(model$coefficients$coefmax, 2, control$interpolation_method, model = model, stations_locations = stations_krige_sp, simulation_locations = simulation_krige_sp)
-        cat('Interpolating gamma shape, this may take a while...')
+        coefmin_sim <- apply(model$coefficients$coefmin, 2, control$interpolation_method, model = model,
+                         stations_locations = stations_krige_sp, simulation_locations = simulation_krige_sp)
+        if (!is.matrix(coefmin_sim)) {
+            aux.matrix           <- base::matrix(nrow = 1, ncol = length(coefmin_sim))
+            aux.matrix[1,]       <- coefmin_sim
+            colnames(aux.matrix) <- names(coefmin_sim)
+            coefmin_sim          <- aux.matrix
+        }
+        coefocc_sim <- apply(model$coefficients$coefocc, 2, control$interpolation_method, model = model,
+                             stations_locations = stations_krige_sp, simulation_locations = simulation_krige_sp)
+        if (!is.matrix(coefocc_sim)) {
+            aux.matrix           <- base::matrix(nrow = 1, ncol = length(coefocc_sim))
+            aux.matrix[1,]       <- coefocc_sim
+            colnames(aux.matrix) <- names(coefocc_sim)
+            coefocc_sim          <- aux.matrix
+        }
+        coefmax_sim <- apply(model$coefficients$coefmax, 2, control$interpolation_method, model = model,
+                             stations_locations = stations_krige_sp, simulation_locations = simulation_krige_sp)
+        if (!is.matrix(coefmax_sim)) {
+            aux.matrix           <- base::matrix(nrow = 1, ncol = length(coefmax_sim))
+            aux.matrix[1,]       <- coefmax_sim
+            colnames(aux.matrix) <- names(coefmax_sim)
+            coefmax_sim          <- aux.matrix
+        }
+        if(verbose) cat('Interpolating gamma shape, this may take a while...')
 
         SH_sim <- control$interpolation_method(model = model, stations_locations = stations_krige_sp, simulation_locations = simulation_krige_sp, SH)
 
-        SC <- array(data = NA, dim = c(nrow(simulation_dates), nrow(coordinates(model$stations))))
+        SC <- array(data = NA, dim = c(nrow(simulation_dates), nrow(sp::coordinates(model$stations))))
         colnames(SC) <- model$stations$id
 
         for (station in as.character(model$stations$id)) {
@@ -292,7 +313,7 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
                                          simulation_locations = simulation_krige_sp,
                                          SC[day_idx, ])
         }
-        cat(sprintf('done (took %.2f minutes)\n', as.numeric(difftime(Sys.time(), start_time, units = 'min'))))
+        if(verbose) cat(sprintf('done (took %.2f minutes)\n', as.numeric(difftime(Sys.time(), start_time, units = 'min'))))
 
         # Fede
         # coefsc <- sapply(as.character(stations_krige_sp$id),
@@ -304,7 +325,7 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
         # SC_sim <- t(exp(coefsc_sim %*% daily_covariates[names(gamma_coef), ]) / SH_sim)
 
         # Andrew, old
-        # SC_sim <- suppressWarnings(fields::predict.Krig(fields::Krig(coordinates(model$stations), SC[d, ]), simulation_coordinates))
+        # SC_sim <- suppressWarnings(fields::predict.Krig(fields::Krig(sp::coordinates(model$stations), SC[d, ]), simulation_coordinates))
 
         rm(gamma_coef)
 
@@ -323,7 +344,7 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
     # if(identical(control$random_fields_method, cholesky_random_field)) {
     #     cat('Calculate cSigma matrixes.\n')
     #     # cSigma_list <- list()
-    #     # # grid     <- list(x = unique(coordinates(simulation_coordinates_grid)[,1]), y = unique(coordinates(simulation_coordinates_grid)[,2]))
+    #     # # grid     <- list(x = unique(sp::coordinates(simulation_coordinates_grid)[,1]), y = unique(sp::coordinates(simulation_coordinates_grid)[,2]))
     #     # # xg       <- fields::make.surface.grid(grid)
     #     #
     #     # model$cSigma <- foreach(month_number=1:12, .multicombine = T) %do% {
@@ -368,8 +389,8 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
         previous_tx <- start_climatology[matching_stations, 'tx']
         previous_tn <- start_climatology[matching_stations, 'tn']
     } else {
-        # previous_tn <- suppressWarnings(as.vector(fields::predict.Krig(fields::Krig(coordinates(model$stations), start_climatology$tn), simulation_coordinates)))
-        # previous_tx <- suppressWarnings(as.vector(fields::predict.Krig(fields::Krig(coordinates(model$stations), start_climatology$tx), simulation_coordinates)))
+        # previous_tn <- suppressWarnings(as.vector(fields::predict.Krig(fields::Krig(sp::coordinates(model$stations), start_climatology$tn), simulation_coordinates)))
+        # previous_tx <- suppressWarnings(as.vector(fields::predict.Krig(fields::Krig(sp::coordinates(model$stations), start_climatology$tx), simulation_coordinates)))
         previous_tn <- control$interpolation_method(model = model, stations_locations = stations_krige_sp, simulation_locations = simulation_krige_sp, start_climatology$tn)
         previous_tx <- control$interpolation_method(model = model, stations_locations = stations_krige_sp, simulation_locations = simulation_krige_sp, start_climatology$tx)
     }
@@ -442,11 +463,11 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
                 simulated_climate[1, d, , 'tn'] <- signif(mu_tn + tn_noise, digits = 4)
             }
             if(daily_retries >= 100) {
-                cat('Failed to simulate random noise that doesn\'t violate the constraint of max. temp. > min. temp.')
+                if(verbose) cat('Failed to simulate random noise that doesn\'t violate the constraint of max. temp. > min. temp.')
                 # temps_diff <- apply(retries_array, 2, function(x) x < control$minimum_temperatures_difference_threshold)
                 # temps_diff <- apply(temps_diff, 2, sum)
                 # fields::quilt.plot(simulation_coordinates, temps_diff)
-                # text(coordinates(model$stations), label = model$stations$id, col = 'white')
+                # text(sp::coordinates(model$stations), label = model$stations$id, col = 'white')
                 # title(main = sprintf('Day %03d', d))
                 return(NULL)
             }
@@ -470,7 +491,7 @@ simulate.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
                 simulated_climate[1, d, rainy_locations, 'prcp'] <- signif(qgamma(pnorm(amt_noise), shape = SH_sim, scale = SC_sim[d, ]), digits = 4)[rainy_locations]
                 # simulated_prcp[d, ] <- signif(qgamma(pnorm(w3), shape = SH_sim, scale = SC.sim), digits = 4)
             }
-            if(verbose && d %% 10 == 0) cat(paste0("\r", i, ": ", d, "/", ncol(daily_covariates), ". Retries: ", temps_retries, '       '))
+            if(verbose && d %% 2 == 0) cat(paste0("\r Realization ", i, ": ", d, "/", ncol(daily_covariates), ". Retries: ", temps_retries, '       '))
 
             if(d %% 30 == 0) invisible(gc())
         }
