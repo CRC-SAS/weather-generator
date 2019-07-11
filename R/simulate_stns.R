@@ -19,37 +19,27 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
                              control = glmwgen:::glmwgen_simulation_control(),  verbose = T) {
     model <- object
 
-    if(class(object) != 'glmwgen') {
-        stop(paste('Received a model of class', class(object), 'and a model of class "glmwgen" was expected.'))
-    }
-
-    if(!is.null(seed)) set.seed(seed)
+    if(class(object) != 'glmwgen') stop(paste('Received a model of class', class(object), 'and a model of class "glmwgen" was expected.'))
 
     simulation_locations <- model$stations
 
-    realizations_seeds <- ceiling(runif(min = 1, max = 10000000, n = nsim))
-
+    if(!is.null(seed)) set.seed(seed)
 
     if(!('proj4string' %in% names(attributes(simulation_locations)))) {
         warning('simulation_locations is not a spacial points object, attempting to convert it with stations projection string.')
         simulation_locations <- SpatialPoints(simulation_locations, proj4string=model$stations_proj4string)
     }
 
-    # Save info about wether the CRS is a projected one or not.
-    is_projected <- sp::is.projected(simulation_locations)
-
-    #########################################
-
-    if(end_date <= start_date) {
-        stop('End date should be greater than start date')
-    }
+    if(end_date <= start_date) stop('End date should be greater than start date')
 
     if(nsim < 1) stop('Number of simulations should be greater than one')
 
     if(identical(control$random_fields_method, glmwgen:::random_field_noise)) {
-        if(verbose) cat("There isn't possible to use random_field_noise function to calculate previous_occ. Switching to rnorm_noise function!\n")
+        warning("There isn't possible to use random_field_noise function to calculate previous_occ. Switching to rnorm_noise function!\n")
         control$random_fields_method <- glmwgen:::rnorm_noise
     }
+
+    #########################################
 
     simulation_dates <- data.frame(date = seq.Date(from = as.Date(start_date), to = as.Date(end_date), by = "days"))
 
@@ -103,6 +93,9 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
     daily_covariates <- rbind(1, daily_covariates)
     rownames(daily_covariates)[1] <- "(Intercept)"
 
+
+    simulation_dates <- simulation_dates %>% dplyr::select(date, year, month)
+
     #########################################
 
     # Gamma shape
@@ -116,22 +109,24 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
     rownames(simulation_coordinates) <- model$stations$id[stations]
 
 
-        coefocc_sim <- matrix(model$coefficients$coefocc[stations, ], nrow = length(stations), byrow = F)
-        coefmin_sim <- matrix(model$coefficients$coefmin[stations, ], nrow = length(stations), byrow = F)
-        coefmax_sim <- matrix(model$coefficients$coefmax[stations, ], nrow = length(stations), byrow = F)
-        SH <- SH[stations]
+    coefocc_sim <- matrix(model$coefficients$coefocc[stations, ], nrow = length(stations), byrow = F)
+    coefmin_sim <- matrix(model$coefficients$coefmin[stations, ], nrow = length(stations), byrow = F)
+    coefmax_sim <- matrix(model$coefficients$coefmax[stations, ], nrow = length(stations), byrow = F)
+    SH <- SH[stations]
 
-        colnames(coefocc_sim) <- colnames(model$coefficients$coefocc)
-        colnames(coefmin_sim) <- colnames(model$coefficients$coefmin)
-        colnames(coefmax_sim) <- colnames(model$coefficients$coefmax)
+    colnames(coefocc_sim) <- colnames(model$coefficients$coefocc)
+    colnames(coefmin_sim) <- colnames(model$coefficients$coefmin)
+    colnames(coefmax_sim) <- colnames(model$coefficients$coefmax)
 
-        SC <- array(data = NA, dim = c(nrow(simulation_dates), nrow(sp::coordinates(model$stations))))
-        colnames(SC) <- model$stations$id
+    SC <- array(data = NA, dim = c(nrow(simulation_dates), nrow(sp::coordinates(model$stations))))
+    colnames(SC) <- model$stations$id
 
-        for (station in as.character(model$stations$id)) {
-            gamma_coef <- model$gamma[[station]]$coef
-            SC[, station] <- exp(apply(daily_covariates[names(gamma_coef), ] * gamma_coef, FUN = sum, MAR = 2, na.rm = T)) / SH[station]
-        }
+    for (station in as.character(model$stations$id)) {
+        gamma_coef <- model$gamma[[station]]$coef
+        SC[, station] <- exp(apply(daily_covariates[names(gamma_coef), ] * gamma_coef, FUN = sum, MAR = 2, na.rm = T)) / SH[station]
+    }
+
+    #########################################
 
     # Register a sequential backend if the user didn't register a parallel
     # in order to avoid a warning message if we use %dopar%.
@@ -161,9 +156,9 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
 
     if(verbose) cat('Simulated start climatology.\n')
 
-    simulation_dates <- simulation_dates[, c(1, 2, 3)]
-
     invisible(gc())
+
+    realizations_seeds <- ceiling(runif(min = 1, max = 10000000, n = nsim))
 
     # gen_climate <- foreach(i = 1:nsim, .combine = list, .multicombine = control$multicombine) %dopar% {
     gen_climate <- foreach(i = 1:nsim, .combine = combine_function, .multicombine = control$multicombine, .packages = c('sp')) %dopar% {
@@ -174,9 +169,8 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
                                                       control = control,
                                                       noise_function = control$random_fields_method)
 
+
         simulated_climate <- array(data = 0.0, dim = c(1, nrow(simulation_dates), nrow(simulation_coordinates), 3))
-
-
         dimnames(simulated_climate)[2] <- list('dates' = format(simulation_dates$date, '%Y-%m-%d'))
         dimnames(simulated_climate)[3] <- list('coordinates' = rownames(simulation_coordinates))
         dimnames(simulated_climate)[4] <- list('variables' = c('tx', 'tn', 'prcp'))
@@ -184,13 +178,12 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
 
         temps_retries <- 0
         for (d in 1:nrow(simulation_dates)) {
-            month_number <- simulation_dates$month[d]
-
 
             simulation_matrix <- cbind(previous_occ, previous_tn, previous_tx,
                                        matrix(daily_covariates[, d], ncol = nrow(daily_covariates), nrow = length(previous_tx), byrow = T))
             colnames(simulation_matrix) <- c("prcp_occ_prev", "tn_prev", "tx_prev", rownames(daily_covariates))
 
+            month_number <- simulation_dates$month[d]
 
             mu_occ <- rowSums(simulation_matrix[, colnames(coefocc_sim)] * coefocc_sim)
             occ_noise <- noise_generator$generate_noise(month_number, 'prcp')
