@@ -16,7 +16,7 @@
 #' @import foreach
 #' @export
 sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end_date = NA,
-                                  control = glmwgen:::glmwgen_simulation_control(),  verbose = T) {
+                             control = glmwgen:::glmwgen_simulation_control(),  verbose = T) {
     model <- object
 
     if(class(object) != 'glmwgen') {
@@ -71,14 +71,6 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
                year_fraction = 2 * pi * lubridate::yday(date) / ifelse(lubridate::leap_year(date), 366, 365),
                ct = cos(year_fraction),
                st = sin(year_fraction),
-               # opcional agregar esto al control de la simulación igual que los lags
-               year_fraction = 2 * pi * lubridate::yday(date) / ifelse(lubridate::leap_year(date), 366, 365),
-               ct6 = cos(year_fraction),
-               st6 = sin(year_fraction),
-               year_fraction = 2 * pi * lubridate::yday(date) / ifelse(lubridate::leap_year(date), 366, 365),
-               ct3 = cos(year_fraction),
-               st3 = sin(year_fraction),
-               #
                Rt = Rt,
                season = ceiling(lubridate::month(date)/3),
                ST1 = 0, ST2 = 0, ST3 = 0, ST4 = 0,
@@ -155,17 +147,13 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
 
     simulation_start <- as.Date(start_date) - 1
 
-    # comentado porque si uso muchos lags esto me da la misma occ para todos los dias del mes, por ejemplo: start_date = 2017-01-01 entonces,
-    # simulation_start con lag 3 = 2016-12-29, por lo tanto occ para el 12-29 va a ser igual al occ para el 12-30 y 12-31!!!!
-    # previous_occ <- (drop(control$random_fields_method(model, simulation_coordinates, lubridate::month(simulation_start), 'prcp')) > 0) + 0
+    previous_occ <- (drop(control$random_fields_method(model, simulation_coordinates, lubridate::month(simulation_start), 'prcp')) > 0) + 0
 
     start_climatology <- as.data.frame(model$start_climatology %>% filter(month == lubridate::month(simulation_start), day == lubridate::day(simulation_start)))
 
-    
     stations <- seq_len(nrow(simulation_locations))
     previous_tx <- start_climatology[stations, 'tx']
     previous_tn <- start_climatology[stations, 'tn']
-    previous_occ <- as.integer(start_climatology[stations, 'prcp'] > 0) # en reemplazo de línea 154
 
     rm(start_climatology)
 
