@@ -1,4 +1,60 @@
 
+generate_simulation_matrix <- function(daily_covariates, actual_date_index, control, sim_start_date, start_climatology, simulated_climate) {
+
+    # las daily_covariates son iguales para todas las estaciones (para una misma fecha), por lo tanto,
+    # es necesario repetir la fila para cada una de las estaciones simuladas
+    simulation_matrix <- tibble::as_tibble(t(daily_covariates[, actual_date_index])) %>%
+        tidyr::crossing(tibble::tibble(station = unique(dplyr::pull(start_climatology, station))))
+
+    # una vez metidas todas las daily_covariates en simulation_matrix, se agregan datos inciales y previos
+    # considerando los lags utilizados en el ajuste, hasta el max lag indicado en el control de la simulación
+    max_lag <- max(control$max_tx_lags_to_use, control$max_tn_lags_to_use, control$max_prcp_lags_to_use)
+
+    for (i in 1:max_lag) {
+
+        # al manejar los lags hay dos situaciones, 1- la inicial, cuando los datos previos se toman de
+        # start_climatology (dato generado en el ajuste), 2- cuando ya es posible tomar, como previos,
+        # datos simulados previamente, en cuyo caso los datos previos se toman de simulated_climate.
+        if (actual_date_index <= max_lag) {
+            previous_date        <- as.Date(sim_start_date) - i
+            previous_climatology <- start_climatology %>%
+                filter(month == lubridate::month(previous_date), day == lubridate::day(previous_date))
+        } else {
+            previous_index       <- actual_date_index - i
+            previous_sim_climate <- simulated_climate[1, previous_index, , ]
+            if (!is.matrix(previous_sim_climate))
+                previous_sim_climate <- t(previous_sim_climate)
+            previous_climatology <- tibble::as_tibble(previous_sim_climate)
+        }
+
+        # el nombre de las columnas a ser agregadas varía de acuerdo a la cantida de lags
+        if (i == 1) sim_matrix_cols <- list(previous_oc = "prcp_occ_prev",
+                                            previous_tn = "tn_prev",
+                                            previous_tx = "tx_prev")
+        else sim_matrix_cols <- list(previous_oc = paste0("prcp_occ_prev.minus.",i),
+                                     previous_tn = paste0("tn_prev.minus.",i),
+                                     previous_tx = paste0("tx_prev.minus.",i))
+
+        # finalmente, aquí se carga simulation_matrix con los datos apropiados
+        if (i <= control$max_prcp_lags_to_use) {
+            simulation_matrix    <- simulation_matrix %>%
+                dplyr::mutate(!!sim_matrix_cols$previous_oc := dplyr::pull(previous_climatology, 'prcp'))
+        }
+        if (i <= control$max_tn_lags_to_use) {
+            simulation_matrix    <- simulation_matrix %>%
+                dplyr::mutate(!!sim_matrix_cols$previous_tn := dplyr::pull(previous_climatology, 'tn'))
+        }
+        if (i <= control$max_tx_lags_to_use) {
+            simulation_matrix    <- simulation_matrix %>%
+                dplyr::mutate(!!sim_matrix_cols$previous_tx := dplyr::pull(previous_climatology, 'tx'))
+        }
+
+    }
+
+    return(simulation_matrix)
+
+}
+
 #' @title Simulates new weather trajectories in stations
 #' @description Simulates new weather trajectories.
 #' @param object A glmwgen model.
@@ -61,6 +117,8 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
                year_fraction = 2 * pi * lubridate::yday(date) / ifelse(lubridate::leap_year(date), 366, 365),
                ct = cos(year_fraction),
                st = sin(year_fraction),
+               six_months_fraction = year_fraction / 2, ct.six = cos(six_months_fraction), st.six = sin(six_months_fraction),
+               three_months_fraction = year_fraction / 4, ct.three = cos(three_months_fraction), st.three = sin(three_months_fraction),
                Rt = Rt,
                season = ceiling(lubridate::month(date)/3),
                ST1 = 0, ST2 = 0, ST3 = 0, ST4 = 0,
@@ -88,7 +146,8 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
         simulation_dates[season_indexes, paste0("SMN", season_number)] <- smn_covariates[match(simulation_dates[season_indexes, 'year'], years)]
     }
 
-    daily_covariates <- as.matrix(t(simulation_dates[, !colnames(simulation_dates) %in% c('date', 'year', 'year_fraction', 'month', 'season')]))
+    daily_covariates <- as.matrix(t(simulation_dates[, !colnames(simulation_dates) %in% c('date', 'year', 'year_fraction', 'six_months_fraction',
+                                                                                          'three_months_fraction', 'month', 'season')]))
 
     daily_covariates <- rbind(1, daily_covariates)
     rownames(daily_covariates)[1] <- "(Intercept)"
@@ -115,8 +174,11 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
     SH <- SH[stations]
 
     colnames(coefocc_sim) <- colnames(model$coefficients$coefocc)
+    rownames(coefocc_sim) <- rownames(model$coefficients$coefocc)
     colnames(coefmin_sim) <- colnames(model$coefficients$coefmin)
+    rownames(coefmin_sim) <- rownames(model$coefficients$coefmin)
     colnames(coefmax_sim) <- colnames(model$coefficients$coefmax)
+    rownames(coefmax_sim) <- rownames(model$coefficients$coefmax)
 
     SC <- array(data = NA, dim = c(nrow(simulation_dates), nrow(sp::coordinates(model$stations))))
     colnames(SC) <- model$stations$id
@@ -140,24 +202,6 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
         abind::abind(..., along = 1)
     }
 
-    simulation_start <- as.Date(start_date) - 1
-
-    previous_occ <- (drop(control$random_fields_method(model, simulation_coordinates, lubridate::month(simulation_start), 'prcp')) > 0) + 0
-
-    start_climatology <- as.data.frame(model$start_climatology %>% filter(month == lubridate::month(simulation_start), day == lubridate::day(simulation_start)))
-
-    stations <- seq_len(nrow(simulation_locations))
-    previous_tx <- start_climatology[stations, 'tx']
-    previous_tn <- start_climatology[stations, 'tn']
-
-    rm(start_climatology)
-
-
-
-    if(verbose) cat('Simulated start climatology.\n')
-
-    invisible(gc())
-
     realizations_seeds <- ceiling(runif(min = 1, max = 10000000, n = nsim))
 
     # gen_climate <- foreach(i = 1:nsim, .combine = list, .multicombine = control$multicombine) %dopar% {
@@ -179,9 +223,8 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
         temps_retries <- 0
         for (d in 1:nrow(simulation_dates)) {
 
-            simulation_matrix <- cbind(previous_occ, previous_tn, previous_tx,
-                                       matrix(daily_covariates[, d], ncol = nrow(daily_covariates), nrow = length(previous_tx), byrow = T))
-            colnames(simulation_matrix) <- c("prcp_occ_prev", "tn_prev", "tx_prev", rownames(daily_covariates))
+            simulation_matrix <- glmwgen:::generate_simulation_matrix(daily_covariates, d, control, start_date,
+                                                                      model$start_climatology, simulated_climate)
 
             month_number <- simulation_dates$month[d]
 
@@ -225,12 +268,6 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
                 # title(main = sprintf('Day %03d', d))
                 return(NULL)
             }
-
-            # aca considerar los lags!!
-            previous_occ <- simulated_climate[1, d, , 'prcp']
-            previous_tx <- simulated_climate[1, d, , 'tx']
-            previous_tn <- simulated_climate[1, d, , 'tn']
-
 
             rainy_locations <- simulated_climate[1, d, , 'prcp'] > 0
 

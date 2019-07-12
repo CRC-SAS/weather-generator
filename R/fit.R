@@ -3,9 +3,18 @@
 #' @description Provides fine control of different parameters that will be used to fit a weather model.
 #' @export
 glmwgen_fit_control <- function(prcp_occurrence_threshold = 0.1,
-                                use_seasonal_covariates = F, # el modelo más simple es sin covariables
+                                use_seasonal_covariates_precipitation = F, # el modelo más simple es sin covariables
+                                use_seasonal_covariates_temperature = F,
                                 use_linear_term = T,
                                 seasonal_covariates = c("tx", "tn", "prcp"),
+                                prcp_lags_to_use = 1,
+                                use_amounts = F,
+                                tn_lags_to_use = 1,
+                                tx_lags_to_use = 1,
+                                use_six_months_precipitation = F,
+                                use_six_months_temperature = F,
+                                use_three_months_precipitation = F,
+                                use_three_months_temperature = F,
                                 save_residuals = F,
                                 cov_mode = 'complete',
                                 save_lm_fits = F,
@@ -17,9 +26,18 @@ glmwgen_fit_control <- function(prcp_occurrence_threshold = 0.1,
     }
 
     return(list(prcp_occurrence_threshold = prcp_occurrence_threshold,
-                use_seasonal_covariates = use_seasonal_covariates,
+                use_seasonal_covariates_precipitation = use_seasonal_covariates_precipitation,
+                use_seasonal_covariates_temperature = use_seasonal_covariates_temperature,
                 use_linear_term = use_linear_term,
                 seasonal_covariates = seasonal_covariates,
+                prcp_lags_to_use = prcp_lags_to_use,
+                use_amounts = use_amounts,
+                tn_lags_to_use = tn_lags_to_use,
+                tx_lags_to_use = tx_lags_to_use,
+                use_six_months_precipitation = use_six_months_precipitation,
+                use_six_months_temperature = use_six_months_temperature,
+                use_three_months_precipitation = use_three_months_precipitation,
+                use_three_months_temperature = use_three_months_temperature,
                 save_residuals = save_residuals,
                 cov_mode = cov_mode,
                 save_lm_fits = save_lm_fits,
@@ -95,8 +113,65 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit
 
     # Precipitation covariates
     prcp_covariates <- c("ct", "st")
+
+    # Use six months cycle
+    if (control$use_six_months_precipitation) {
+        prcp_covariates <- c(prcp_covariates, "ct.six", "st.six")
+    }
+
+    # Use three months cycle
+    if (control$use_three_months_precipitation) {
+        prcp_covariates <- c(prcp_covariates, "ct.three", "st.three")
+    }
+
+    if (control$prcp_lags_to_use > 1) {
+        prcp_prev_autocorrelation <- c()
+        for (i in 2:control$prcp_lags_to_use) {
+            prcp_prev_autocorrelation <- c(prcp_prev_autocorrelation,
+                                           paste0("prcp_occ_prev.minus.", i))
+        }
+        prcp_covariates <-c(prcp_covariates, prcp_prev_autocorrelation)
+    }
+
     # Temperature covariates
-    temps_covariates <- c("tn_prev", "tx_prev", "ct", "st", "prcp_occ")
+    temps_covariates <- c("tn_prev", "tx_prev", "ct", "st")
+
+    # Use six months cycle
+    if (control$use_six_months_temperature) {
+        temps_covariates <- c(temps_covariates, "ct.six", "st.six")
+    }
+
+    # Use three months cycle
+    if (control$use_three_months_temperature) {
+        temps_covariates <- c(temps_covariates, "ct.three", "st.three")
+    }
+
+    # Use occurence or amounts
+    if (control$use_amounts) {
+        temps_covariates <- c(temps_covariates, "prcp")
+    } else {
+        temps_covariates <- c(temps_covariates, "prcp_occ")
+    }
+
+    # Min temperature of n days before day i
+    if (control$tn_lags_to_use > 1) {
+        tn_prev_autocorrelation <- c()
+        for (i in 2:control$tn_lags_to_use) {
+            tn_prev_autocorrelation <- c(tn_prev_autocorrelation,
+                                         paste0("tn_prev.minus.", i))
+        }
+        temps_covariates <-c(temps_covariates, tn_prev_autocorrelation)
+    }
+
+    # Max temperature of n days before day i
+    if (control$tx_lags_to_use > 1) {
+        tx_prev_autocorrelation <- c()
+        for (i in 2:control$tx_lags_to_use) {
+            tx_prev_autocorrelation <- c(tx_prev_autocorrelation,
+                                         paste0("tx_prev.minus.", i))
+        }
+        temps_covariates <-c(temps_covariates, tx_prev_autocorrelation)
+    }
 
     # Use linear term
     if(control$use_linear_term) {
@@ -104,8 +179,11 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit
     }
 
     # Use seasonal covariates
-    if (control$use_seasonal_covariates) {
+    if (control$use_seasonal_covariates_precipitation) {
         prcp_covariates <- c(prcp_covariates, "ST1", "ST2", "ST3", "ST4")
+    }
+
+    if (control$use_seasonal_covariates_temperature) {
         temps_covariates <- c(temps_covariates, "SMN1", "SMN2", "SMN3", "SMN4", "SMX1", "SMX2", "SMX3", "SMX4")
     }
 
@@ -124,6 +202,7 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit
                    prcp_occ_prev = lag(prcp_occ),
                    tx_prev = lag(tx),
                    tn_prev = lag(tn),
+                   tmean = (tx + tn)/2,
                    year_fraction = 2 * pi * lubridate::yday(date)/ifelse(lubridate::leap_year(date), 366, 365),
                    ct = cos(year_fraction),
                    st = sin(year_fraction),
@@ -132,23 +211,91 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit
 
         station_climate$station <- station
 
-        # Estimate seasonal covariates
-        if (control$use_seasonal_covariates) {
-            seasonal_covariates <- glmwgen:::create_seasonal_covariates(summarised_climate)
+        # Add six months cycle functions
+        if (control$use_six_months_precipitation | control$use_six_months_temperature) {
+            year_fraction = 2 * pi * lubridate::yday(station_climate$date)/ifelse(lubridate::leap_year(station_climate$date), 366/2, 365/2)
+            ct.six = cos(year_fraction)
+            st.six = sin(year_fraction)
 
             station_climate <- data.frame(station_climate,
-                                          ST1 = seasonal_covariates$prcp[[1]],
-                                          ST2 = seasonal_covariates$prcp[[2]],
-                                          ST3 = seasonal_covariates$prcp[[3]],
-                                          ST4 = seasonal_covariates$prcp[[4]],
-                                          SMX1 = seasonal_covariates$tx[[1]],
-                                          SMX2 = seasonal_covariates$tx[[2]],
-                                          SMX3 = seasonal_covariates$tx[[3]],
-                                          SMX4 = seasonal_covariates$tx[[4]],
-                                          SMN1 = seasonal_covariates$tn[[1]],
-                                          SMN2 = seasonal_covariates$tn[[2]],
-                                          SMN3 = seasonal_covariates$tn[[3]],
-                                          SMN4 = seasonal_covariates$tn[[4]])
+                                          ct.six,
+                                          st.six)
+        }
+
+        # Add three months cycle functions
+        if (control$use_three_months_precipitation | control$use_three_months_temperature) {
+            year_fraction = 2 * pi * lubridate::yday(station_climate$date)/ifelse(lubridate::leap_year(station_climate$date), 366/4, 365/4)
+            ct.three = cos(year_fraction)
+            st.three = sin(year_fraction)
+
+            station_climate <- data.frame(station_climate,
+                                          ct.three,
+                                          st.three)
+        }
+
+        # Add lagged precipitation
+        if (control$prcp_lags_to_use > 1) {
+            prcp_occ_prev.mas.i <- as.data.frame(matrix(ncol = control$prcp_lags_to_use-1, nrow = nrow(station_climate)))
+            for (i in 2:control$prcp_lags_to_use) {
+                prcp_prev <- lag(station_climate$prcp_occ, i)
+                prcp_occ_prev.mas.i[,i-1] <- prcp_prev
+            }
+
+            colnames(prcp_occ_prev.mas.i) <- prcp_prev_autocorrelation
+            station_climate <- data.frame(station_climate,
+                                          prcp_occ_prev.mas.i)
+        }
+
+        # Add lagged min temperature
+        if (control$tn_lags_to_use > 1) {
+            tn_prev.mas.i <- as.data.frame(matrix(ncol = control$tn_lags_to_use-1, nrow = nrow(station_climate)))
+            for (i in 2:control$tn_lags_to_use) {
+                tn_prev <- lag(station_climate$tn, i)
+                tn_prev.mas.i[,i-1] <- tn_prev
+            }
+
+            colnames(tn_prev.mas.i) <- tn_prev_autocorrelation
+            station_climate <- data.frame(station_climate,
+                                          tn_prev.mas.i)
+        }
+
+        # Add lagged max temperature
+        if (control$tx_lags_to_use > 1) {
+            tx_prev.mas.i <- as.data.frame(matrix(ncol = control$tx_lags_to_use-1, nrow = nrow(station_climate)))
+            for (i in 2:control$tx_lags_to_use) {
+                tx_prev <- lag(station_climate$tx, i)
+                tx_prev.mas.i[,i-1] <- tx_prev
+            }
+
+            colnames(tx_prev.mas.i) <- tx_prev_autocorrelation
+            station_climate <- data.frame(station_climate,
+                                          tx_prev.mas.i)
+        }
+
+        # Estimate seasonal covariates
+        if (control$use_seasonal_covariates_precipitation | control$use_seasonal_covariates_temperature) {
+            seasonal_covariates <- glmwgen:::create_seasonal_covariates(summarised_climate)
+
+            station_climate <- data.frame(station_climate)
+
+            if (control$use_seasonal_covariates_precipitation) {
+                station_climate <- station_climate %>%
+                    dplyr::mutate(ST1 = seasonal_covariates$prcp[[1]],
+                                  ST2 = seasonal_covariates$prcp[[2]],
+                                  ST3 = seasonal_covariates$prcp[[3]],
+                                  ST4 = seasonal_covariates$prcp[[4]])
+            }
+            if (control$use_seasonal_covariates_temperature) {
+                station_climate <- station_climate %>%
+                    dplyr::mutate(SMX1 = seasonal_covariates$tx[[1]],
+                                  SMX2 = seasonal_covariates$tx[[2]],
+                                  SMX3 = seasonal_covariates$tx[[3]],
+                                  SMX4 = seasonal_covariates$tx[[4]],
+                                  SMN1 = seasonal_covariates$tn[[1]],
+                                  SMN2 = seasonal_covariates$tn[[2]],
+                                  SMN3 = seasonal_covariates$tn[[3]],
+                                  SMN4 = seasonal_covariates$tn[[4]])
+            }
         }
 
         # Fit model for precipitation occurrence.
@@ -172,23 +319,6 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit
         }
 
         station_climate[probit_indexes, "probit_residuals"] <- prcp_occ_fit$residuals
-
-        prcp_occ_fit_auc <- NA
-        if("ROCR" %in% rownames(installed.packages())) {
-            tmp_auc <- ROCR::prediction(fitted(prcp_occ_fit), (na.omit(station_climate[, c("prcp_occ", "prcp_occ_prev", prcp_covariates)]))$prcp_occ)
-            prcp_occ_fit_auc <- ROCR::performance(tmp_auc, 'auc')@y.values[[1]]
-            rm(tmp_auc)
-        } else {
-            warning ("Install ROCR package to get AUC metrics for the precipitation occurrences fit!")
-        }
-        prcp_occ_fit_rsq <- NA
-        if("ResourceSelection" %in% rownames(installed.packages())) {
-            tmp_rsq <- ResourceSelection::hoslem.test(prcp_occ_fit$y, prcp_occ_fit$fitted.values, g = 100)
-            prcp_occ_fit_rsq <- tmp_rsq$statistic
-            rm(tmp_rsq)
-        } else {
-            warning ("Install ResourceSelection package to get R² metrics for the precipitation occurrences fit!")
-        }
 
 
         # Fit model for precipitation amounts.
@@ -233,8 +363,6 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit
 
         station_climate[tx_indexes, "tx_residuals"] <- tx_fit$residuals
 
-        tx_fit_rsq <- summary(tx_fit)$r.squared
-
         # TODO: extract p-values for each covariate
         # coefs_summary <- summary(tx_fit)$coefficients
         # coefs_summary[, ncol(coefs_summary)]
@@ -256,16 +384,9 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit
 
         station_climate[tn_indexes, "tn_residuals"] <- tn_fit$residuals
 
-        tn_fit_rsq <- summary(tn_fit)$r.squared
-
         return_list <- list(coefficients = list(coefocc = coefocc, coefmin = coefmin, coefmax = coefmax),
                             gamma = list(coef = coefamt, alpha = alphamt),
                             residuals = station_climate[, c("date", "station", "probit_residuals", "tx_residuals", "tn_residuals")],
-                            metrics = data.frame(station = station,
-                                                 metric = c('R²', 'R²', 'AUC', 'R²'),
-                                                 model = c('tx', 'tn', 'prcp_occ', 'prcp_occ'),
-                                                 value = c(tx_fit_rsq, tn_fit_rsq, prcp_occ_fit_auc, prcp_occ_fit_rsq)),
-                            # significance = list(coefocc = )
                             station = station)
 
 
@@ -410,4 +531,3 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit
 
     model
 }
-

@@ -46,14 +46,17 @@ get_temperatures_seasonal_covariate <- function(years, season_number, seasonal_v
 #' @export
 glmwgen_simulation_control <- function(seasonal_temps_covariates_getter = get_temperatures_seasonal_covariate,
                                        seasonal_prcp_covariates_getter = get_rainfall_seasonal_covariate,
-                                       random_fields_method = 'rf',
+                                       random_fields_method = 'rn',
                                        minimum_temperatures_difference_threshold = 0.1,
                                        Rt = NULL,
                                        # grf_method = NULL,
                                        multicombine = F,
                                        always_krig_coefficients = T,
                                        interpolation_method = c('idw', 'kriging'),
-                                       cache_size = 1) {
+                                       cache_size = 1,
+                                       max_prcp_lags_to_use = 1,
+                                       max_tn_lags_to_use = 1,
+                                       max_tx_lags_to_use = 1) {
     rf_function <- NULL
     if(!is.function(random_fields_method)) {
         # if(startsWith(random_fields_method, 'gauss')) rf_function <- gaussian_random_field
@@ -79,5 +82,8 @@ glmwgen_simulation_control <- function(seasonal_temps_covariates_getter = get_te
                 multicombine = multicombine,
                 interpolation_method = interpolation_method,
                 cache_size = cache_size,
-                minimum_temperatures_difference_threshold = minimum_temperatures_difference_threshold))
+                minimum_temperatures_difference_threshold = minimum_temperatures_difference_threshold,
+                max_prcp_lags_to_use = max_prcp_lags_to_use,
+                max_tn_lags_to_use = max_tn_lags_to_use,
+                max_tx_lags_to_use = max_tx_lags_to_use))
 }

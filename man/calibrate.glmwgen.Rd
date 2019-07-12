@@ -4,8 +4,8 @@
 \alias{calibrate.glmwgen}
 \title{Weather model calibration}
 \usage{
-calibrate.glmwgen(climate, stations, control = glmwgen_fit_control(),
-  verbose = T)
+calibrate.glmwgen(climate, stations,
+  control = glmwgen:::glmwgen_fit_control(), verbose = T)
 }
 \description{
 Fits a weather model from historical data.
