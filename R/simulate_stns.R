@@ -30,7 +30,8 @@ generate_simulation_matrix <- function(daily_covariates, actual_date_index, cont
         # el nombre de las columnas a ser agregadas varía de acuerdo a la cantida de lags
         if (i == 1) sim_matrix_cols <- list(previous_oc = "prcp_occ_prev",
                                             previous_tn = "tn_prev",
-                                            previous_tx = "tx_prev")
+                                            previous_tx = "tx_prev",
+                                            prcp = "prcp")
         else sim_matrix_cols <- list(previous_oc = paste0("prcp_occ_prev.minus.",i),
                                      previous_tn = paste0("tn_prev.minus.",i),
                                      previous_tx = paste0("tx_prev.minus.",i))
@@ -38,7 +39,7 @@ generate_simulation_matrix <- function(daily_covariates, actual_date_index, cont
         # finalmente, aquí se carga simulation_matrix con los datos apropiados
         if (i <= control$max_prcp_lags_to_use) {
             simulation_matrix    <- simulation_matrix %>%
-                dplyr::mutate(!!sim_matrix_cols$previous_oc := dplyr::pull(previous_climatology, 'prcp'))
+                dplyr::mutate(!!sim_matrix_cols$previous_oc := as.integer(dplyr::pull(previous_climatology, 'prcp')))
         }
         if (i <= control$max_tn_lags_to_use) {
             simulation_matrix    <- simulation_matrix %>%
@@ -47,6 +48,10 @@ generate_simulation_matrix <- function(daily_covariates, actual_date_index, cont
         if (i <= control$max_tx_lags_to_use) {
             simulation_matrix    <- simulation_matrix %>%
                 dplyr::mutate(!!sim_matrix_cols$previous_tx := dplyr::pull(previous_climatology, 'tx'))
+        }
+        if (i == 1) {
+            simulation_matrix    <- simulation_matrix %>%
+                dplyr::mutate(!!sim_matrix_cols$prcp := dplyr::pull(previous_climatology, 'prcp'))
         }
 
     }
@@ -94,6 +99,13 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
         warning("There isn't possible to use random_field_noise function to calculate previous_occ. Switching to rnorm_noise function!\n")
         control$random_fields_method <- glmwgen:::rnorm_noise
     }
+
+    if (model$control$prcp_lags_to_use > control$max_prcp_lags_to_use)
+        stop('max_prcp_lags_to_use lags should be equal than prcp lags in model$control$prcp_lags_to_use')
+    if (model$control$tn_lags_to_use > control$max_tn_lags_to_use)
+        stop('max_tn_lags_to_use lags should be equal than tn lags in model$control$tn_lags_to_use')
+    if (model$control$tx_lags_to_use > control$max_tx_lags_to_use)
+        stop('max_tx_lags_to_use lags should be equal than tx lags in model$control$tx_lags_to_use')
 
     #########################################
 
@@ -230,11 +242,7 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
 
             mu_occ <- rowSums(simulation_matrix[, colnames(coefocc_sim)] * coefocc_sim)
             occ_noise <- noise_generator$generate_noise(month_number, 'prcp')
-            simulated_climate[1, d, , 'prcp'] <- ((mu_occ + occ_noise) > 0) + 0
-
-
-            simulation_matrix <- cbind(prcp_occ = simulated_climate[1, d, , 'prcp'], simulation_matrix)
-
+            simulated_climate[1, d, , 'prcp'] <- as.integer((mu_occ + occ_noise) > 0)
 
             mu_tn <- rowSums(simulation_matrix[, colnames(coefmin_sim)] * coefmin_sim)
             tn_noise <- noise_generator$generate_noise(month_number, 'tn')
