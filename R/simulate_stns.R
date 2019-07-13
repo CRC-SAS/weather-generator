@@ -1,19 +1,51 @@
 
-generate_simulation_matrix <- function(daily_covariates, actual_date_index, control, sim_start_date, start_climatology, simulated_climate) {
+#' @title Transform simulation result to tibble
+#' @description This function transforms the simulation result, a named array, to a tibble.
+#' @export
+sim_result_to_tibble <- function(sim_result, nsim_to_extract = 1) {
 
-    # las daily_covariates son iguales para todas las estaciones (para una misma fecha), por lo tanto,
+    if (any(class(sim_result) != c("array", "glmwgen.climate")))
+        return (NULL)
+
+    dates    <- colnames(sim_result)
+    stations <- rownames(sim_result[nsim_to_extract, 1, ,])
+
+    prcp <- tibble::tibble(date = dates) %>%
+        dplyr::bind_cols(tibble::as_tibble(sim_result[nsim_to_extract, , , "prcp"])) %>%
+        tidyr::gather(key="station", value="prcp", -date)
+    tn   <- tibble::tibble(date = dates) %>%
+        dplyr::bind_cols(tibble::as_tibble(sim_result[nsim_to_extract, , , "tn"])) %>%
+        tidyr::gather(key="station", value="tn", -date)
+    tx   <- tibble::tibble(date = dates) %>%
+        dplyr::bind_cols(tibble::as_tibble(sim_result[nsim_to_extract, , , "tx"])) %>%
+        tidyr::gather(key="station", value="tx", -date)
+
+    result   <- tidyr::crossing(dates, stations) %>%
+        dplyr::rename(date = dates, station = stations) %>%
+        dplyr::inner_join(prcp, by = c("date","station")) %>%
+        dplyr::inner_join(tn, by = c("date","station")) %>%
+        dplyr::inner_join(tx, by = c("date","station"))
+
+    return (result)
+}
+
+
+generate_simulation_matrix <- function(daily_covariates, actual_date_index, model_lags,
+                                       sim_start_date, start_climatology, simulated_climate) {
+
+    # Las daily_covariates son iguales para todas las estaciones (para una misma fecha), por lo tanto,
     # es necesario repetir la fila para cada una de las estaciones simuladas
     simulation_matrix <- tibble::as_tibble(t(daily_covariates[, actual_date_index])) %>%
         tidyr::crossing(tibble::tibble(station = unique(dplyr::pull(start_climatology, station))))
 
-    # una vez metidas todas las daily_covariates en simulation_matrix, se agregan datos inciales y previos
-    # considerando los lags utilizados en el ajuste, hasta el max lag indicado en el control de la simulación
-    max_lag <- max(control$max_tx_lags_to_use, control$max_tn_lags_to_use, control$max_prcp_lags_to_use)
+    # Una vez metidas todas las daily_covariates en simulation_matrix, se agregan datos inciales y previos
+    # considerando los lags utilizados en el ajuste, hasta el max lag indicado en model_control
+    max_lag <- max(model_lags$tx_lags_to_use, model_lags$tn_lags_to_use, model_lags$prcp_lags_to_use)
 
     for (i in 1:max_lag) {
 
-        # al manejar los lags hay dos situaciones, 1- la inicial, cuando los datos previos se toman de
-        # start_climatology (dato generado en el ajuste), 2- cuando ya es posible tomar, como previos,
+        # Al manejar los lags hay dos situaciones; 1- la inicial, cuando los datos previos se toman de
+        # start_climatology (dato generado en el ajuste); 2- cuando ya es posible tomar, como previos,
         # datos simulados previamente, en cuyo caso los datos previos se toman de simulated_climate.
         if (actual_date_index <= max_lag) {
             previous_date        <- as.Date(sim_start_date) - i
@@ -27,31 +59,33 @@ generate_simulation_matrix <- function(daily_covariates, actual_date_index, cont
             previous_climatology <- tibble::as_tibble(previous_sim_climate)
         }
 
-        # el nombre de las columnas a ser agregadas varía de acuerdo a la cantida de lags
+        # El nombre de las columnas a ser agregadas varía de acuerdo a la cantida de lags
         if (i == 1) sim_matrix_cols <- list(previous_oc = "prcp_occ_prev",
                                             previous_tn = "tn_prev",
                                             previous_tx = "tx_prev",
-                                            prcp = "prcp")
+                                            prcp = "prcp", prcp_occ = "prcp_occ")
         else sim_matrix_cols <- list(previous_oc = paste0("prcp_occ_prev.minus.",i),
                                      previous_tn = paste0("tn_prev.minus.",i),
                                      previous_tx = paste0("tx_prev.minus.",i))
 
-        # finalmente, aquí se carga simulation_matrix con los datos apropiados
-        if (i <= control$max_prcp_lags_to_use) {
+        # Finalmente, aquí se carga simulation_matrix con los datos apropiados
+        if (i <= model_lags$prcp_lags_to_use) {
             simulation_matrix    <- simulation_matrix %>%
                 dplyr::mutate(!!sim_matrix_cols$previous_oc := as.integer(dplyr::pull(previous_climatology, 'prcp')))
         }
-        if (i <= control$max_tn_lags_to_use) {
+        if (i <= model_lags$tn_lags_to_use) {
             simulation_matrix    <- simulation_matrix %>%
                 dplyr::mutate(!!sim_matrix_cols$previous_tn := dplyr::pull(previous_climatology, 'tn'))
         }
-        if (i <= control$max_tx_lags_to_use) {
+        if (i <= model_lags$tx_lags_to_use) {
             simulation_matrix    <- simulation_matrix %>%
                 dplyr::mutate(!!sim_matrix_cols$previous_tx := dplyr::pull(previous_climatology, 'tx'))
         }
         if (i == 1) {
+            # Estos son datos del día, pero simulados, por lo tanto, en este punto de la ejecución aún
+            # no están disponibles. Van a ser calculados más adelante en la ejecución de la simulación!
             simulation_matrix    <- simulation_matrix %>%
-                dplyr::mutate(!!sim_matrix_cols$prcp := dplyr::pull(previous_climatology, 'prcp'))
+                dplyr::mutate(!!sim_matrix_cols$prcp := NA, !!sim_matrix_cols$prcp_occ := NA)
         }
 
     }
@@ -59,6 +93,7 @@ generate_simulation_matrix <- function(daily_covariates, actual_date_index, cont
     return(simulation_matrix)
 
 }
+
 
 #' @title Simulates new weather trajectories in stations
 #' @description Simulates new weather trajectories.
@@ -100,21 +135,14 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
         control$random_fields_method <- glmwgen:::rnorm_noise
     }
 
-    if (model$control$prcp_lags_to_use > control$max_prcp_lags_to_use)
-        stop('max_prcp_lags_to_use lags should be equal than prcp lags in model$control$prcp_lags_to_use')
-    if (model$control$tn_lags_to_use > control$max_tn_lags_to_use)
-        stop('max_tn_lags_to_use lags should be equal than tn lags in model$control$tn_lags_to_use')
-    if (model$control$tx_lags_to_use > control$max_tx_lags_to_use)
-        stop('max_tx_lags_to_use lags should be equal than tx lags in model$control$tx_lags_to_use')
-
     #########################################
 
     simulation_dates <- data.frame(date = seq.Date(from = as.Date(start_date), to = as.Date(end_date), by = "days"))
 
     if (is.null(control$Rt)) {
         # TODO: shouldn't this be = 1 once we start simulating?
-        # Rt <- seq(from = -1, to = 1, length.out = nrow(simulation_dates))
-        Rt <- 0
+        Rt <- seq(from = -1, to = 1, length.out = nrow(simulation_dates))
+        # Rt <- 0
     } else {
         Rt <- control$Rt
         if (length(Rt) == 1)
@@ -231,72 +259,84 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
         dimnames(simulated_climate)[3] <- list('coordinates' = rownames(simulation_coordinates))
         dimnames(simulated_climate)[4] <- list('variables' = c('tx', 'tn', 'prcp'))
 
+        model_lags <- list(prcp_lags_to_use = model$control$prcp_lags_to_use,
+                           tn_lags_to_use = model$control$tn_lags_to_use,
+                           tx_lags_to_use = model$control$tx_lags_to_use)
 
         temps_retries <- 0
         for (d in 1:nrow(simulation_dates)) {
 
-            simulation_matrix <- glmwgen:::generate_simulation_matrix(daily_covariates, d, control, start_date,
+            simulation_matrix <- glmwgen:::generate_simulation_matrix(daily_covariates, d, model_lags, start_date,
                                                                       model$start_climatology, simulated_climate)
 
             month_number <- simulation_dates$month[d]
 
-            mu_occ <- rowSums(simulation_matrix[, colnames(coefocc_sim)] * coefocc_sim)
-            occ_noise <- noise_generator$generate_noise(month_number, 'prcp')
-            simulated_climate[1, d, , 'prcp'] <- as.integer((mu_occ + occ_noise) > 0)
+            # Se simula la ocurrencia de precipitación (prcp_occ)
+            prcp_occ_sim <- tibble::tibble(
+                station = names(simulated_climate[1, d, , 'prcp']),
+                mu_occ = rowSums(simulation_matrix[, colnames(coefocc_sim)] * coefocc_sim),
+                occ_noise = noise_generator$generate_noise(month_number, 'prcp'),
+                prcp_occ = as.integer((mu_occ + occ_noise) > 0)
+            )
 
-            mu_tn <- rowSums(simulation_matrix[, colnames(coefmin_sim)] * coefmin_sim)
-            tn_noise <- noise_generator$generate_noise(month_number, 'tn')
-            simulated_climate[1, d, , 'tn'] <- signif(mu_tn + tn_noise, digits = 4)
+            # Se guarda prcp_occ en simulation_matrix (porque se usa para simular temperatura)
+            simulation_matrix$prcp_occ <- dplyr::pull(prcp_occ_sim, prcp_occ)
 
-            mu_tx <- rowSums(simulation_matrix[, colnames(coefmax_sim)] * coefmax_sim)
-            tx_noise <- noise_generator$generate_noise(month_number, 'tx')
-            simulated_climate[1, d, , 'tx'] <- signif(mu_tx + tx_noise, digits = 4)
+            # Se calcula una cantidad de mm para las estaciones con lluvia (prcp_amt)
+            prcp_amt_sim <- prcp_occ_sim %>%
+                dplyr::select(station, prcp_occ) %>%
+                dplyr::mutate(
+                    amt_noise = noise_generator$generate_noise(month_number, 'prcp'),
+                    amt_value = signif(qgamma(pnorm(amt_noise), shape = SH, scale = SC[d, ]), digits = 4)
+                ) %>%
+                dplyr::mutate(is_valid = prcp_occ == 1 && amt_value >= model$control$prcp_occurrence_threshold) %>%
+                dplyr::mutate(prcp_amt = ifelse(is_valid, amt_value, 0))
 
+            # Se guarda prcp (cantidad de mm) en simulation_matrix (porque se usa para simular temperatura)
+            simulation_matrix$prcp <- dplyr::pull(prcp_amt_sim, prcp_amt)
 
+            # Se simula la temperatura mínima (tn_sim)
+            tn_sim <- tibble::tibble(
+                station = names(simulated_climate[1, d, , 'tx']),
+                mu_tn = rowSums(simulation_matrix[, colnames(coefmin_sim)] * coefmin_sim),
+                tn_noise = noise_generator$generate_noise(month_number, 'tn'),
+                tn = signif(mu_tn + tn_noise, digits = 4)
+            )
+
+            # Se simula la temperatura máxima (tx_sim)
+            tx_sim <- tibble::tibble(
+                station = names(simulated_climate[1, d, , 'tx']),
+                mu_tx = rowSums(simulation_matrix[, colnames(coefmax_sim)] * coefmax_sim),
+                tx_noise = noise_generator$generate_noise(month_number, 'tx'),
+                tx = signif(mu_tx + tx_noise, digits = 4)
+            )
+
+            # Se verifica que tx y tn sean válidos (sino son válidos se los recalcula)
             daily_retries <- 0
-            # retries_array <- array(NA, dim = c(100, length(simulated_climate[1, d, , 'tx'])))
-            while (min(simulated_climate[1, d, , 'tx'] - simulated_climate[1, d, , 'tn']) < control$minimum_temperatures_difference_threshold && daily_retries < 100) {
+            while (min(tx_sim$tx - tn_sim$tn) < control$minimum_temperatures_difference_threshold && daily_retries < 100) {
                 temps_retries <- temps_retries + 1
                 daily_retries <- daily_retries + 1
-
-                # retries_array[daily_retries, ] <- simulated_climate[1, d, , 'tx'] - simulated_climate[1, d, , 'tn']
-
-                tn_noise <- noise_generator$generate_noise(month_number, 'tn')
-                tx_noise <- noise_generator$generate_noise(month_number, 'tx')
-
-                simulated_climate[1, d, , 'tx'] <- signif(mu_tx + tx_noise, digits = 4)
-                simulated_climate[1, d, , 'tn'] <- signif(mu_tn + tn_noise, digits = 4)
+                tn_sim <- tn_sim %>% dplyr::mutate(
+                    tn_noise = noise_generator$generate_noise(month_number, 'tn'),
+                    tn = signif(mu_tn + tn_noise, digits = 4))
+                tx_sim <- tx_sim %>% dplyr::mutate(
+                    tx_noise = noise_generator$generate_noise(month_number, 'tx'),
+                    tx = signif(mu_tx + tx_noise, digits = 4))
             }
             if(daily_retries >= 100) {
                 if(verbose) cat('Failed to simulate random noise that doesn\'t violate the constraint of max. temp. > min. temp.')
-                # temps_diff <- apply(retries_array, 2, function(x) x < control$minimum_temperatures_difference_threshold)
-                # temps_diff <- apply(temps_diff, 2, sum)
-                # fields::quilt.plot(simulation_coordinates, temps_diff)
-                # text(sp::coordinates(model$stations), label = model$stations$id, col = 'white')
-                # title(main = sprintf('Day %03d', d))
                 return(NULL)
             }
 
-            rainy_locations <- simulated_climate[1, d, , 'prcp'] > 0
+            # Se guardan prcp, tn y tx en el array de salida (el resultado de la simulación)
+            simulated_climate[1, d, , 'prcp'] <- dplyr::pull(prcp_amt_sim, prcp_amt)
+            simulated_climate[1, d, , 'tn']   <- dplyr::pull(tn_sim, tn)
+            simulated_climate[1, d, , 'tx']   <- dplyr::pull(tx_sim, tx)
 
-            if(any(rainy_locations)) {
-                # amounts generation
-
-                # w3 <- suppressWarnings(geoR::grf(nrow(simulation_coordinates_grid), grid = simulation_coordinates_grid, cov.model = "exponential", cov.pars = c(p$prcp[2], p$prcp[3]), nugget = p$prcp[1], mean = rep(0,
-                #     nrow(simulation_coordinates_grid)), messages = FALSE)$data)
-                #
-                # w3 <- control$random_fields_method(model, simulation_coordinates_grid, month_number, 'prcp')
-                amt_noise <- noise_generator$generate_noise(month_number, 'prcp')
-
-                simulated_climate[1, d, rainy_locations, 'prcp'] <- signif(qgamma(pnorm(amt_noise), shape = SH, scale = SC[d, ]), digits = 4)[rainy_locations]
-                # simulated_prcp[d, ] <- signif(qgamma(pnorm(w3), shape = SH_sim, scale = SC.sim), digits = 4)
-            }
+            # Se reporta el estado de la simulación
             if(verbose && d %% 2 == 0) cat(paste0("\r Realization ", i, ": ", d, "/", ncol(daily_covariates), ". Retries: ", temps_retries, '       '))
-
             if(d %% 30 == 0) invisible(gc())
         }
-
-        simulated_climate[1, , , 'prcp'][simulated_climate[1, , , 'prcp'] < model$control$prcp_occurrence_threshold] <- 0
 
         simulated_climate
     }
