@@ -71,7 +71,7 @@ generate_simulation_matrix <- function(daily_covariates, actual_date_index, mode
         # Finalmente, aquí se carga simulation_matrix con los datos apropiados
         if (i <= model_lags$prcp_lags_to_use) {
             simulation_matrix    <- simulation_matrix %>%
-                dplyr::mutate(!!sim_matrix_cols$previous_oc := as.integer(dplyr::pull(previous_climatology, 'prcp')))
+                dplyr::mutate(!!sim_matrix_cols$previous_oc := as.integer(dplyr::pull(previous_climatology, 'prcp') > 0))
         }
         if (i <= model_lags$tn_lags_to_use) {
             simulation_matrix    <- simulation_matrix %>%
@@ -131,8 +131,17 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
     if(nsim < 1) stop('Number of simulations should be greater than one')
 
     if(identical(control$random_fields_method, glmwgen:::random_field_noise)) {
-        warning("There isn't possible to use random_field_noise function to calculate previous_occ. Switching to rnorm_noise function!\n")
+        warning("There isn't possible to use random_field_noise function to calculate noises when simulated points are the coordinates of stations.\n")
+    }
+
+    if(!identical(control$random_fields_method, glmwgen:::rnorm_noise) && (nrow(simulation_locations) == 1)) {
+        warning("Only the function rnorm_noise can be used to calculate noises for simulate only one station!\n")
         control$random_fields_method <- glmwgen:::rnorm_noise
+    }
+
+    if(!identical(control$random_fields_method, glmwgen:::mvrnorm_noise) && (nrow(simulation_locations) > 1)) {
+        warning("Only the function mvnorm_noise can be used to calculate noises for simulate multiple stations!\n")
+        control$random_fields_method <- glmwgen:::mvrnorm_noise
     }
 
     #########################################
@@ -273,7 +282,7 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
 
             # Se simula la ocurrencia de precipitación (prcp_occ)
             prcp_occ_sim <- tibble::tibble(
-                station = names(simulated_climate[1, d, , 'prcp']),
+                station = rownames(simulation_coordinates),
                 mu_occ = rowSums(simulation_matrix[, colnames(coefocc_sim)] * coefocc_sim),
                 occ_noise = noise_generator$generate_noise(month_number, 'prcp'),
                 prcp_occ = as.integer((mu_occ + occ_noise) > 0)
@@ -297,7 +306,7 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
 
             # Se simula la temperatura mínima (tn_sim)
             tn_sim <- tibble::tibble(
-                station = names(simulated_climate[1, d, , 'tx']),
+                station = rownames(simulation_coordinates),
                 mu_tn = rowSums(simulation_matrix[, colnames(coefmin_sim)] * coefmin_sim),
                 tn_noise = noise_generator$generate_noise(month_number, 'tn'),
                 tn = signif(mu_tn + tn_noise, digits = 4)
@@ -305,7 +314,7 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
 
             # Se simula la temperatura máxima (tx_sim)
             tx_sim <- tibble::tibble(
-                station = names(simulated_climate[1, d, , 'tx']),
+                station = rownames(simulation_coordinates),
                 mu_tx = rowSums(simulation_matrix[, colnames(coefmax_sim)] * coefmax_sim),
                 tx_noise = noise_generator$generate_noise(month_number, 'tx'),
                 tx = signif(mu_tx + tx_noise, digits = 4)
