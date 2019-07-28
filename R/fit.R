@@ -320,6 +320,10 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit
 
         station_climate[probit_indexes, "probit_residuals"] <- prcp_occ_fit$residuals
 
+        # Se agregan las fechas para poder hacer las validaciones posteriormente
+        prcp_occ_fit[["dates"]] <- station_climate[probit_indexes, "date"]
+        # End of prcp_occ fit
+
 
         # Fit model for precipitation amounts.
         gamma_indexes <- na.omit(station_climate[, c("prcp_amt", "row_num", prcp_covariates)])$row_num
@@ -342,9 +346,13 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit
         #     prcp_amt_fit <- stats::step(prcp_amt_fit)
         # }
 
+        # Se agregan las fechas para poder hacer las validaciones posteriormente
+        prcp_amt_fit[["dates"]] <- station_climate[gamma_indexes, "date"]
+        # End of prcp_amt fit
+
+
+        # Fit model for max temperature.
         tx_indexes <- na.omit(station_climate[, c("tx", "row_num", temps_covariates)])$row_num
-        tn_indexes <- na.omit(station_climate[, c("tn", "row_num", temps_covariates)])$row_num
-        # Fit
 
         if (control$use_robust_methods) {
             tx_fit <- robustbase::lmrob(formula(paste0("tx", "~", paste0(temps_covariates, collapse = "+"))),
@@ -367,6 +375,14 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit
         # coefs_summary <- summary(tx_fit)$coefficients
         # coefs_summary[, ncol(coefs_summary)]
 
+        # Se agregan las fechas para poder hacer las validaciones posteriormente
+        tx_fit[["dates"]] <- station_climate[tx_indexes, "date"]
+        # End of tx fit
+
+
+        # Fit model for min temperature.
+        tn_indexes <- na.omit(station_climate[, c("tn", "row_num", temps_covariates)])$row_num
+
         if (control$use_robust_methods) {
             tn_fit <- robustbase::lmrob(formula(paste0("tn", "~", paste0(temps_covariates, collapse = "+"))),
                                         data = station_climate[tn_indexes, ])
@@ -383,6 +399,10 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit
         }
 
         station_climate[tn_indexes, "tn_residuals"] <- tn_fit$residuals
+
+        # Se agregan las fechas para poder hacer las validaciones posteriormente
+        tn_fit[["dates"]] <- station_climate[tn_indexes, "date"]
+        # End of tn fit
 
         return_list <- list(coefficients = list(coefocc = coefocc, coefmin = coefmin, coefmax = coefmax),
                             gamma = list(coef = coefamt, alpha = alphamt),
