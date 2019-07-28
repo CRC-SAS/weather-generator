@@ -121,11 +121,13 @@ noise_method <- proto::proto(
 
 random_field_noise <- function(model, simulation_locations, month_number, var_name, nsim = 1) {
     month_params <- model$month_params[[month_number]]$variogram_parameters[[var_name]]
-    t(RandomFields::RFsimulate(RandomFields::RMexp(var=month_params[2], scale=month_params[3]),
-                             distances = model$simulation_dist_matrix,
-                             dim = nrow(simulation_locations),
-                             n = nsim,
-                             printlevel = 0))
+    rf_model     <- RandomFields::RMexp(var=month_params[2], scale=month_params[3])
+    rf_simulate  <- RandomFields::RFsimulate(rf_model,
+                                             distances = model$simulation_dist_matrix,
+                                             dim = nrow(simulation_locations),
+                                             n = nsim,
+                                             printlevel = 0)
+    return (t(rf_simulate))
 }
 
 # random_field_noise <- function(model, simulation_locations, month_number, var_name, nsim = 1) {
