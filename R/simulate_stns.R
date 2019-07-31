@@ -61,8 +61,8 @@ generate_simulation_matrix <- function(daily_covariates, actual_date_index, mode
 
         # El nombre de las columnas a ser agregadas varía de acuerdo a la cantida de lags
         if (i == 1) sim_matrix_cols <- list(previous_oc = "prcp_occ_prev",
-                                            previous_tn = "tn_prev",
-                                            previous_tx = "tx_prev",
+                                            previous_tn = "tn_prev", tn = "tn",
+                                            previous_tx = "tx_prev", tx = "tx",
                                             prcp = "prcp", prcp_occ = "prcp_occ")
         else sim_matrix_cols <- list(previous_oc = paste0("prcp_occ_prev.minus.",i),
                                      previous_tn = paste0("tn_prev.minus.",i),
@@ -85,6 +85,7 @@ generate_simulation_matrix <- function(daily_covariates, actual_date_index, mode
             # Estos son datos del día, pero simulados, por lo tanto, en este punto de la ejecución aún
             # no están disponibles. Van a ser calculados más adelante en la ejecución de la simulación!
             simulation_matrix    <- simulation_matrix %>%
+                dplyr::mutate(!!sim_matrix_cols$tn := NA, !!sim_matrix_cols$tx := NA) %>%
                 dplyr::mutate(!!sim_matrix_cols$prcp := NA, !!sim_matrix_cols$prcp_occ := NA)
         }
 
@@ -135,12 +136,12 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
     }
 
     if(!identical(control$random_fields_method, glmwgen:::rnorm_noise) && (nrow(simulation_locations) == 1)) {
-        warning("Only the function rnorm_noise can be used to calculate noises for simulate only one station!\n")
+        warning("Only the function rnorm_noise can be used to calculate noises for simulate only one station! Switching to it!\n")
         control$random_fields_method <- glmwgen:::rnorm_noise
     }
 
     if(!identical(control$random_fields_method, glmwgen:::mvrnorm_noise) && (nrow(simulation_locations) > 1)) {
-        warning("Only the function mvnorm_noise can be used to calculate noises for simulate multiple stations!\n")
+        warning("Only the function mvnorm_noise can be used to calculate noises for simulate multiple stations! Switching to it!\n")
         control$random_fields_method <- glmwgen:::mvrnorm_noise
     }
 
@@ -288,7 +289,7 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
                 prcp_occ = as.integer((mu_occ + occ_noise) > 0)
             )
 
-            # Se guarda prcp_occ en simulation_matrix (porque se usa para simular temperatura)
+            # Se guarda prcp_occ en simulation_matrix (porque se usa para simular temperaturas)
             simulation_matrix$prcp_occ <- dplyr::pull(prcp_occ_sim, prcp_occ)
 
             # Se calcula una cantidad de mm para las estaciones con lluvia (prcp_amt)
@@ -301,7 +302,7 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
                 dplyr::mutate(is_valid = prcp_occ == 1 && amt_value >= model$control$prcp_occurrence_threshold) %>%
                 dplyr::mutate(prcp_amt = ifelse(is_valid, amt_value, 0))
 
-            # Se guarda prcp (cantidad de mm) en simulation_matrix (porque se usa para simular temperatura)
+            # Se guarda prcp (cantidad de mm) en simulation_matrix (porque se usa para simular temperaturas)
             simulation_matrix$prcp <- dplyr::pull(prcp_amt_sim, prcp_amt)
 
             # Se simula la temperatura mínima (tn_sim)
@@ -312,6 +313,9 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
                 tn = signif(mu_tn + tn_noise, digits = 4)
             )
 
+            # Se guarda tn en simulation_matrix (porque se usa para simular tx)
+            simulation_matrix$tn <- dplyr::pull(tn_sim, tn)
+
             # Se simula la temperatura máxima (tx_sim)
             tx_sim <- tibble::tibble(
                 station = rownames(simulation_coordinates),
@@ -320,17 +324,38 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
                 tx = signif(mu_tx + tx_noise, digits = 4)
             )
 
+            # Se guarda tx en simulation_matrix (solo para mejorar los debugs, no se usa en ningún cálculo posterior)
+            simulation_matrix$tx <- dplyr::pull(tx_sim, tx)
+
+            # Se establecen los parametros de control de las temperaturas generadas
+            t_ctrl <- model$month_params[[month_number]]$temp_ampl %>%
+                tibble::rownames_to_column(var = "station") %>%
+                dplyr::inner_join(dplyr::select(tx_sim, station, tx), by = "station") %>%
+                dplyr::inner_join(dplyr::select(tn_sim, station, tn), by = "station") %>%
+                dplyr::mutate(te = tx - tn) %>%
+                dplyr::select(station, tx, tn, te_min, te, te_max)
+
+
             # Se verifica que tx y tn sean válidos (sino son válidos se los recalcula)
             daily_retries <- 0
-            while (min(tx_sim$tx - tn_sim$tn) < control$minimum_temperatures_difference_threshold && daily_retries < 100) {
+            while ( daily_retries < 100 && (any(t_ctrl$tx < t_ctrl$tn) || any(t_ctrl$te > t_ctrl$te_max) || any(t_ctrl$te < t_ctrl$te_min)) ) {
                 temps_retries <- temps_retries + 1
                 daily_retries <- daily_retries + 1
+
+                stns_a_recalc <- t_ctrl %>% dplyr::filter(tx < tn | te > te_max | te < te_min) %>% dplyr::pull(station)
+
+                new_tn_noises <- noise_generator$generate_noise(month_number, 'tn')
+                names(new_tn_noises) <- dplyr::pull(t_ctrl, station)  # a veces faltan los names, ej. cuando se usa rnorm_noise
+                new_tx_noises <- noise_generator$generate_noise(month_number, 'tx')
+                names(new_tx_noises) <- dplyr::pull(t_ctrl, station)  # a veces faltan los names, ej. cuando se usa rnorm_noise
+
                 tn_sim <- tn_sim %>% dplyr::mutate(
-                    tn_noise = noise_generator$generate_noise(month_number, 'tn'),
-                    tn = signif(mu_tn + tn_noise, digits = 4))
+                    tn_noise = dplyr::if_else(station %in% stns_a_recalc, new_tn_noises[station], tn_noise),
+                    tn = dplyr::if_else(station %in% stns_a_recalc, signif(mu_tn + tn_noise, digits = 4), tn))
                 tx_sim <- tx_sim %>% dplyr::mutate(
-                    tx_noise = noise_generator$generate_noise(month_number, 'tx'),
-                    tx = signif(mu_tx + tx_noise, digits = 4))
+                    tx_noise = dplyr::if_else(station %in% stns_a_recalc, new_tx_noises[station], tx_noise),
+                    tx = dplyr::if_else(station %in% stns_a_recalc, signif(mu_tx + tx_noise, digits = 4), tx))
+                t_ctrl <- t_ctrl %>% dplyr::mutate(tx = tx_sim$tx, tn = tn_sim$tn, te = tx - tn)
             }
             if(daily_retries >= 100) {
                 if(verbose) cat('Failed to simulate random noise that doesn\'t violate the constraint of max. temp. > min. temp.')

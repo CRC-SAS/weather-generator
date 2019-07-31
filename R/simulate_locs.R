@@ -366,7 +366,7 @@ sim.locs.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
 
             daily_retries <- 0
             # retries_array <- array(NA, dim = c(100, length(simulated_climate[1, d, , 'tx'])))
-            while (min(simulated_climate[1, d, , 'tx'] - simulated_climate[1, d, , 'tn']) < control$minimum_temperatures_difference_threshold && daily_retries < 100) {
+            while (min(simulated_climate[1, d, , 'tx'] - simulated_climate[1, d, , 'tn']) < 0.1 && daily_retries < 100) {
                 temps_retries <- temps_retries + 1
                 daily_retries <- daily_retries + 1
 
@@ -380,7 +380,7 @@ sim.locs.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
             }
             if(daily_retries >= 100) {
                 if(verbose) cat('Failed to simulate random noise that doesn\'t violate the constraint of max. temp. > min. temp.')
-                # temps_diff <- apply(retries_array, 2, function(x) x < control$minimum_temperatures_difference_threshold)
+                # temps_diff <- apply(retries_array, 2, function(x) x < 0.1)
                 # temps_diff <- apply(temps_diff, 2, sum)
                 # fields::quilt.plot(simulation_coordinates, temps_diff)
                 # text(sp::coordinates(model$stations), label = model$stations$id, col = 'white')

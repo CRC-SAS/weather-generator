@@ -353,12 +353,16 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit
 
         # Fit model for max temperature.
         tx_indexes <- na.omit(station_climate[, c("tx", "row_num", temps_covariates)])$row_num
+        # como se agrega tn al ajuste de tx, entonces, también se debe excluir los NAs en tn
+        tx_indexes <- na.omit(station_climate[tx_indexes, c("tn", "row_num", temps_covariates)])$row_num
 
         if (control$use_robust_methods) {
-            tx_fit <- robustbase::lmrob(formula(paste0("tx", "~", paste0(temps_covariates, collapse = "+"))),
+            tx_fit_old <- robustbase::lmrob(formula(paste0("tx", "~", paste0(temps_covariates, collapse = "+"))),
+                                        data = station_climate[tx_indexes, ])
+            tx_fit <- robustbase::lmrob(formula(paste0("tx", "~", "tn", "+", paste0(temps_covariates, collapse = "+"))),
                                         data = station_climate[tx_indexes, ])
         } else {
-            tx_fit <- stats::lm(formula(paste0("tx", "~", paste0(temps_covariates, collapse = "+"))),
+            tx_fit <- stats::lm(formula(paste0("tx", "~", "tn", "+", paste0(temps_covariates, collapse = "+"))),
                                 data = station_climate[tx_indexes, ])
         }
         coefmax <- coefficients(tx_fit)
@@ -532,11 +536,22 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit
 
         cov_matrix <- list(tx = tx_vario, tn = tn_vario, prcp = prcp_cor)
 
-        result <- list(residuals_sd = NULL,  cov_matrix = NULL)
+        temp_ampl <- data.frame(month_climate %>% mutate(te = tx-tn) %>% group_by(station) %>%
+                                    summarise(te_max = max(te, na.rm = T),
+                                              te_min = min(te, na.rm = T)))
+        rownames(temp_ampl) <- dplyr::pull(temp_ampl, station)
+        temp_ampl <- dplyr::select(temp_ampl, -station)
+
+        result <- list(residuals_sd = NULL,  cov_matrix = NULL, temp_ampl = NULL)
         if (fit_only_one_station)
-            result <- list(residuals_sd = residuals_sd,  cov_matrix = cov_matrix)
+            result <- list(residuals_sd = residuals_sd,
+                           cov_matrix = cov_matrix,
+                           temp_ampl = temp_ampl)
         if (fit_multiple_stations)
-            result <- list(variogram_parameters = variogram_parameters, residuals_sd = residuals_sd,  cov_matrix = cov_matrix)
+            result <- list(variogram_parameters = variogram_parameters,
+                           residuals_sd = residuals_sd,
+                           cov_matrix = cov_matrix,
+                           temp_ampl = temp_ampl)
 
         return (result)
     }

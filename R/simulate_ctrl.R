@@ -52,8 +52,7 @@ glmwgen_simulation_control <- function(seasonal_temps_covariates_getter = get_te
                                        multicombine = F,
                                        always_krig_coefficients = T,
                                        interpolation_method = c('idw', 'kriging'),
-                                       cache_size = 1,
-                                       minimum_temperatures_difference_threshold = 0.1) {
+                                       cache_size = 1) {
     rf_function <- NULL
     if(!is.function(random_fields_method)) {
         # if(startsWith(random_fields_method, 'gauss')) rf_function <- gaussian_random_field
@@ -78,6 +77,5 @@ glmwgen_simulation_control <- function(seasonal_temps_covariates_getter = get_te
                 multicombine = multicombine,
                 always_krig_coefficients = always_krig_coefficients,
                 interpolation_method = interpolation_method,
-                cache_size = cache_size,
-                minimum_temperatures_difference_threshold = minimum_temperatures_difference_threshold))
+                cache_size = cache_size))
 }
