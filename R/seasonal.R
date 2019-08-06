@@ -5,14 +5,14 @@ summarise_seasonal_climate <- function(climate) {
         summarise(montot = sum(prcp, na.rm = T), maxmean = mean(tx, na.rm = T), minmean = mean(tn, na.rm = T))
 
     d_avg_montot <- d_montot %>% group_by(year, month) %>%
-        summarise(avgmontot = mean(na.omit(montot)),
-                  avgmaxmean = mean(na.omit(maxmean)),
-                  avgminmean = mean(na.omit(minmean)))
+        summarise(avgmontot = mean(montot, na.rm = T),
+                  avgmaxmean = mean(maxmean, na.rm = T),
+                  avgminmean = mean(minmean, na.rm = T))
 
     d_seatot <- d_avg_montot %>% group_by(year, season = ceiling(month/3)) %>%
-        summarise(sum_prcp = sum(avgmontot),
-                  mean_tx = mean(avgmaxmean),
-                  mean_tn = mean(avgminmean)) %>%
+        summarise(sum_prcp = sum(avgmontot, na.rm = T),
+                  mean_tx = mean(avgmaxmean, na.rm = T),
+                  mean_tn = mean(avgminmean, na.rm = T)) %>%
         arrange(year, season)  # Sort in ascending order.
 
     # sort( sapply(objects(),function(x){ format(object.size(get(x)), units='MB') }))
