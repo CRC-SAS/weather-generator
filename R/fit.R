@@ -357,8 +357,6 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit
         tx_indexes <- na.omit(station_climate[tx_indexes, c("tn", "row_num", temps_covariates)])$row_num
 
         if (control$use_robust_methods) {
-            tx_fit_old <- robustbase::lmrob(formula(paste0("tx", "~", paste0(temps_covariates, collapse = "+"))),
-                                        data = station_climate[tx_indexes, ])
             tx_fit <- robustbase::lmrob(formula(paste0("tx", "~", "tn", "+", paste0(temps_covariates, collapse = "+"))),
                                         data = station_climate[tx_indexes, ])
         } else {
