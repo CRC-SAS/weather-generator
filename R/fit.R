@@ -5,7 +5,7 @@
 glmwgen_fit_control <- function(prcp_occurrence_threshold = 0.1,
                                 use_seasonal_covariates_precipitation = F, # el modelo más simple es sin covariables
                                 use_seasonal_covariates_temperature = F,
-                                use_linear_term = T,
+                                use_linear_term = F,
                                 seasonal_covariates = c("tx", "tn", "prcp"),
                                 prcp_lags_to_use = 1,
                                 use_amounts = F,

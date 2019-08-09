@@ -6,7 +6,7 @@
 \usage{
 glmwgen_fit_control(prcp_occurrence_threshold = 0.1,
   use_seasonal_covariates_precipitation = F,
-  use_seasonal_covariates_temperature = F, use_linear_term = T,
+  use_seasonal_covariates_temperature = F, use_linear_term = F,
   seasonal_covariates = c("tx", "tn", "prcp"), prcp_lags_to_use = 1,
   use_amounts = F, tn_lags_to_use = 1, tx_lags_to_use = 1,
   use_six_months_precipitation = F, use_six_months_temperature = F,
