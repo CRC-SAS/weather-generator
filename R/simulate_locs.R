@@ -1,4 +1,120 @@
 
+
+generate_locs_simulation_matrix <- function(daily_covariates, actual_date_index, model_lags,
+                                            sim_start_date, start_climatology, simulated_climate,
+                                            simulation_coordinates_grid,
+                                            stations_krige_sp, simulation_krige_sp) {
+
+    # Las daily_covariates son iguales para todas las estaciones (para una misma fecha), por lo tanto,
+    # es necesario repetir la fila para cada una de las estaciones simuladas
+    simulation_matrix <- tibble::as_tibble(t(daily_covariates[, actual_date_index])) %>%
+        tidyr::crossing(tibble::tibble(station = unique(dplyr::pull(start_climatology, station))))
+
+    # Una vez metidas todas las daily_covariates en simulation_matrix, se agregan datos inciales y previos
+    # considerando los lags utilizados en el ajuste, hasta el max lag indicado en model_control
+    max_lag <- max(model_lags$tx_lags_to_use, model_lags$tn_lags_to_use, model_lags$prcp_lags_to_use)
+
+    for (i in 1:max_lag) {
+
+        # Al manejar los lags hay dos situaciones; 1- la inicial, cuando los datos previos se toman de
+        # start_climatology (dato generado en el ajuste); 2- cuando ya es posible tomar, como previos,
+        # datos simulados previamente, en cuyo caso los datos previos se toman de simulated_climate.
+        if (actual_date_index <= max_lag) {
+            previous_date        <- as.Date(sim_start_date) - i
+            previous_climatology <- start_climatology %>%
+                filter(month == lubridate::month(previous_date), day == lubridate::day(previous_date)) %>%
+                mutate(
+                    prcp = drop(control$random_fields_method(model,
+                                                             simulation_coordinates_grid,
+                                                             lubridate::month(previous_date),
+                                                             'prcp')),
+                    tx = control$interpolation_method(model = model,
+                                                      stations_locations = stations_krige_sp,
+                                                      simulation_locations = simulation_krige_sp,
+                                                      covariate = tx),
+                    tn = control$interpolation_method(model = model,
+                                                      stations_locations = stations_krige_sp,
+                                                      simulation_locations = simulation_krige_sp,
+                                                      covariate = tn)
+                )
+        } else {
+            previous_index       <- actual_date_index - i
+            previous_sim_climate <- simulated_climate[1, previous_index, , ]
+            if (!is.matrix(previous_sim_climate))
+                previous_sim_climate <- t(previous_sim_climate)
+            previous_climatology <- tibble::as_tibble(previous_sim_climate)
+        }
+
+        # El nombre de las columnas a ser agregadas varía de acuerdo a la cantida de lags
+        if (i == 1) sim_matrix_cols <- list(previous_oc = "prcp_occ_prev",
+                                            previous_tn = "tn_prev", tn = "tn",
+                                            previous_tx = "tx_prev", tx = "tx",
+                                            prcp = "prcp", prcp_occ = "prcp_occ")
+        else sim_matrix_cols <- list(previous_oc = paste0("prcp_occ_prev.minus.",i),
+                                     previous_tn = paste0("tn_prev.minus.",i),
+                                     previous_tx = paste0("tx_prev.minus.",i))
+
+        # Finalmente, aquí se carga simulation_matrix con los datos apropiados
+        if (i <= model_lags$prcp_lags_to_use) {
+            simulation_matrix    <- simulation_matrix %>%
+                dplyr::mutate(!!sim_matrix_cols$previous_oc := as.integer(dplyr::pull(previous_climatology, 'prcp') > 0))
+        }
+        if (i <= model_lags$tn_lags_to_use) {
+            simulation_matrix    <- simulation_matrix %>%
+                dplyr::mutate(!!sim_matrix_cols$previous_tn := dplyr::pull(previous_climatology, 'tn'))
+        }
+        if (i <= model_lags$tx_lags_to_use) {
+            simulation_matrix    <- simulation_matrix %>%
+                dplyr::mutate(!!sim_matrix_cols$previous_tx := dplyr::pull(previous_climatology, 'tx'))
+        }
+        if (i == 1) {
+            # Estos son datos del día, pero simulados, por lo tanto, en este punto de la ejecución aún
+            # no están disponibles. Van a ser calculados más adelante en la ejecución de la simulación!
+            simulation_matrix    <- simulation_matrix %>%
+                dplyr::mutate(!!sim_matrix_cols$tn := NA, !!sim_matrix_cols$tx := NA) %>%
+                dplyr::mutate(!!sim_matrix_cols$prcp := NA, !!sim_matrix_cols$prcp_occ := NA)
+        }
+
+    }
+
+    return(simulation_matrix)
+
+}
+
+calc.krige.sp <- function(model, simulation_locations, control) {
+
+    stations_krige_sp <- model$stations
+    simulation_krige_sp <- sp::SpatialPointsDataFrame(sp::coordinates(simulation_locations),
+                                                      data = data.frame(loc_id = 1:nrow(simulation_locations)),
+                                                      proj4string = sp::CRS(sp::proj4string(simulation_locations)))
+
+    if(!sp::is.projected(stations_krige_sp)) {
+        projection_string <- "+proj=tpeqd +lat_1=%f +lon_1=%f +lat_2=%f +lon_2=%f +x_0=%f +y_0=%f +ellps=intl +units=m +no_defs"
+        # projection_string <- "+proj=tmerc +lat_0=%f +lon_0=%f +x_0=%f +y_0=%f +ellps=intl +datum=WGS84 +units=m +no_defs"
+        # Get locations bounds.
+        bounds <- sp::bbox(rbind(sp::coordinates(stations_krige_sp),
+                                 sp::coordinates(simulation_krige_sp)))
+        # Format projection string and make it a CRS.
+        projection_crs <- sp::CRS(sprintf(projection_string, bounds[2, 'min'], bounds[1, 'min'], bounds[2, 'max'], bounds[1, 'max'], 0, 0))
+        # projection_crs <- sp::CRS(sprintf(projection_string, bounds[2, 'min'], bounds[1, 'min'], 0, 0))
+        .stations_krige_sp <- sp::spTransform(stations_krige_sp, projection_crs)
+        .simulation_krige_sp <- sp::spTransform(simulation_krige_sp, projection_crs)
+
+        coords_offset <- max(abs(apply(rbind(sp::coordinates(.simulation_krige_sp), sp::coordinates(.stations_krige_sp)), 2, min))) + 1000
+
+        projection_crs <- sp::CRS(sprintf(projection_string, bounds[2, 'min'], bounds[1, 'min'], bounds[2, 'max'], bounds[1, 'max'], ceiling(coords_offset), ceiling(coords_offset)))
+        # projection_crs <- sp::CRS(sprintf(projection_string, bounds[2, 'min'], bounds[1, 'min'], min_coords[1], min_coords[2]))
+        stations_krige_sp <- sp::spTransform(stations_krige_sp, projection_crs)
+        simulation_krige_sp <- sp::spTransform(simulation_krige_sp, projection_crs)
+
+        rm(.stations_krige_sp, .simulation_krige_sp)
+    }
+
+    return (tibble::tibble(stations_krige_sp = stations_krige_sp, simulation_krige_sp = simulation_krige_sp))
+
+}
+
+
 #' @title Simulates new weather trajectories in interpolated locations
 #' @description Simulates new weather trajectories.
 #' @param object A glmwgen model.
@@ -19,49 +135,36 @@ sim.locs.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
                              control = glmwgen:::glmwgen_simulation_control(), verbose = T) {
     model <- object
 
-    if(class(object) != 'glmwgen') {
-        stop(paste('Received a model of class', class(object), 'and a model of class "glmwgen" was expected.'))
-    }
-
-    if(!is.null(seed)) set.seed(seed)
+    if(class(object) != 'glmwgen') stop(paste('Received a model of class', class(object), 'and a model of class "glmwgen" was expected.'))
 
     if (is.null(simulation_locations)) {
         stop('Simulation locations missing\n')
     }
 
-    realizations_seeds <- ceiling(runif(min = 1, max = 10000000, n = nsim))
-
+    if(!is.null(seed)) set.seed(seed)
 
     if(!('proj4string' %in% names(attributes(simulation_locations)))) {
         warning('simulation_locations is not a spacial points object, attempting to convert it with stations projection string.')
         simulation_locations <- SpatialPoints(simulation_locations, proj4string=model$stations_proj4string)
     }
 
-    # Check if all the simulation locations match a station.
-    distance_to_stations <- round(sp::spDists(simulation_locations, model$stations), 1)
-    matching_stations <- NULL
-
-    if(all(apply(distance_to_stations, 1, min) < 0.5)) {
-        matching_stations <- apply(distance_to_stations, 1, which.min)
-    }
-
-    # Save info about wether the CRS is a projected one or not.
-    is_projected <- sp::is.projected(simulation_locations)
-
-    #########################################
-
-    if(end_date <= start_date) {
-        stop('End date should be greater than start date')
-    }
+    if(end_date <= start_date) stop('End date should be greater than start date')
 
     if(nsim < 1) stop('Number of simulations should be greater than one')
+
+    if(!identical(control$random_fields_method, glmwgen:::random_field_noise)) {
+        warning("Only the function random_field_noise can be used to calculate noises for simulate locations! Switching to it!\n")
+        control$random_fields_method <- glmwgen:::random_field_noise
+    }
+
+    #########################################
 
     simulation_dates <- data.frame(date = seq.Date(from = as.Date(start_date), to = as.Date(end_date), by = "days"))
 
     if (is.null(control$Rt)) {
         # TODO: shouldn't this be = 1 once we start simulating?
-        # Rt <- seq(from = -1, to = 1, length.out = nrow(simulation_dates))
-        Rt <- 0
+        Rt <- seq(from = -1, to = 1, length.out = nrow(simulation_dates))
+        # Rt <- 0
     } else {
         Rt <- control$Rt
         if (length(Rt) == 1)
@@ -76,6 +179,8 @@ sim.locs.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
                year_fraction = 2 * pi * lubridate::yday(date) / ifelse(lubridate::leap_year(date), 366, 365),
                ct = cos(year_fraction),
                st = sin(year_fraction),
+               six_months_fraction = year_fraction / 2, ct.six = cos(six_months_fraction), st.six = sin(six_months_fraction),
+               three_months_fraction = year_fraction / 4, ct.three = cos(three_months_fraction), st.three = sin(three_months_fraction),
                Rt = Rt,
                season = ceiling(lubridate::month(date)/3),
                ST1 = 0, ST2 = 0, ST3 = 0, ST4 = 0,
@@ -103,185 +208,87 @@ sim.locs.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
         simulation_dates[season_indexes, paste0("SMN", season_number)] <- smn_covariates[match(simulation_dates[season_indexes, 'year'], years)]
     }
 
-    daily_covariates <- as.matrix(t(simulation_dates[, !colnames(simulation_dates) %in% c('date', 'year', 'year_fraction', 'month', 'season')]))
+    daily_covariates <- as.matrix(t(simulation_dates[, !colnames(simulation_dates) %in% c('date', 'year', 'year_fraction', 'six_months_fraction',
+                                                                                          'three_months_fraction', 'month', 'season')]))
 
     daily_covariates <- rbind(1, daily_covariates)
     rownames(daily_covariates)[1] <- "(Intercept)"
 
+
+    simulation_dates <- simulation_dates %>% dplyr::select(date, year, month)
+
     #########################################
 
-    if(identical(control$random_fields_method, glmwgen:::random_field_noise)) {
-        if(verbose) cat('Calculating distance matrix for simulation points\n')
-        model$simulation_dist_matrix <- as.dist(sp::spDists(simulation_locations), upper = T)
+    # Check if all the simulation locations match a station.
+    matching_stations <- NULL
+    distance_to_stations <- round(sp::spDists(simulation_locations, model$stations), 1)
+    if(all(apply(distance_to_stations, 1, min) < 0.5)) {
+        matching_stations <- apply(distance_to_stations, 1, which.min)
     }
-
-    if(identical(control$interpolation_method, glmwgen:::idw_covariate)) {
-        model$idw_weights <- 1 / (sp::spDists(simulation_locations, model$stations)) ^ 2
-        model$idw_weights[is.infinite(model$idw_weights)] <- 1
-        model$idw_weights <- model$idw_weights / rowSums(model$idw_weights)
-    }
-
-    # Gamma shape
-    SH <- c()
-    for (station in as.character(model$stations$id)) SH[station] <- model$gamma[[station]]$alpha
-
-    # Check wether we should krige coefficients or not.
-    krige_coefficients <- is.null(matching_stations) || control$always_krig_coefficients
 
     # Save original coordinates.
     simulation_coordinates <- sp::coordinates(simulation_locations)
+    rownames(simulation_coordinates) <- model$stations$id
+    if(is.null(matching_stations))
+        rownames(simulation_coordinates) <- sprintf("(%f, %f)", simulation_coordinates[, 1], simulation_coordinates[, 2])
 
     # Create a gridded representation of the simulation points and fitted stations.
     # This is similar to a Gauss-Kruger projection.
     projections_grid <- glmwgen:::make_distance_grid(model$stations, simulation_locations)
     simulation_coordinates_grid <- projections_grid$simulation_grid
+    rownames(simulation_coordinates_grid) <- model$stations$id
+    if(is.null(matching_stations))
+        rownames(simulation_coordinates_grid) <- sprintf("(%f, %f)", simulation_coordinates[, 1], simulation_coordinates[, 2])
 
-    # stations_in_grid <- apply(spDists(model$stations, simulation_locations), 1, which.min)
-    # stations_grid_distance <- apply(spDists(model$stations, simulation_locations), 1, min)
-    # station_coordinates_grid <- simulation_coordinates_grid[stations_in_grid, ]
-    station_coordinates_grid <- projections_grid$stations_grid
+    # Calculate stations_krige_sp and simulation_krige_sp
+    ksp <- calc.krige.sp(model, simulation_locations, control)
 
-    if(!krige_coefficients) {
-        coefocc_sim <- matrix(model$coefficients$coefocc[matching_stations, ], nrow = length(matching_stations), byrow = F)
-        coefmin_sim <- matrix(model$coefficients$coefmin[matching_stations, ], nrow = length(matching_stations), byrow = F)
-        coefmax_sim <- matrix(model$coefficients$coefmax[matching_stations, ], nrow = length(matching_stations), byrow = F)
-        SH_sim <- SH[matching_stations]
 
-        colnames(coefocc_sim) <- colnames(model$coefficients$coefocc)
-        colnames(coefmin_sim) <- colnames(model$coefficients$coefmin)
-        colnames(coefmax_sim) <- colnames(model$coefficients$coefmax)
+    coefocc_sim <- matrix(apply(model$coefficients$coefocc, 2, control$interpolation_method, model = model,
+                                stations_locations = ksp$stations_krige_sp, simulation_locations = ksp$simulation_krige_sp),
+                         nrow = length(stations), byrow = F)
+    coefmin_sim <- matrix(apply(model$coefficients$coefmin, 2, control$interpolation_method, model = model,
+                                stations_locations = ksp$stations_krige_sp, simulation_locations = ksp$simulation_krige_sp),
+                         nrow = length(stations), byrow = F)
+    coefmax_sim <- matrix(apply(model$coefficients$coefmax, 2, control$interpolation_method, model = model,
+                                stations_locations = ksp$stations_krige_sp, simulation_locations = ksp$simulation_krige_sp),
+                          nrow = length(stations), byrow = F)
 
-        rownames(simulation_coordinates) <- model$stations$id[matching_stations]
-        rownames(simulation_coordinates_grid) <- model$stations$id[matching_stations]
-    } else {
-        stations_krige_sp <- model$stations
-        simulation_krige_sp <- sp::SpatialPointsDataFrame(sp::coordinates(simulation_locations),
-                                                          data = data.frame(loc_id = 1:nrow(simulation_locations)),
-                                                          proj4string = sp::CRS(sp::proj4string(simulation_locations)))
+    colnames(coefocc_sim) <- colnames(model$coefficients$coefocc)
+    rownames(coefocc_sim) <- rownames(model$coefficients$coefocc)
+    colnames(coefmin_sim) <- colnames(model$coefficients$coefmin)
+    rownames(coefmin_sim) <- rownames(model$coefficients$coefmin)
+    colnames(coefmax_sim) <- colnames(model$coefficients$coefmax)
+    rownames(coefmax_sim) <- rownames(model$coefficients$coefmax)
 
-        if(!sp::is.projected(stations_krige_sp)) {
-            projection_string <- "+proj=tpeqd +lat_1=%f +lon_1=%f +lat_2=%f +lon_2=%f +x_0=%f +y_0=%f +ellps=intl +units=m +no_defs"
-            # projection_string <- "+proj=tmerc +lat_0=%f +lon_0=%f +x_0=%f +y_0=%f +ellps=intl +datum=WGS84 +units=m +no_defs"
-            # Get locations bounds.
-            bounds <- sp::bbox(rbind(sp::coordinates(stations_krige_sp),
-                                     sp::coordinates(simulation_krige_sp)))
-            # Format projection string and make it a CRS.
-            projection_crs <- sp::CRS(sprintf(projection_string, bounds[2, 'min'], bounds[1, 'min'], bounds[2, 'max'], bounds[1, 'max'], 0, 0))
-            # projection_crs <- sp::CRS(sprintf(projection_string, bounds[2, 'min'], bounds[1, 'min'], 0, 0))
-            .stations_krige_sp <- sp::spTransform(stations_krige_sp, projection_crs)
-            .simulation_krige_sp <- sp::spTransform(simulation_krige_sp, projection_crs)
 
-            coords_offset <- max(abs(apply(rbind(sp::coordinates(.simulation_krige_sp), sp::coordinates(.stations_krige_sp)), 2, min))) + 1000
+    # Gamma shape
+    SH <- c()
+    for (station in as.character(model$stations$id)) SH[station] <- model$gamma[[station]]$alpha
+    SH_sim <- control$interpolation_method(model = model, stations_locations = ksp$stations_krige_sp, simulation_locations = ksp$simulation_krige_sp, SH)
 
-            projection_crs <- sp::CRS(sprintf(projection_string, bounds[2, 'min'], bounds[1, 'min'], bounds[2, 'max'], bounds[1, 'max'], ceiling(coords_offset), ceiling(coords_offset)))
-            # projection_crs <- sp::CRS(sprintf(projection_string, bounds[2, 'min'], bounds[1, 'min'], min_coords[1], min_coords[2]))
-            stations_krige_sp <- sp::spTransform(stations_krige_sp, projection_crs)
-            simulation_krige_sp <- sp::spTransform(simulation_krige_sp, projection_crs)
 
-            rm(.stations_krige_sp, .simulation_krige_sp)
-            if(verbose) cat('Projected stations and simulation locations to interpolate coefficients\n')
-        }
+    SC <- array(data = NA, dim = c(nrow(simulation_dates), nrow(sp::coordinates(model$stations))))
+    colnames(SC) <- model$stations$id
 
-        coefmin_sim <- apply(model$coefficients$coefmin, 2, control$interpolation_method, model = model,
-                         stations_locations = stations_krige_sp, simulation_locations = simulation_krige_sp)
-        if (!is.matrix(coefmin_sim)) {
-            aux.matrix           <- base::matrix(nrow = 1, ncol = length(coefmin_sim))
-            aux.matrix[1,]       <- coefmin_sim
-            colnames(aux.matrix) <- names(coefmin_sim)
-            coefmin_sim          <- aux.matrix
-        }
-        coefocc_sim <- apply(model$coefficients$coefocc, 2, control$interpolation_method, model = model,
-                             stations_locations = stations_krige_sp, simulation_locations = simulation_krige_sp)
-        if (!is.matrix(coefocc_sim)) {
-            aux.matrix           <- base::matrix(nrow = 1, ncol = length(coefocc_sim))
-            aux.matrix[1,]       <- coefocc_sim
-            colnames(aux.matrix) <- names(coefocc_sim)
-            coefocc_sim          <- aux.matrix
-        }
-        coefmax_sim <- apply(model$coefficients$coefmax, 2, control$interpolation_method, model = model,
-                             stations_locations = stations_krige_sp, simulation_locations = simulation_krige_sp)
-        if (!is.matrix(coefmax_sim)) {
-            aux.matrix           <- base::matrix(nrow = 1, ncol = length(coefmax_sim))
-            aux.matrix[1,]       <- coefmax_sim
-            colnames(aux.matrix) <- names(coefmax_sim)
-            coefmax_sim          <- aux.matrix
-        }
-        if(verbose) cat('Interpolating gamma shape, this may take a while...')
-
-        SH_sim <- control$interpolation_method(model = model, stations_locations = stations_krige_sp, simulation_locations = simulation_krige_sp, SH)
-
-        SC <- array(data = NA, dim = c(nrow(simulation_dates), nrow(sp::coordinates(model$stations))))
-        colnames(SC) <- model$stations$id
-
-        for (station in as.character(model$stations$id)) {
-            gamma_coef <- model$gamma[[station]]$coef
-            SC[, station] <- exp(apply(daily_covariates[names(gamma_coef), ] * gamma_coef, FUN = sum, MAR = 2, na.rm = T)) / SH[station]
-        }
-
-        # Andrew, new
-        start_time <- Sys.time()
-
-        `%op%` <- if(identical(control$interpolation_method, glmwgen:::idw_covariate)) `%do%` else `%dopar%`
-
-        SC_sim <- foreach(day_idx = 1:nrow(SC), .combine = rbind, .packages = c('sp')) %op% {
-            control$interpolation_method(model = model,
-                                         stations_locations = stations_krige_sp,
-                                         simulation_locations = simulation_krige_sp,
-                                         SC[day_idx, ])
-        }
-        if(verbose) cat(sprintf('done (took %.2f minutes)\n', as.numeric(difftime(Sys.time(), start_time, units = 'min'))))
-
-        # Fede
-        # coefsc <- sapply(as.character(stations_krige_sp$id),
-        #                  function(station_id) model$gamma[[station_id]]$coef)
-        # coefsc_sim <- apply(coefsc, 1, control$interpolation_method,
-        #                     model = model, stations_locations = stations_krige_sp,
-        #                     simulation_locations = simulation_krige_sp)
-        #
-        # SC_sim <- t(exp(coefsc_sim %*% daily_covariates[names(gamma_coef), ]) / SH_sim)
-
-        # Andrew, old
-        # SC_sim <- suppressWarnings(fields::predict.Krig(fields::Krig(sp::coordinates(model$stations), SC[d, ]), simulation_coordinates))
-
-        rm(gamma_coef)
-
-        if(verbose) cat('Interpolated coefficients.\n')
-
-        if(!is.null(matching_stations)) {
-            rownames(simulation_coordinates) <- model$stations$id[matching_stations]
-            rownames(simulation_coordinates_grid) <- model$stations$id[matching_stations]
-        } else {
-            rownames(simulation_coordinates) <- sprintf("(%f, %f)", simulation_coordinates[, 1], simulation_coordinates[, 2])
-            rownames(simulation_coordinates_grid) <- sprintf("(%f, %f)", simulation_coordinates[, 1], simulation_coordinates[, 2])
-        }
-        rownames(coefmin_sim) <- rownames(coefmax_sim) <- rownames(coefocc_sim) <- colnames(SC_sim) <- rownames(simulation_coordinates_grid)
+    for (station in as.character(model$stations$id)) {
+        gamma_coef <- model$gamma[[station]]$coef
+        SC[, station] <- exp(apply(daily_covariates[names(gamma_coef), ] * gamma_coef, FUN = sum, MAR = 2, na.rm = T)) / SH[station]
     }
 
-    # if(identical(control$random_fields_method, cholesky_random_field)) {
-    #     cat('Calculate cSigma matrixes.\n')
-    #     # cSigma_list <- list()
-    #     # # grid     <- list(x = unique(sp::coordinates(simulation_coordinates_grid)[,1]), y = unique(sp::coordinates(simulation_coordinates_grid)[,2]))
-    #     # # xg       <- fields::make.surface.grid(grid)
-    #     #
-    #     # model$cSigma <- foreach(month_number=1:12, .multicombine = T) %do% {
-    #     #     month_params <- model$month_params[[month_number]]
-    #     #     cSigma_list <- list()
-    #     #     for(var_name in names(month_params)) {
-    #     #
-    #     #         # bigSigma <- fields::stationary.cov(xg, theta=month_params[[var_name]][3])
-    #     #         bigSigma <- fields::stationary.cov(simulation_coordinates_grid, theta=month_params[[var_name]][3])
-    #     #         cSigma_list[[var_name]] <- t(chol(bigSigma))
-    #     #     }
-    #     #     print(paste0('Chol transform. Month = ', month, '. Variable = ', var_name))
-    #     #
-    #     #     cSigma_list
-    #     # }
-    #     #
-    #     # # names(model$cSigma) <- unique(lubridate::month(simulation_dates$date))
-    #     #
-    #     # # rm(grid, xg, bigSigma)
-    #     # rm(bigSigma)
-    # }
+    # Andrew, new
+    start_time <- Sys.time()
+    `%op%` <- if(identical(control$interpolation_method, glmwgen:::idw_covariate)) `%do%` else `%dopar%`
+    SC_sim <- foreach(day_idx = 1:nrow(SC), .combine = rbind, .packages = c('sp')) %op% {
+        control$interpolation_method(model = model,
+                                     stations_locations = ksp$stations_krige_sp,
+                                     simulation_locations = ksp$simulation_krige_sp,
+                                     SC[day_idx, ])
+    }
+    if(verbose) cat(sprintf('done (took %.2f minutes)\n', as.numeric(difftime(Sys.time(), start_time, units = 'min'))))
+
+
+    #########################################
 
     # Register a sequential backend if the user didn't register a parallel
     # in order to avoid a warning message if we use %dopar%.
@@ -295,124 +302,127 @@ sim.locs.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
         abind::abind(..., along = 1)
     }
 
-    simulation_start <- as.Date(start_date) - 1
-
-    previous_occ <- (drop(control$random_fields_method(model, simulation_coordinates_grid, lubridate::month(simulation_start), 'prcp')) > 0) + 0
-
-    start_climatology <- as.data.frame(model$start_climatology %>% filter(month == lubridate::month(simulation_start), day == lubridate::day(simulation_start)))
-
-    if(!krige_coefficients) {
-        previous_tx <- start_climatology[matching_stations, 'tx']
-        previous_tn <- start_climatology[matching_stations, 'tn']
-    } else {
-        # previous_tn <- suppressWarnings(as.vector(fields::predict.Krig(fields::Krig(sp::coordinates(model$stations), start_climatology$tn), simulation_coordinates)))
-        # previous_tx <- suppressWarnings(as.vector(fields::predict.Krig(fields::Krig(sp::coordinates(model$stations), start_climatology$tx), simulation_coordinates)))
-        previous_tn <- control$interpolation_method(model = model, stations_locations = stations_krige_sp, simulation_locations = simulation_krige_sp, start_climatology$tn)
-        previous_tx <- control$interpolation_method(model = model, stations_locations = stations_krige_sp, simulation_locations = simulation_krige_sp, start_climatology$tx)
-    }
-
-    rm(start_climatology)
-
-
-
-    if(verbose) cat('Simulated start climatology.\n')
-
-    simulation_dates <- simulation_dates[, c(1, 2, 3)]
-
-    invisible(gc())
+    realizations_seeds <- ceiling(runif(min = 1, max = 10000000, n = nsim))
 
     # gen_climate <- foreach(i = 1:nsim, .combine = list, .multicombine = control$multicombine) %dopar% {
     gen_climate <- foreach(i = 1:nsim, .combine = combine_function, .multicombine = control$multicombine, .packages = c('sp')) %dopar% {
         set.seed(realizations_seeds[i])
 
-        noise_generator <- noise_method$new(model = model,
-                                            simulation_locations = simulation_coordinates_grid,
-                                            control = control,
-                                            noise_function = control$random_fields_method)
+        noise_generator <- glmwgen:::noise_method$new(model = model,
+                                                      simulation_locations = simulation_coordinates_grid,
+                                                      control = control,
+                                                      noise_function = control$random_fields_method)
+
 
         simulated_climate <- array(data = 0.0, dim = c(1, nrow(simulation_dates), nrow(simulation_coordinates_grid), 3))
-
-
         dimnames(simulated_climate)[2] <- list('dates' = format(simulation_dates$date, '%Y-%m-%d'))
         dimnames(simulated_climate)[3] <- list('coordinates' = rownames(simulation_coordinates))
         dimnames(simulated_climate)[4] <- list('variables' = c('tx', 'tn', 'prcp'))
 
+        model_lags <- list(prcp_lags_to_use = model$control$prcp_lags_to_use,
+                           tn_lags_to_use = model$control$tn_lags_to_use,
+                           tx_lags_to_use = model$control$tx_lags_to_use)
 
         temps_retries <- 0
         for (d in 1:nrow(simulation_dates)) {
+
+            simulation_matrix <- glmwgen:::generate_locs_simulation_matrix(daily_covariates, d, model_lags, start_date,
+                                                                           model$start_climatology, simulated_climate,
+                                                                           simulation_coordinates_grid,
+                                                                           ksp$stations_krige_sp, ksp$simulation_krige_sp)
+
             month_number <- simulation_dates$month[d]
 
+            # Se simula la ocurrencia de precipitación (prcp_occ)
+            prcp_occ_sim <- tibble::tibble(
+                station = rownames(simulation_coordinates),
+                mu_occ = rowSums(simulation_matrix[, colnames(coefocc_sim)] * coefocc_sim),
+                occ_noise = noise_generator$generate_noise(month_number, 'prcp'),
+                prcp_occ = as.integer((mu_occ + occ_noise) > 0)
+            )
 
-            simulation_matrix <- cbind(previous_occ, previous_tn, previous_tx, matrix(daily_covariates[, d], ncol = nrow(daily_covariates), nrow = length(previous_tx), byrow = T))
-            colnames(simulation_matrix) <- c("prcp_occ_prev", "tn_prev", "tx_prev", rownames(daily_covariates))
+            # Se guarda prcp_occ en simulation_matrix (porque se usa para simular temperaturas)
+            simulation_matrix$prcp_occ <- dplyr::pull(prcp_occ_sim, prcp_occ)
+
+            # Se calcula una cantidad de mm para las estaciones con lluvia (prcp_amt)
+            prcp_amt_sim <- prcp_occ_sim %>%
+                dplyr::select(station, prcp_occ) %>%
+                dplyr::mutate(
+                    amt_noise = noise_generator$generate_noise(month_number, 'prcp'),
+                    amt_value = signif(qgamma(pnorm(amt_noise), shape = SH_sim, scale = SC_sim[d, ]), digits = 4)
+                ) %>%
+                dplyr::mutate(is_valid = prcp_occ == 1 && amt_value >= model$control$prcp_occurrence_threshold) %>%
+                dplyr::mutate(prcp_amt = ifelse(is_valid, amt_value, 0))
+
+            # Se guarda prcp (cantidad de mm) en simulation_matrix (porque se usa para simular temperaturas)
+            simulation_matrix$prcp <- dplyr::pull(prcp_amt_sim, prcp_amt)
+
+            # Se simula la temperatura mínima (tn_sim)
+            tn_sim <- tibble::tibble(
+                station = rownames(simulation_coordinates),
+                mu_tn = rowSums(simulation_matrix[, colnames(coefmin_sim)] * coefmin_sim),
+                tn_noise = noise_generator$generate_noise(month_number, 'tn'),
+                tn = signif(mu_tn + tn_noise, digits = 4)
+            )
+
+            # Se guarda tn en simulation_matrix (porque se usa para simular tx)
+            simulation_matrix$tn <- dplyr::pull(tn_sim, tn)
+
+            # Se simula la temperatura máxima (tx_sim)
+            tx_sim <- tibble::tibble(
+                station = rownames(simulation_coordinates),
+                mu_tx = rowSums(simulation_matrix[, colnames(coefmax_sim)] * coefmax_sim),
+                tx_noise = noise_generator$generate_noise(month_number, 'tx'),
+                tx = signif(mu_tx + tx_noise, digits = 4)
+            )
+
+            # Se guarda tx en simulation_matrix (solo para mejorar los debugs, no se usa en ningún cálculo posterior)
+            simulation_matrix$tx <- dplyr::pull(tx_sim, tx)
+
+            # Se establecen los parametros de control de las temperaturas generadas
+            t_ctrl <- model$month_params[[month_number]]$temp_ampl %>%
+                tibble::rownames_to_column(var = "station") %>%
+                dplyr::inner_join(dplyr::select(tx_sim, station, tx), by = "station") %>%
+                dplyr::inner_join(dplyr::select(tn_sim, station, tn), by = "station") %>%
+                dplyr::mutate(te = tx - tn) %>%
+                dplyr::select(station, tx, tn, te_min, te, te_max)
 
 
-            mu_occ <- rowSums(simulation_matrix[, colnames(coefocc_sim)] * coefocc_sim)
-            occ_noise <- noise_generator$generate_noise(month_number, 'prcp')
-            simulated_climate[1, d, , 'prcp'] <- ((mu_occ + occ_noise) > 0) + 0
-
-
-            simulation_matrix <- cbind(prcp_occ = simulated_climate[1, d, , 'prcp'], simulation_matrix)
-
-
-            mu_tn <- rowSums(simulation_matrix[, colnames(coefmin_sim)] * coefmin_sim)
-            tn_noise <- noise_generator$generate_noise(month_number, 'tn')
-            simulated_climate[1, d, , 'tn'] <- signif(mu_tn + tn_noise, digits = 4)
-
-            mu_tx <- rowSums(simulation_matrix[, colnames(coefmax_sim)] * coefmax_sim)
-            tx_noise <- noise_generator$generate_noise(month_number, 'tx')
-            simulated_climate[1, d, , 'tx'] <- signif(mu_tx + tx_noise, digits = 4)
-
-
+            # Se verifica que tx y tn sean válidos (sino son válidos se los recalcula)
             daily_retries <- 0
-            # retries_array <- array(NA, dim = c(100, length(simulated_climate[1, d, , 'tx'])))
-            while (min(simulated_climate[1, d, , 'tx'] - simulated_climate[1, d, , 'tn']) < 0.1 && daily_retries < 100) {
+            while ( daily_retries < 100 && (any(t_ctrl$tx < t_ctrl$tn) || any(t_ctrl$te > t_ctrl$te_max) || any(t_ctrl$te < t_ctrl$te_min)) ) {
                 temps_retries <- temps_retries + 1
                 daily_retries <- daily_retries + 1
 
-                # retries_array[daily_retries, ] <- simulated_climate[1, d, , 'tx'] - simulated_climate[1, d, , 'tn']
+                stns_a_recalc <- t_ctrl %>% dplyr::filter(tx < tn | te > te_max | te < te_min) %>% dplyr::pull(station)
 
-                tn_noise <- noise_generator$generate_noise(month_number, 'tn')
-                tx_noise <- noise_generator$generate_noise(month_number, 'tx')
+                new_tn_noises <- noise_generator$generate_noise(month_number, 'tn')
+                names(new_tn_noises) <- dplyr::pull(t_ctrl, station)  # a veces faltan los names, ej. cuando se usa rnorm_noise
+                new_tx_noises <- noise_generator$generate_noise(month_number, 'tx')
+                names(new_tx_noises) <- dplyr::pull(t_ctrl, station)  # a veces faltan los names, ej. cuando se usa rnorm_noise
 
-                simulated_climate[1, d, , 'tx'] <- signif(mu_tx + tx_noise, digits = 4)
-                simulated_climate[1, d, , 'tn'] <- signif(mu_tn + tn_noise, digits = 4)
+                tn_sim <- tn_sim %>% dplyr::mutate(
+                    tn_noise = dplyr::if_else(station %in% stns_a_recalc, new_tn_noises[station], tn_noise),
+                    tn = dplyr::if_else(station %in% stns_a_recalc, signif(mu_tn + tn_noise, digits = 4), tn))
+                tx_sim <- tx_sim %>% dplyr::mutate(
+                    tx_noise = dplyr::if_else(station %in% stns_a_recalc, new_tx_noises[station], tx_noise),
+                    tx = dplyr::if_else(station %in% stns_a_recalc, signif(mu_tx + tx_noise, digits = 4), tx))
+                t_ctrl <- t_ctrl %>% dplyr::mutate(tx = tx_sim$tx, tn = tn_sim$tn, te = tx - tn)
             }
             if(daily_retries >= 100) {
                 if(verbose) cat('Failed to simulate random noise that doesn\'t violate the constraint of max. temp. > min. temp.')
-                # temps_diff <- apply(retries_array, 2, function(x) x < 0.1)
-                # temps_diff <- apply(temps_diff, 2, sum)
-                # fields::quilt.plot(simulation_coordinates, temps_diff)
-                # text(sp::coordinates(model$stations), label = model$stations$id, col = 'white')
-                # title(main = sprintf('Day %03d', d))
                 return(NULL)
             }
 
-            previous_occ <- simulated_climate[1, d, , 'prcp']
-            previous_tx <- simulated_climate[1, d, , 'tx']
-            previous_tn <- simulated_climate[1, d, , 'tn']
+            # Se guardan prcp, tn y tx en el array de salida (el resultado de la simulación)
+            simulated_climate[1, d, , 'prcp'] <- dplyr::pull(prcp_amt_sim, prcp_amt)
+            simulated_climate[1, d, , 'tn']   <- dplyr::pull(tn_sim, tn)
+            simulated_climate[1, d, , 'tx']   <- dplyr::pull(tx_sim, tx)
 
-
-            rainy_locations <- simulated_climate[1, d, , 'prcp'] > 0
-
-            if(any(rainy_locations)) {
-                # amounts
-
-                # w3 <- suppressWarnings(geoR::grf(nrow(simulation_coordinates_grid), grid = simulation_coordinates_grid, cov.model = "exponential", cov.pars = c(p$prcp[2], p$prcp[3]), nugget = p$prcp[1], mean = rep(0,
-                #     nrow(simulation_coordinates_grid)), messages = FALSE)$data)
-                #
-                # w3 <- control$random_fields_method(model, simulation_coordinates_grid, month_number, 'prcp')
-                amt_noise <- noise_generator$generate_noise(month_number, 'prcp')
-
-                simulated_climate[1, d, rainy_locations, 'prcp'] <- signif(qgamma(pnorm(amt_noise), shape = SH_sim, scale = SC_sim[d, ]), digits = 4)[rainy_locations]
-                # simulated_prcp[d, ] <- signif(qgamma(pnorm(w3), shape = SH_sim, scale = SC.sim), digits = 4)
-            }
+            # Se reporta el estado de la simulación
             if(verbose && d %% 2 == 0) cat(paste0("\r Realization ", i, ": ", d, "/", ncol(daily_covariates), ". Retries: ", temps_retries, '       '))
-
             if(d %% 30 == 0) invisible(gc())
         }
-
-        simulated_climate[1, , , 'prcp'][simulated_climate[1, , , 'prcp'] < model$control$prcp_occurrence_threshold] <- 0
 
         simulated_climate
     }
@@ -432,10 +442,6 @@ sim.locs.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
 
     attr(gen_climate, 'realizations_seeds') <- realizations_seeds
     attr(gen_climate, 'simulation_coordinates') <- simulation_coordinates
-
-    if('simulation_dist_matrix' %in% names(model)) {
-        model[['simulation_dist_matrix']] <- NULL
-    }
 
     attr(gen_climate, 'model') <- model
 

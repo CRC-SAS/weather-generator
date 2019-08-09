@@ -1,37 +1,7 @@
 
-#' @title Transform simulation result to tibble
-#' @description This function transforms the simulation result, a named array, to a tibble.
-#' @export
-sim_result_to_tibble <- function(sim_result, nsim_to_extract = 1) {
 
-    if (any(class(sim_result) != c("array", "glmwgen.climate")))
-        return (NULL)
-
-    dates    <- colnames(sim_result)
-    stations <- rownames(sim_result[nsim_to_extract, 1, ,])
-
-    prcp <- tibble::tibble(date = dates) %>%
-        dplyr::bind_cols(tibble::as_tibble(sim_result[nsim_to_extract, , , "prcp"])) %>%
-        tidyr::gather(key="station", value="prcp", -date)
-    tn   <- tibble::tibble(date = dates) %>%
-        dplyr::bind_cols(tibble::as_tibble(sim_result[nsim_to_extract, , , "tn"])) %>%
-        tidyr::gather(key="station", value="tn", -date)
-    tx   <- tibble::tibble(date = dates) %>%
-        dplyr::bind_cols(tibble::as_tibble(sim_result[nsim_to_extract, , , "tx"])) %>%
-        tidyr::gather(key="station", value="tx", -date)
-
-    result   <- tidyr::crossing(dates, stations) %>%
-        dplyr::rename(date = dates, station = stations) %>%
-        dplyr::inner_join(prcp, by = c("date","station")) %>%
-        dplyr::inner_join(tn, by = c("date","station")) %>%
-        dplyr::inner_join(tx, by = c("date","station"))
-
-    return (result)
-}
-
-
-generate_simulation_matrix <- function(daily_covariates, actual_date_index, model_lags,
-                                       sim_start_date, start_climatology, simulated_climate) {
+generate_stns_simulation_matrix <- function(daily_covariates, actual_date_index, model_lags,
+                                            sim_start_date, start_climatology, simulated_climate) {
 
     # Las daily_covariates son iguales para todas las estaciones (para una misma fecha), por lo tanto,
     # es necesario repetir la fila para cada una de las estaciones simuladas
@@ -113,7 +83,7 @@ generate_simulation_matrix <- function(daily_covariates, actual_date_index, mode
 #' @import foreach
 #' @export
 sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end_date = NA,
-                             control = glmwgen:::glmwgen_simulation_control(),  verbose = T) {
+                             control = glmwgen:::glmwgen_simulation_control(), verbose = T) {
     model <- object
 
     if(class(object) != 'glmwgen') stop(paste('Received a model of class', class(object), 'and a model of class "glmwgen" was expected.'))
@@ -207,21 +177,16 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
 
     #########################################
 
-    # Gamma shape
-    SH <- c()
-    for (station in as.character(model$stations$id)) SH[station] <- model$gamma[[station]]$alpha
-
     stations <- seq_len(nrow(simulation_locations))  # en lugar de matching_stations
 
     # Save original coordinates.
     simulation_coordinates <- sp::coordinates(simulation_locations)
-    rownames(simulation_coordinates) <- model$stations$id[stations]
+    rownames(simulation_coordinates) <- model$stations$id
 
 
     coefocc_sim <- matrix(model$coefficients$coefocc[stations, ], nrow = length(stations), byrow = F)
     coefmin_sim <- matrix(model$coefficients$coefmin[stations, ], nrow = length(stations), byrow = F)
     coefmax_sim <- matrix(model$coefficients$coefmax[stations, ], nrow = length(stations), byrow = F)
-    SH <- SH[stations]
 
     colnames(coefocc_sim) <- colnames(model$coefficients$coefocc)
     rownames(coefocc_sim) <- rownames(model$coefficients$coefocc)
@@ -230,6 +195,13 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
     colnames(coefmax_sim) <- colnames(model$coefficients$coefmax)
     rownames(coefmax_sim) <- rownames(model$coefficients$coefmax)
 
+
+    # Gamma shape
+    SH <- c()
+    for (station in as.character(model$stations$id)) SH[station] <- model$gamma[[station]]$alpha
+    SH_sim <- SH[stations]
+
+
     SC <- array(data = NA, dim = c(nrow(simulation_dates), nrow(sp::coordinates(model$stations))))
     colnames(SC) <- model$stations$id
 
@@ -237,6 +209,8 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
         gamma_coef <- model$gamma[[station]]$coef
         SC[, station] <- exp(apply(daily_covariates[names(gamma_coef), ] * gamma_coef, FUN = sum, MAR = 2, na.rm = T)) / SH[station]
     }
+
+    SC_sim <- SC
 
     #########################################
 
@@ -276,8 +250,8 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
         temps_retries <- 0
         for (d in 1:nrow(simulation_dates)) {
 
-            simulation_matrix <- glmwgen:::generate_simulation_matrix(daily_covariates, d, model_lags, start_date,
-                                                                      model$start_climatology, simulated_climate)
+            simulation_matrix <- glmwgen:::generate_stns_simulation_matrix(daily_covariates, d, model_lags, start_date,
+                                                                           model$start_climatology, simulated_climate)
 
             month_number <- simulation_dates$month[d]
 
@@ -297,7 +271,7 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
                 dplyr::select(station, prcp_occ) %>%
                 dplyr::mutate(
                     amt_noise = noise_generator$generate_noise(month_number, 'prcp'),
-                    amt_value = signif(qgamma(pnorm(amt_noise), shape = SH, scale = SC[d, ]), digits = 4)
+                    amt_value = signif(qgamma(pnorm(amt_noise), shape = SH_sim, scale = SC_sim[d, ]), digits = 4)
                 ) %>%
                 dplyr::mutate(is_valid = prcp_occ == 1 && amt_value >= model$control$prcp_occurrence_threshold) %>%
                 dplyr::mutate(prcp_amt = ifelse(is_valid, amt_value, 0))
@@ -390,10 +364,6 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
 
     attr(gen_climate, 'realizations_seeds') <- realizations_seeds
     attr(gen_climate, 'simulation_coordinates') <- simulation_coordinates
-
-    if('simulation_dist_matrix' %in% names(model)) {
-        model[['simulation_dist_matrix']] <- NULL
-    }
 
     attr(gen_climate, 'model') <- model
 

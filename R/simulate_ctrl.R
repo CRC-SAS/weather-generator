@@ -79,3 +79,33 @@ glmwgen_simulation_control <- function(seasonal_temps_covariates_getter = get_te
                 interpolation_method = interpolation_method,
                 cache_size = cache_size))
 }
+
+#' @title Transform simulation result to tibble
+#' @description This function transforms the simulation result, a named array, to a tibble.
+#' @export
+sim_result_to_tibble <- function(sim_result, nsim_to_extract = 1) {
+
+    if (any(class(sim_result) != c("array", "glmwgen.climate")))
+        return (NULL)
+
+    dates    <- colnames(sim_result)
+    stations <- rownames(sim_result[nsim_to_extract, 1, ,])
+
+    prcp <- tibble::tibble(date = dates) %>%
+        dplyr::bind_cols(tibble::as_tibble(sim_result[nsim_to_extract, , , "prcp"])) %>%
+        tidyr::gather(key="station", value="prcp", -date)
+    tn   <- tibble::tibble(date = dates) %>%
+        dplyr::bind_cols(tibble::as_tibble(sim_result[nsim_to_extract, , , "tn"])) %>%
+        tidyr::gather(key="station", value="tn", -date)
+    tx   <- tibble::tibble(date = dates) %>%
+        dplyr::bind_cols(tibble::as_tibble(sim_result[nsim_to_extract, , , "tx"])) %>%
+        tidyr::gather(key="station", value="tx", -date)
+
+    result   <- tidyr::crossing(dates, stations) %>%
+        dplyr::rename(date = dates, station = stations) %>%
+        dplyr::inner_join(prcp, by = c("date","station")) %>%
+        dplyr::inner_join(tn, by = c("date","station")) %>%
+        dplyr::inner_join(tx, by = c("date","station"))
+
+    return (result)
+}
