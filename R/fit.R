@@ -69,7 +69,7 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     ###############################################################
 
     climate <- climate %>%
-        dplyr::rename(station = station_id)
+        dplyr::rename(station = station_id) %>%
         dplyr::arrange(station, date)
 
     invalid_records <- c(which(climate$tx < climate$tn), which(climate$prcp < 0))
