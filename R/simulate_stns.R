@@ -149,9 +149,6 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
                       six_months_fraction = year_fraction / 2,
                       ct.six = cos(six_months_fraction),
                       st.six = sin(six_months_fraction),
-                      three_months_fraction = year_fraction / 4,
-                      ct.three = cos(three_months_fraction),
-                      st.three = sin(three_months_fraction),
                       Rt = sort(rep(Rt, times = length(simulation_locations))),
                       season = ceiling(lubridate::month(date)/3)) %>%
         dplyr::left_join(seasonal_covariates, by = c("station", "year", "season")) %>%

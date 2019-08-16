@@ -180,7 +180,6 @@ sim.locs.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
                ct = cos(year_fraction),
                st = sin(year_fraction),
                six_months_fraction = year_fraction / 2, ct.six = cos(six_months_fraction), st.six = sin(six_months_fraction),
-               three_months_fraction = year_fraction / 4, ct.three = cos(three_months_fraction), st.three = sin(three_months_fraction),
                Rt = Rt,
                season = ceiling(lubridate::month(date)/3),
                ST1 = 0, ST2 = 0, ST3 = 0, ST4 = 0,
@@ -209,7 +208,7 @@ sim.locs.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
     }
 
     daily_covariates <- as.matrix(t(simulation_dates[, !colnames(simulation_dates) %in% c('date', 'year', 'year_fraction', 'six_months_fraction',
-                                                                                          'three_months_fraction', 'month', 'season')]))
+                                                                                          'month', 'season')]))
 
     daily_covariates <- rbind(1, daily_covariates)
     rownames(daily_covariates)[1] <- "(Intercept)"

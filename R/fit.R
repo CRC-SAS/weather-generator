@@ -12,8 +12,6 @@ glmwgen_fit_control <- function(prcp_occurrence_threshold = 0.1,
                                 tx_lags_to_use = 1,
                                 use_six_months_precipitation = F,
                                 use_six_months_temperature = F,
-                                use_three_months_precipitation = F,
-                                use_three_months_temperature = F,
                                 save_residuals = F,
                                 cov_mode = 'complete',
                                 save_lm_fits = F,
@@ -31,8 +29,6 @@ glmwgen_fit_control <- function(prcp_occurrence_threshold = 0.1,
                 tx_lags_to_use = tx_lags_to_use,
                 use_six_months_precipitation = use_six_months_precipitation,
                 use_six_months_temperature = use_six_months_temperature,
-                use_three_months_precipitation = use_three_months_precipitation,
-                use_three_months_temperature = use_three_months_temperature,
                 save_residuals = save_residuals,
                 cov_mode = cov_mode,
                 save_lm_fits = save_lm_fits,
@@ -157,11 +153,6 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
         prcp_covariates <- c(prcp_covariates, "ct.six", "st.six")
     }
 
-    # Use three months cycle
-    if (control$use_three_months_precipitation) {
-        prcp_covariates <- c(prcp_covariates, "ct.three", "st.three")
-    }
-
     if (control$prcp_lags_to_use > 1) {
         prcp_prev_autocorrelation <- c()
         for (i in 2:control$prcp_lags_to_use) {
@@ -177,11 +168,6 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     # Use six months cycle
     if (control$use_six_months_temperature) {
         temps_covariates <- c(temps_covariates, "ct.six", "st.six")
-    }
-
-    # Use three months cycle
-    if (control$use_three_months_temperature) {
-        temps_covariates <- c(temps_covariates, "ct.three", "st.three")
     }
 
     # Use occurence or amounts
@@ -258,17 +244,6 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
             station_climate <- data.frame(station_climate,
                                           ct.six,
                                           st.six)
-        }
-
-        # Add three months cycle functions
-        if (control$use_three_months_precipitation | control$use_three_months_temperature) {
-            year_fraction = 2 * pi * lubridate::yday(station_climate$date)/ifelse(lubridate::leap_year(station_climate$date), 366/4, 365/4)
-            ct.three = cos(year_fraction)
-            st.three = sin(year_fraction)
-
-            station_climate <- data.frame(station_climate,
-                                          ct.three,
-                                          st.three)
         }
 
         # Add lagged precipitation
