@@ -87,12 +87,38 @@ check.object <- function(object, obj.name, obj.class, obj.cols) {
 
 }
 
-check.input.data <- function(climate, stations) {
+check.ends.with.columns <- function(object, obj.name, obj.cols) {
+
+    for (c in names(obj.cols)) {
+        if (sum(endsWith(names(object), c)) != 1) {
+            warning (glue::glue("{obj.name} must have exactly one column ending with: {c}!"),
+                     call. = FALSE, immediate. = TRUE)
+            stop ("Entry data for glmwgen::calibrate.glmwgen() aren't in the correct format!", call. = FALSE)
+        }
+    }
+
+    for (c in names(obj.cols)) {
+        if (class(dplyr::pull(dplyr::select(object, dplyr::ends_with(c))))[[1]] != obj.cols[[c]]) {
+            warning (glue::glue("{obj.name} column named {c} must be {obj.cols[[c]]}"), call. = FALSE, immediate. = TRUE)
+            stop ("Entry data for glmwgen::calibrate.glmwgen() aren't in the correct format!", call. = FALSE)
+        }
+    }
+
+}
+
+check.input.data <- function(climate, stations, seasonal.climate) {
 
     climate.columns <- c(date = "Date", station_id = "integer", tx = "numeric", tn = "numeric", prcp = "numeric")
     stations.columns <- c(station_id = "integer", lon_dec = "numeric", lat_dec = "numeric", geometry = "sfc_POINT")
+    seasonal.invariant.columns <- c(station_id = "integer", year = "numeric", season = "numeric")
+    seasonal.ends.with.columns <- c(tx = "numeric", tn = "numeric", prcp = "numeric")
 
     check.object(climate, "climate", c("tbl_df", "tbl", "data.frame"), climate.columns)
     check.object(stations, "stations", c("sf", "tbl_df", "tbl", "data.frame"), stations.columns)
+
+    if (!is.null(seasonal.climate)) {
+        check.object(seasonal.climate, "seasonal.climate", c("tbl_df", "tbl", "data.frame"), seasonal.invariant.columns)
+        check.ends.with.columns(seasonal.climate, "seasonal.climate", seasonal.ends.with.columns)
+    }
 
 }

@@ -1,12 +1,9 @@
 
 
-generate_stns_simulation_matrix <- function(daily_covariates, actual_date_index, model_lags,
+generate_stns_simulation_matrix <- function(daily_covariates, actual_date, actual_date_index, model_lags,
                                             sim_start_date, start_climatology, simulated_climate) {
 
-    # Las daily_covariates son iguales para todas las estaciones (para una misma fecha), por lo tanto,
-    # es necesario repetir la fila para cada una de las estaciones simuladas
-    simulation_matrix <- tibble::as_tibble(t(daily_covariates[, actual_date_index])) %>%
-        tidyr::crossing(tibble::tibble(station = unique(dplyr::pull(start_climatology, station))))
+    simulation_matrix <- daily_covariates %>% dplyr::filter(date == actual_date)
 
     # Una vez metidas todas las daily_covariates en simulation_matrix, se agregan datos inciales y previos
     # considerando los lags utilizados en el ajuste, hasta el max lag indicado en model_control
@@ -99,6 +96,11 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
 
     if(end_date <= start_date) stop('End date should be greater than start date')
 
+    years_in_sim_dates <- base::seq.int(lubridate::year(start_date), lubridate::year(end_date))
+    years_in_senal_cov <- dplyr::distinct(model$seasonal, year) %>% dplyr::pull()
+    if (!all(is.element(years_in_sim_dates, years_in_senal_cov)))
+        stop("Simulation years aren't in model$seasonal!")
+
     if(nsim < 1) stop('Number of simulations should be greater than one')
 
     if(identical(control$random_fields_method, glmwgen:::random_field_noise)) {
@@ -117,7 +119,8 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
 
     #########################################
 
-    simulation_dates <- data.frame(date = seq.Date(from = as.Date(start_date), to = as.Date(end_date), by = "days"))
+    simulation_dates <- data.frame(date = seq.Date(from = as.Date(start_date), to = as.Date(end_date), by = "days")) %>%
+        dplyr::mutate(year = lubridate::year(date), month = lubridate::month(date), day = lubridate::day(date))
 
     if (is.null(control$Rt)) {
         # TODO: shouldn't this be = 1 once we start simulating?
@@ -131,49 +134,41 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
             stop("The specified Rt parameter length differs from the simulation dates series length.")
     }
 
-    simulation_dates <- simulation_dates %>%
-        mutate(year = lubridate::year(date),
-               month = lubridate::month(date),
-               year_fraction = 2 * pi * lubridate::yday(date) / ifelse(lubridate::leap_year(date), 366, 365),
-               ct = cos(year_fraction),
-               st = sin(year_fraction),
-               six_months_fraction = year_fraction / 2, ct.six = cos(six_months_fraction), st.six = sin(six_months_fraction),
-               three_months_fraction = year_fraction / 4, ct.three = cos(three_months_fraction), st.three = sin(three_months_fraction),
-               Rt = Rt,
-               season = ceiling(lubridate::month(date)/3),
-               ST1 = 0, ST2 = 0, ST3 = 0, ST4 = 0,
-               SMX1 = 0, SMX2 = 0, SMX3 = 0, SMX4 = 0,
-               SMN1 = 0, SMN2 = 0, SMN3 = 0, SMN4 = 0)
+    seasonal_covariates <- model$seasonal  %>%
+        dplyr::rename(st_covariates  = dplyr::ends_with("prcp"),
+                      smx_covariates = dplyr::ends_with("tx"),
+                      smn_covariates = dplyr::ends_with("tn"))
 
-    rm(Rt)
+    daily_covariates    <- simulation_dates %>%
+        tidyr::crossing(station = simulation_locations$id) %>%
+        dplyr::mutate("(Intercept)" = 1,
+                      year = lubridate::year(date),
+                      year_fraction = 2 * pi * lubridate::yday(date) / ifelse(lubridate::leap_year(date), 366, 365),
+                      ct = cos(year_fraction),
+                      st = sin(year_fraction),
+                      six_months_fraction = year_fraction / 2,
+                      ct.six = cos(six_months_fraction),
+                      st.six = sin(six_months_fraction),
+                      three_months_fraction = year_fraction / 4,
+                      ct.three = cos(three_months_fraction),
+                      st.three = sin(three_months_fraction),
+                      Rt = sort(rep(Rt, times = length(simulation_locations))),
+                      season = ceiling(lubridate::month(date)/3)) %>%
+        dplyr::left_join(seasonal_covariates, by = c("station", "year", "season")) %>%
+        dplyr::mutate(ST1  = dplyr::if_else(season == 1, st_covariates,  0),
+                      ST2  = dplyr::if_else(season == 2, st_covariates,  0),
+                      ST3  = dplyr::if_else(season == 3, st_covariates,  0),
+                      ST4  = dplyr::if_else(season == 4, st_covariates,  0),
+                      SMX1 = dplyr::if_else(season == 1, smx_covariates, 0),
+                      SMX2 = dplyr::if_else(season == 2, smx_covariates, 0),
+                      SMX3 = dplyr::if_else(season == 3, smx_covariates, 0),
+                      SMX4 = dplyr::if_else(season == 4, smx_covariates, 0),
+                      SMN1 = dplyr::if_else(season == 1, smn_covariates, 0),
+                      SMN2 = dplyr::if_else(season == 2, smn_covariates, 0),
+                      SMN3 = dplyr::if_else(season == 3, smn_covariates, 0),
+                      SMN4 = dplyr::if_else(season == 4, smn_covariates, 0)) %>%
+        dplyr::select(station, date, dplyr::everything(), -month, -day, -dplyr::ends_with("fraction"))
 
-    for (season_number in unique(simulation_dates$season)) {
-        season_indexes <- simulation_dates$season == season_number
-        # season_values <- d_seatot[d_seatot$season == season_number, ]
-        # season_tx <- unique(model$seasonal$tx[[season_number]])
-        # season_tn <- unique(model$seasonal$tn[[season_number]])
-        # season_prcp <- unique(model$seasonal$prcp[[season_number]])
-
-        years <- unique(simulation_dates$year[season_indexes])
-
-        temp_covariates <- control$seasonal_temps_covariates_getter(years, season_number, model$seasonal)
-        smx_covariates <- temp_covariates[['tx']]
-        smn_covariates <- temp_covariates[['tn']]
-        st_covariates <- control$seasonal_prcp_covariates_getter(years, season_number, model$seasonal)
-
-        simulation_dates[season_indexes, paste0("ST", season_number)] <- st_covariates[match(simulation_dates[season_indexes, 'year'], years)]
-        simulation_dates[season_indexes, paste0("SMX", season_number)] <- smx_covariates[match(simulation_dates[season_indexes, 'year'], years)]
-        simulation_dates[season_indexes, paste0("SMN", season_number)] <- smn_covariates[match(simulation_dates[season_indexes, 'year'], years)]
-    }
-
-    daily_covariates <- as.matrix(t(simulation_dates[, !colnames(simulation_dates) %in% c('date', 'year', 'year_fraction', 'six_months_fraction',
-                                                                                          'three_months_fraction', 'month', 'season')]))
-
-    daily_covariates <- rbind(1, daily_covariates)
-    rownames(daily_covariates)[1] <- "(Intercept)"
-
-
-    simulation_dates <- simulation_dates %>% dplyr::select(date, year, month)
 
     #########################################
 
@@ -205,9 +200,14 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
     SC <- array(data = NA, dim = c(nrow(simulation_dates), nrow(sp::coordinates(model$stations))))
     colnames(SC) <- model$stations$id
 
-    for (station in as.character(model$stations$id)) {
-        gamma_coef <- model$gamma[[station]]$coef
-        SC[, station] <- exp(apply(daily_covariates[names(gamma_coef), ] * gamma_coef, FUN = sum, MAR = 2, na.rm = T)) / SH[station]
+    for (station_id in as.character(model$stations$id)) {
+        gamma_coef <- model$gamma[[station_id]]$coef
+        col_names  <- as.character(sort(simulation_dates$date))
+        covariates <- daily_covariates %>%
+            dplyr::filter(station == station_id) %>% dplyr::arrange(date) %>%
+            dplyr::select(-station, -date) %>% base::t() %>% base::as.matrix() %>%
+            magrittr::set_colnames(glue::glue("{station_id}.{col_names}"))
+        SC[, station_id] <- exp(apply(covariates[names(gamma_coef), ] * gamma_coef, FUN = sum, MAR = 2, na.rm = T)) / SH[station_id]
     }
 
     SC_sim <- SC
@@ -249,8 +249,9 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
 
         temps_retries <- 0
         for (d in 1:nrow(simulation_dates)) {
+            actual_date <- simulation_dates$date[d]
 
-            simulation_matrix <- glmwgen:::generate_stns_simulation_matrix(daily_covariates, d, model_lags, start_date,
+            simulation_matrix <- glmwgen:::generate_stns_simulation_matrix(daily_covariates, actual_date, d, model_lags, start_date,
                                                                            model$start_climatology, simulated_climate)
 
             month_number <- simulation_dates$month[d]
@@ -342,12 +343,14 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
             simulated_climate[1, d, , 'tx']   <- dplyr::pull(tx_sim, tx)
 
             # Se reporta el estado de la simulación
-            if(verbose && d %% 2 == 0) cat(paste0("\r Realization ", i, ": ", d, "/", ncol(daily_covariates), ". Retries: ", temps_retries, '       '))
+            if(verbose && d %% 2 == 0) cat(paste0("\r Realization ", i, ": ", d, "/", nrow(simulation_dates), ". Retries: ", temps_retries, '       '))
             if(d %% 30 == 0) invisible(gc())
         }
 
         simulated_climate
     }
+
+    if(verbose) cat("\n")  # Para que los warnings y errores se impriman debajo de Realization ..., y no al lado!
 
 
     attr(gen_climate, 'simulation_coefficients') <- list(
@@ -357,9 +360,12 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
     )
 
     attr(gen_climate, 'seasonal_covariates') <- list(
-        'tx' = smx_covariates,
-        'tn' = smn_covariates,
-        'prcp' = st_covariates
+        'tx' = seasonal_covariates %>% dplyr::filter(year %in% years_in_sim_dates) %>%
+            dplyr::select(station, year, season, smx_covariates),  # smx_covariates,
+        'tn' = seasonal_covariates %>% dplyr::filter(year %in% years_in_sim_dates) %>%
+            dplyr::select(station, year, season, smn_covariates),  # smn_covariates,
+        'prcp' = seasonal_covariates %>% dplyr::filter(year %in% years_in_sim_dates) %>%
+            dplyr::select(station, year, season, st_covariates)    # st_covariates
     )
 
     attr(gen_climate, 'realizations_seeds') <- realizations_seeds

@@ -4,12 +4,12 @@ summarise_seasonal_climate <- function(climate) {
     d_montot <- climate %>% group_by(station, year = lubridate::year(date), month = lubridate::month(date)) %>%
         summarise(montot = sum(prcp, na.rm = T), maxmean = mean(tx, na.rm = T), minmean = mean(tn, na.rm = T))
 
-    d_avg_montot <- d_montot %>% group_by(year, month) %>%
+    d_avg_montot <- d_montot %>% group_by(station, year, month) %>%
         summarise(avgmontot = mean(montot, na.rm = T),
                   avgmaxmean = mean(maxmean, na.rm = T),
                   avgminmean = mean(minmean, na.rm = T))
 
-    d_seatot <- d_avg_montot %>% group_by(year, season = ceiling(month/3)) %>%
+    d_seatot <- d_avg_montot %>% group_by(station, year, season = ceiling(month/3)) %>%
         summarise(sum_prcp = sum(avgmontot, na.rm = T),
                   mean_tx = mean(avgmaxmean, na.rm = T),
                   mean_tn = mean(avgminmean, na.rm = T)) %>%

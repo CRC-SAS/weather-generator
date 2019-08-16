@@ -6,7 +6,6 @@ glmwgen_fit_control <- function(prcp_occurrence_threshold = 0.1,
                                 use_seasonal_covariates_precipitation = F, # el modelo más simple es sin covariables
                                 use_seasonal_covariates_temperature = F,
                                 use_linear_term = F,
-                                seasonal_covariates = c("tx", "tn", "prcp"),
                                 prcp_lags_to_use = 1,
                                 use_amounts = F,
                                 tn_lags_to_use = 1,
@@ -19,17 +18,13 @@ glmwgen_fit_control <- function(prcp_occurrence_threshold = 0.1,
                                 cov_mode = 'complete',
                                 save_lm_fits = F,
                                 use_stepwise = F,
-                                use_robust_methods = F) {
-
-    if (!all(seasonal_covariates %in% c("tx", "tn", "prcp"))) {
-        stop("The seasonal_covariates parameter should list the variables names that will be fitted with seasonal averages as covariates.")
-    }
+                                use_robust_methods = F,
+                                use_external_seasonal_climate = T) {
 
     return(list(prcp_occurrence_threshold = prcp_occurrence_threshold,
                 use_seasonal_covariates_precipitation = use_seasonal_covariates_precipitation,
                 use_seasonal_covariates_temperature = use_seasonal_covariates_temperature,
                 use_linear_term = use_linear_term,
-                seasonal_covariates = seasonal_covariates,
                 prcp_lags_to_use = prcp_lags_to_use,
                 use_amounts = use_amounts,
                 tn_lags_to_use = tn_lags_to_use,
@@ -42,7 +37,8 @@ glmwgen_fit_control <- function(prcp_occurrence_threshold = 0.1,
                 cov_mode = cov_mode,
                 save_lm_fits = save_lm_fits,
                 use_stepwise = use_stepwise,
-                use_robust_methods = use_robust_methods))
+                use_robust_methods = use_robust_methods,
+                use_external_seasonal_climate = use_external_seasonal_climate))
 }
 
 
@@ -51,15 +47,39 @@ glmwgen_fit_control <- function(prcp_occurrence_threshold = 0.1,
 #' @import foreach
 #' @import dplyr
 #' @export
-calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit_control(), verbose = T) {
+calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
+                              control = glmwgen:::glmwgen_fit_control(),
+                              verbose = T) {
 
-    glmwgen:::check.input.data(climate, stations)
-
+    # Se crea el objeto a ser retornado al culminar el ajuste!
     model <- list()
+
+    ###############################################################
+
+    if (control$use_external_seasonal_climate & is.null(seasonal.climate))
+        stop("If use_external_seasonal_climate is True, seasonal.climate can't be NULL!!")
+
+    if (!control$use_external_seasonal_climate & !is.null(seasonal.climate)) {
+        warning('Entered seasonal.climate will be descarted because use_external_seasonal_climate is set as False!')
+        seasonal.climate <- NULL
+    }
+
+    glmwgen:::check.input.data(climate, stations, seasonal.climate)
+
+    ###############################################################
 
     climate <- climate %>%
         dplyr::rename(station = station_id)
-    climate <- climate %>% arrange(station, date)
+        dplyr::arrange(station, date)
+
+    invalid_records <- c(which(climate$tx < climate$tn), which(climate$prcp < 0))
+
+    if(length(invalid_records) > 0) {
+        warning(sprintf('Removing %d records with maximum temperature < minimum temperature or negative rainfalls.', length(invalid_records)))
+        climate[invalid_records, c('tx', 'tn', 'prcp')] <- NA
+    }
+
+    ###############################################################
 
     stations <- stations %>%
         dplyr::rename(id = station_id) %>%
@@ -67,10 +87,12 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit
     stations <- stations[order(stations$id), ]
     rownames(stations@data) <- stations$id
 
+    # Se verifica si se va a ajustar una o más estaciones.
     fit_multiple_stations <- fit_only_one_station <- F
     if (nrow(stations) == 1) fit_only_one_station <- T
     if (nrow(stations) > 1) fit_multiple_stations <- T
 
+    # Se establecen los nombres de las filas y columnas.
     gral.rownames <- as.character(stations$id)
     gral.colnames <- as.character(stations$id)
 
@@ -80,22 +102,38 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit
         stop("Mismatch between stations ids between climate and stations datasets.")
     }
 
-    invalid_records <- c(which(climate$tx < climate$tn), which(climate$prcp < 0))
+    ###############################################################
 
-    if(length(invalid_records) > 0) {
-        warning(sprintf('Removing %d records with maximum temperature < minimum temperature or negative rainfalls.', length(invalid_records)))
-        climate[invalid_records, c('tx', 'tn', 'prcp')] <- NA
-    }
-
+    # En caso que se haga el ajuste para múltiples estaciones,
+    # es necesario definir más variables iniciales!
     if (fit_multiple_stations) {
-        dist.mat <- sp::spDists(stations) # no se debe usar al argumento longlat porque fit se hace diferentes proyecciones!
+        dist.mat <- sp::spDists(stations) # no se debe usar al argumento longlat porque fit hace diferentes proyecciones!
         colnames(dist.mat) <- gral.colnames
         rownames(dist.mat) <- gral.rownames
         # diagonal element is not explicitly equal to zero, so define as such
         diag(dist.mat) <- 0
     }
 
-    summarised_climate <- glmwgen:::summarise_seasonal_climate(climate)
+    ###############################################################
+
+    if (control$use_external_seasonal_climate) {
+
+        seasonal.climate <- seasonal.climate %>%
+            dplyr::rename(station = station_id)
+        seasonal.climate <- seasonal.climate %>%
+            dplyr::arrange(station, year, season)
+
+        years_in_climate <- dplyr::distinct(climate, lubridate::year(date)) %>% dplyr::pull()
+        years_in_seasonal.climate <- dplyr::distinct(seasonal.climate, year) %>% dplyr::pull()
+        if (!dplyr::all_equal(years_in_climate, years_in_seasonal.climate))
+            stop("Years in climate and years in seasonal.climate don't match!")
+    }
+
+    summarised_climate <- seasonal.climate
+    if (is.null(summarised_climate) | !control$use_external_seasonal_climate)
+        summarised_climate <- glmwgen:::summarise_seasonal_climate(climate)
+
+    ###############################################################
 
     ## TODO: check control variables.
     model[["control"]] <- control
@@ -195,8 +233,8 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit
 
     full_dates <- data.frame(date = seq.Date(min(climate$date), max(climate$date), by = 'days'))
 
-    models <- foreach::foreach(station = unique_stations, .multicombine = T, .packages = c('dplyr')) %dopar% {
-        station_climate <- full_dates %>% left_join(climate[climate$station == station, ], by = 'date') %>%
+    models <- foreach::foreach(station_id = unique_stations, .multicombine = T, .packages = c('dplyr')) %dopar% {
+        station_climate <- full_dates %>% left_join(climate[climate$station == station_id, ], by = 'date') %>%
             mutate(prcp_occ = (prcp >= control$prcp_occurrence_threshold) + 0,              # prcp occurrence
                    prcp_amt = ifelse(prcp >= control$prcp_occurrence_threshold, prcp, NA),  # prcp amount/intensity
                    prcp_occ_prev = lag(prcp_occ),
@@ -209,7 +247,7 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit
                    Rt = seq(from = -1, to = 1, length.out = length(year_fraction)),
                    row_num = row_number())
 
-        station_climate$station <- station
+        station_climate$station <- station_id
 
         # Add six months cycle functions
         if (control$use_six_months_precipitation | control$use_six_months_temperature) {
@@ -274,27 +312,28 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit
 
         # Estimate seasonal covariates
         if (control$use_seasonal_covariates_precipitation | control$use_seasonal_covariates_temperature) {
-            seasonal_covariates <- glmwgen:::create_seasonal_covariates(summarised_climate)
+            station_summarised_climate  <- summarised_climate %>% dplyr::filter(station == station_id)
+            station_seasonal_covariates <- glmwgen:::create_seasonal_covariates(station_summarised_climate)
 
             station_climate <- data.frame(station_climate)
 
             if (control$use_seasonal_covariates_precipitation) {
                 station_climate <- station_climate %>%
-                    dplyr::mutate(ST1 = seasonal_covariates$prcp[[1]],
-                                  ST2 = seasonal_covariates$prcp[[2]],
-                                  ST3 = seasonal_covariates$prcp[[3]],
-                                  ST4 = seasonal_covariates$prcp[[4]])
+                    dplyr::mutate(ST1 = station_seasonal_covariates$prcp[[1]],
+                                  ST2 = station_seasonal_covariates$prcp[[2]],
+                                  ST3 = station_seasonal_covariates$prcp[[3]],
+                                  ST4 = station_seasonal_covariates$prcp[[4]])
             }
             if (control$use_seasonal_covariates_temperature) {
                 station_climate <- station_climate %>%
-                    dplyr::mutate(SMX1 = seasonal_covariates$tx[[1]],
-                                  SMX2 = seasonal_covariates$tx[[2]],
-                                  SMX3 = seasonal_covariates$tx[[3]],
-                                  SMX4 = seasonal_covariates$tx[[4]],
-                                  SMN1 = seasonal_covariates$tn[[1]],
-                                  SMN2 = seasonal_covariates$tn[[2]],
-                                  SMN3 = seasonal_covariates$tn[[3]],
-                                  SMN4 = seasonal_covariates$tn[[4]])
+                    dplyr::mutate(SMX1 = station_seasonal_covariates$tx[[1]],
+                                  SMX2 = station_seasonal_covariates$tx[[2]],
+                                  SMX3 = station_seasonal_covariates$tx[[3]],
+                                  SMX4 = station_seasonal_covariates$tx[[4]],
+                                  SMN1 = station_seasonal_covariates$tn[[1]],
+                                  SMN2 = station_seasonal_covariates$tn[[2]],
+                                  SMN3 = station_seasonal_covariates$tn[[3]],
+                                  SMN4 = station_seasonal_covariates$tn[[4]])
             }
         }
 
@@ -409,7 +448,7 @@ calibrate.glmwgen <- function(climate, stations, control = glmwgen:::glmwgen_fit
         return_list <- list(coefficients = list(coefocc = coefocc, coefmin = coefmin, coefmax = coefmax),
                             gamma = list(coef = coefamt, alpha = alphamt),
                             residuals = station_climate[, c("date", "station", "probit_residuals", "tx_residuals", "tn_residuals")],
-                            station = station)
+                            station = station_id)
 
 
         if(control$save_lm_fits) return_list[['lm_fits']] <- list(
