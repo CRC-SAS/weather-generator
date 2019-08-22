@@ -1,22 +1,42 @@
 
-summarise_seasonal_climate <- function(climate) {
-    ## compute regional average seasonal total precip to use as predictor
-    d_montot <- climate %>% group_by(station, year = lubridate::year(date), month = lubridate::month(date)) %>%
-        summarise(montot = sum(prcp, na.rm = T), maxmean = mean(tx, na.rm = T), minmean = mean(tn, na.rm = T))
+summarise_seasonal_climate <- function(datos_climaticos, umbral.faltantes = 0.2) {
+    ## compute seasonal averages for tx and tn, and sum for prcp, with quality control and missing values imputation
+    purrr::map_dfr(
+        .x = unique(dplyr::pull(datos_climaticos, station)),
+        .f = function(omm.id) {
+            datos.omm.id     <- dplyr::filter(datos_climaticos, station == omm.id) %>%
+                tidyr::complete(date = base::seq.Date(from = lubridate::floor_date(min(date), "year") ,
+                                                       to   = lubridate::ceiling_date(max(date), "year") - lubridate::days(1),
+                                                       by   = "days")) %>%
+                dplyr::mutate(season = lubridate::quarter(date), year = lubridate::year(date))
+            estadisticas     <- datos.omm.id %>%
+                dplyr::group_by(station, year, season) %>%
+                dplyr::summarise(cantidad_datos = dplyr::n(),
+                                 cantidad_tmax = sum(ifelse(is.na(tx), 0, 1)),
+                                 cantidad_tmin = sum(ifelse(is.na(tn), 0, 1)),
+                                 cantidad_prcp = sum(ifelse(is.na(prcp), 0, 1)),
+                                 mean_tx  = mean(tx, na.rm = TRUE),
+                                 mean_tn  = mean(tn, na.rm = TRUE),
+                                 sum_prcp = sum(prcp, na.rm = TRUE)) %>%
+                dplyr::mutate(proporcion_faltantes_tmax = 1 - cantidad_tmax/cantidad_datos,
+                              proporcion_faltantes_tmin = 1 - cantidad_tmin/cantidad_datos,
+                              proporcion_faltantes_prcp = 1 - cantidad_prcp/cantidad_datos) %>%
+                dplyr::mutate(mean_tx  = dplyr::if_else(proporcion_faltantes_tmax > umbral.faltantes, as.double(NA), mean_tx),
+                              mean_tn  = dplyr::if_else(proporcion_faltantes_tmin > umbral.faltantes, as.double(NA), mean_tn),
+                              sum_prcp = dplyr::if_else(proporcion_faltantes_prcp > umbral.faltantes, as.double(NA), sum_prcp)) %>%
+                dplyr::ungroup() %>%
+                dplyr::select(station, year, season, sum_prcp, mean_tx, mean_tn) %>%
+                base::as.data.frame()
 
-    d_avg_montot <- d_montot %>% group_by(station, year, month) %>%
-        summarise(avgmontot = mean(montot, na.rm = T),
-                  avgmaxmean = mean(maxmean, na.rm = T),
-                  avgminmean = mean(minmean, na.rm = T))
-
-    d_seatot <- d_avg_montot %>% group_by(station, year, season = ceiling(month/3)) %>%
-        summarise(sum_prcp = sum(avgmontot, na.rm = T),
-                  mean_tx = mean(avgmaxmean, na.rm = T),
-                  mean_tn = mean(avgminmean, na.rm = T)) %>%
-        arrange(year, season)  # Sort in ascending order.
-
-    # sort( sapply(objects(),function(x){ format(object.size(get(x)), units='MB') }))
-    d_seatot
+            # Imputar datos faltantes (solo si es necesario)
+            if (anyNA(estadisticas$sum_prcp) || anyNA(estadisticas$mean_tx) || anyNA(estadisticas$mean_tn)) {
+                estadisticas.missmda   <- missMDA::imputePCA(X = dplyr::select(estadisticas, sum_prcp, mean_tx, mean_tn))
+                estadisticas.imputadas <- cbind(dplyr::select(estadisticas, station, year, season), estadisticas.missmda$completeObs)
+                return (estadisticas.imputadas)
+            }
+            return (estadisticas) # en caso que no sea necesario imputar nada, estadisticas tiene los resultados finales
+        }
+    )
 }
 
 create_seasonal_covariates <- function(seasonal_totals) {

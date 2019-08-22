@@ -17,7 +17,8 @@ glmwgen_fit_control <- function(prcp_occurrence_threshold = 0.1,
                                 save_lm_fits = F,
                                 use_stepwise = F,
                                 use_robust_methods = F,
-                                use_external_seasonal_climate = T) {
+                                use_external_seasonal_climate = T,
+                                climate_missing_threshold = 0.2) {
 
     return(list(prcp_occurrence_threshold = prcp_occurrence_threshold,
                 use_seasonal_covariates_precipitation = use_seasonal_covariates_precipitation,
@@ -34,7 +35,8 @@ glmwgen_fit_control <- function(prcp_occurrence_threshold = 0.1,
                 save_lm_fits = save_lm_fits,
                 use_stepwise = use_stepwise,
                 use_robust_methods = use_robust_methods,
-                use_external_seasonal_climate = use_external_seasonal_climate))
+                use_external_seasonal_climate = use_external_seasonal_climate,
+                climate_missing_threshold = climate_missing_threshold))
 }
 
 
@@ -127,7 +129,7 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
 
     summarised_climate <- seasonal.climate
     if (is.null(summarised_climate) | !control$use_external_seasonal_climate)
-        summarised_climate <- glmwgen:::summarise_seasonal_climate(climate)
+        summarised_climate <- glmwgen:::summarise_seasonal_climate(climate, control$climate_missing_threshold)
 
     ###############################################################
 

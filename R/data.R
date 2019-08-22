@@ -33,7 +33,7 @@ as.climate.tibble <- function(object, map_cols = list(date = "date", station_id 
                       tx = !!rlang::sym(map_cols$tx), tn = !!rlang::sym(map_cols$tn), prcp = !!rlang::sym(map_cols$prcp)) %>%
         dplyr::mutate(date = as.Date(date), station_id = as.integer(station_id),
                       tx = as.numeric(tx), tn = as.numeric(tn), prcp = as.numeric(prcp)) %>%
-        tidyr::complete(date = base::seq.Date(min(date), max(date), by = "days"), station_id) %>%
+        tidyr::complete(date = base::seq.Date(min(date), max(date), by = "days")) %>%
         exclude_incomplete_years() # solo se pueden tomar anhos completos!!
     return (climate)
 }
