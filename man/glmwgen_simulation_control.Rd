@@ -4,12 +4,8 @@
 \alias{glmwgen_simulation_control}
 \title{Simulations control configuration}
 \usage{
-
-  glmwgen_simulation_control(seasonal_temps_covariates_getter = get_temperatures_seasonal_covariate,
-  seasonal_prcp_covariates_getter = get_rainfall_seasonal_covariate,
-  random_fields_method = "rn", Rt = NULL, multicombine = F,
-  always_krig_coefficients = T, interpolation_method = c("idw",
-  "kriging"), cache_size = 1)
+glmwgen_simulation_control(Rt = NULL, multicombine = F,
+  cache_size = 1)
 }
 \description{
 Provides fine control of different parameters that will be used to create new weather series.

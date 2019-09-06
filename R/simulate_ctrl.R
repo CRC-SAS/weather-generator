@@ -44,40 +44,8 @@ get_temperatures_seasonal_covariate <- function(years, season_number, seasonal_v
 #' @title Simulations control configuration
 #' @description Provides fine control of different parameters that will be used to create new weather series.
 #' @export
-glmwgen_simulation_control <- function(seasonal_temps_covariates_getter = get_temperatures_seasonal_covariate,
-                                       seasonal_prcp_covariates_getter = get_rainfall_seasonal_covariate,
-                                       random_fields_method = 'rn',
-                                       Rt = NULL,
-                                       # grf_method = NULL,
-                                       multicombine = F,
-                                       always_krig_coefficients = T,
-                                       interpolation_method = c('idw', 'kriging'),
-                                       cache_size = 1) {
-    rf_function <- NULL
-    if(!is.function(random_fields_method)) {
-        # if(startsWith(random_fields_method, 'gauss')) rf_function <- gaussian_random_field
-        if(startsWith(random_fields_method, 'rf')) rf_function <- glmwgen:::random_field_noise
-        if(startsWith(random_fields_method, 'chol')) rf_function <- glmwgen:::cholesky_random_field
-        if(startsWith(random_fields_method, 'rn')) rf_function <- glmwgen:::rnorm_noise
-        if(startsWith(random_fields_method, 'mv')) rf_function <- glmwgen:::mvrnorm_noise
-    } else {
-        rf_function <- random_fields_method
-    }
-
-    interpolation_method <- match.arg(interpolation_method)
-
-    interpolation_method <- c('kriging' = glmwgen:::krige_covariate_automap,
-                              'idw' = glmwgen:::idw_covariate)[[interpolation_method]]
-
-    return(list(seasonal_temps_covariates_getter = seasonal_temps_covariates_getter,
-                seasonal_prcp_covariates_getter = seasonal_prcp_covariates_getter,
-                random_fields_method = rf_function,
-                Rt = Rt,
-                # grf_method = grf_method,
-                multicombine = multicombine,
-                always_krig_coefficients = always_krig_coefficients,
-                interpolation_method = interpolation_method,
-                cache_size = cache_size))
+glmwgen_simulation_control <- function(Rt = NULL, multicombine = F, cache_size = 1) {
+    return(list(Rt = Rt, multicombine = multicombine, cache_size = cache_size))
 }
 
 #' @title Transform simulation result to tibble
@@ -104,8 +72,8 @@ sim_result_to_tibble <- function(sim_result, nsim_to_extract = 1) {
     result   <- tidyr::crossing(dates, stations) %>%
         dplyr::rename(date = dates, station = stations) %>%
         dplyr::inner_join(prcp, by = c("date","station")) %>%
-        dplyr::inner_join(tn, by = c("date","station")) %>%
-        dplyr::inner_join(tx, by = c("date","station"))
+        dplyr::inner_join(tn,   by = c("date","station")) %>%
+        dplyr::inner_join(tx,   by = c("date","station"))
 
     return (result)
 }

@@ -8,7 +8,7 @@ summarise_seasonal_climate <- function(datos_climaticos, umbral.faltantes = 0.2)
                 tidyr::complete(date = base::seq.Date(from = lubridate::floor_date(min(date), "year") ,
                                                        to   = lubridate::ceiling_date(max(date), "year") - lubridate::days(1),
                                                        by   = "days")) %>%
-                dplyr::mutate(season = lubridate::quarter(date), year = lubridate::year(date))
+                dplyr::mutate(season = lubridate::quarter(date, fiscal_start = 12), year = lubridate::year(date))
             estadisticas     <- datos.omm.id %>%
                 dplyr::group_by(station, year, season) %>%
                 dplyr::summarise(cantidad_datos = dplyr::n(),

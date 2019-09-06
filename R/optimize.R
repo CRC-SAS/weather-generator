@@ -12,3 +12,31 @@ partially_apply_LS <- function(variogram, dist_matrix, base_p = c()) {
     }
     return(new_ls)
 }
+
+# Ver:
+# http://www.win-vector.com/blog/2014/05/trimming-the-fat-from-glm-models-in-r/
+# Es una fnción que borra del resultado de mgcv::gam, todo lo que no necesita predict!!
+stripGlmLR = function(cm) {
+    cm$y = c()
+    cm$model = c()
+
+    cm$residuals = c()
+    cm$fitted.values = c()
+    cm$effects = c()
+    cm$qr$qr = c()
+    cm$linear.predictors = c()
+    cm$weights = c()
+    cm$prior.weights = c()
+    cm$data = c()
+
+
+    cm$family$variance = c()
+    cm$family$dev.resids = c()
+    cm$family$aic = c()
+    cm$family$validmu = c()
+    cm$family$simulate = c()
+    attr(cm$terms,".Environment") = c()
+    attr(cm$formula,".Environment") = c()
+
+    cm
+}
