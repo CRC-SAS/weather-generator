@@ -4,7 +4,7 @@
 \alias{climate.tibble}
 \title{Create climate tibble}
 \usage{
-climate.tibble(date, station_id, tx, tn, prcp, ...)
+climate.tibble(date, station_id, tmax, tmin, prcp, ...)
 }
 \description{
 Create climate tibble.

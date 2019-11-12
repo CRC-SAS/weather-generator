@@ -17,9 +17,11 @@ exclude_incomplete_years <- function(climate_data) {
 #' @title Create climate tibble
 #' @description Create climate tibble.
 #' @export
-climate.tibble <- function(date, station_id, tx, tn, prcp, ...) {
-    return (tibble::tibble(date = as.Date(date), station_id = as.integer(station_id),
-                           tx = as.numeric(tx), tn = as.numeric(tn),
+climate.tibble <- function(date, station_id, tmax, tmin, prcp, ...) {
+    return (tibble::tibble(date = as.Date(date),
+                           station_id = as.integer(station_id),
+                           tmax = as.numeric(tmax),
+                           tmin = as.numeric(tmin),
                            prcp = as.numeric(prcp), ...))
 }
 
@@ -27,12 +29,23 @@ climate.tibble <- function(date, station_id, tx, tn, prcp, ...) {
 #' @description Transform object to climate tibble
 #' @export
 as.climate.tibble <- function(object, map_cols = list(date = "date", station_id = "station_id",
-                                                      tx = "tx", tn = "tn", prcp = "prcp")) {
+                                                      tmax = "tmax", tmin = "tmin", prcp = "prcp")) {
+    req_cols <- list(date = "date", station_id = "station_id",
+                     tmax = "tmax", tmin = "tmin", prcp = "prcp")
+    lst_cols <- setdiff(names(req_cols), names(map_cols))
+    map_cols <- c(map_cols, req_cols[lst_cols])
+
     climate <- object %>% tibble::as_tibble() %>%
-        dplyr::rename(date = !!rlang::sym(map_cols$date), station_id = !!rlang::sym(map_cols$station_id),
-                      tx = !!rlang::sym(map_cols$tx), tn = !!rlang::sym(map_cols$tn), prcp = !!rlang::sym(map_cols$prcp)) %>%
-        dplyr::mutate(date = as.Date(date), station_id = as.integer(station_id),
-                      tx = as.numeric(tx), tn = as.numeric(tn), prcp = as.numeric(prcp)) %>%
+        dplyr::rename(date = !!rlang::sym(map_cols$date),
+                      station_id = !!rlang::sym(map_cols$station_id),
+                      tmax = !!rlang::sym(map_cols$tmax),
+                      tmin = !!rlang::sym(map_cols$tmin),
+                      prcp = !!rlang::sym(map_cols$prcp)) %>%
+        dplyr::mutate(date = as.Date(date),
+                      station_id = as.integer(station_id),
+                      tmax = as.numeric(tmax),
+                      tmin = as.numeric(tmin),
+                      prcp = as.numeric(prcp)) %>%
         tidyr::complete(date = base::seq.Date(min(date), max(date), by = "days")) %>%
         exclude_incomplete_years() # solo se pueden tomar anhos completos!!
     return (climate)
@@ -44,8 +57,10 @@ as.climate.tibble <- function(object, map_cols = list(date = "date", station_id 
 #' @export
 stations.sf <- function(station_id, lon_dec, lat_dec, crs, ...) {
     stations <- tibble::tibble(station_id = as.integer(station_id),
-                               lon_dec = as.numeric(lon_dec), lat_dec = as.numeric(lat_dec), ...) %>%
-        dplyr::mutate(latitud = lat_dec, longitud = lon_dec) %>%
+                               lon_dec = as.numeric(lon_dec),
+                               lat_dec = as.numeric(lat_dec), ...) %>%
+        dplyr::mutate(latitud = lat_dec,
+                      longitud = lon_dec) %>%
         sf::st_as_sf(coords = c('longitud', 'latitud'), crs = crs)
     return (stations)
 }
@@ -54,11 +69,19 @@ stations.sf <- function(station_id, lon_dec, lat_dec, crs, ...) {
 #' @description Transform object to stations simple feature (sf).
 #' @export
 as.stations.sf <- function(object, crs, map_cols = list(station_id = "station_id", lon_dec = "lon_dec", lat_dec = "lat_dec")) {
+    req_cols <- list(station_id = "station_id", lon_dec = "lon_dec", lat_dec = "lat_dec")
+    lst_cols <- setdiff(names(req_cols), names(map_cols))
+    map_cols <- c(map_cols, req_cols[lst_cols])
+
     stations <- object %>% tibble::as_tibble() %>%
         dplyr::rename(station_id = !!rlang::sym(map_cols$station_id),
-                      lon_dec = !!rlang::sym(map_cols$lon_dec), lat_dec = !!rlang::sym(map_cols$lat_dec) ) %>%
-        dplyr::mutate(station_id = as.integer(station_id), lon_dec = as.numeric(lon_dec), lat_dec = as.numeric(lat_dec),
-                      latitud = lat_dec, longitud = lon_dec) %>%
+                      lon_dec = !!rlang::sym(map_cols$lon_dec),
+                      lat_dec = !!rlang::sym(map_cols$lat_dec) ) %>%
+        dplyr::mutate(station_id = as.integer(station_id),
+                      lon_dec = as.numeric(lon_dec),
+                      lat_dec = as.numeric(lat_dec)) %>%
+        dplyr::mutate(latitud = lat_dec,
+                      longitud = lon_dec) %>%
         sf::st_as_sf(coords = c('longitud', 'latitud'), crs = crs)
     return (stations)
 }
@@ -108,10 +131,10 @@ check.ends.with.columns <- function(object, obj.name, obj.cols) {
 
 check.input.data <- function(climate, stations, seasonal.climate) {
 
-    climate.columns <- c(date = "Date", station_id = "integer", tx = "numeric", tn = "numeric", prcp = "numeric")
+    climate.columns <- c(date = "Date", station_id = "integer", tmax = "numeric", tmin = "numeric", prcp = "numeric")
     stations.columns <- c(station_id = "integer", lon_dec = "numeric", lat_dec = "numeric", geometry = "sfc_POINT")
     seasonal.invariant.columns <- c(station_id = "integer", year = "numeric", season = "numeric")
-    seasonal.ends.with.columns <- c(tx = "numeric", tn = "numeric", prcp = "numeric")
+    seasonal.ends.with.columns <- c(tmax = "numeric", tmin = "numeric", prcp = "numeric")
 
     check.object(climate, "climate", c("tbl_df", "tbl", "data.frame"), climate.columns)
     check.object(stations, "stations", c("sf", "tbl_df", "tbl", "data.frame"), stations.columns)
