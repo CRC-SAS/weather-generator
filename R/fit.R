@@ -5,18 +5,17 @@
 glmwgen_fit_control <- function(prcp_occurrence_threshold = 0.1,
                                 use_external_seasonal_climate = T,
                                 climate_missing_threshold = 0.2,
-                                use_covariates = F, nthreads = 2) {
+                                use_covariates = F, avbl_cores = 2) {
 
     return(list(prcp_occurrence_threshold = prcp_occurrence_threshold,
                 use_external_seasonal_climate = use_external_seasonal_climate,
                 climate_missing_threshold = climate_missing_threshold,
-                use_covariates = use_covariates, nthreads = nthreads))
+                use_covariates = use_covariates, avbl_cores = avbl_cores))
 }
 
 
 #' @title Weather model calibration
 #' @description Fits a weather model from historical data.
-#' @import foreach
 #' @import dplyr
 #' @export
 calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
@@ -95,25 +94,18 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     ###########################################
     ## Parallelization initialization
 
-    ## Variable that indicate if it's necessary to remove
-    ## the parallelization configuration
-    remove_parallelization_conf <- F
+    ## OBS:
+    ## No se usa foreach con %dopar% ni furrr para calcular
+    ## los 12 gam en prcp_amt_fit porque el gam ya utiliza
+    ## todos los procesadores disponibles. Usando foreach
+    ## y %dopar% con la opción cluster del bam, se ebtienen,
+    ## al calcular el resultado para prcp_amt_fit, tiempos
+    ## 10 veces peores al acutal (30 vs 350)!!
+    ## Además, se usa purrr::map en lugar de foreach %do%
+    ## porque purrr:map es más rápido!!
 
-    ## Register a sequential backend if the user didn't register a parallel
-    ## in order to avoid a warning message if we use %dopar%.
-    if(!foreach::getDoParRegistered()) {
-        if(is.na(control$nthreads) | is.null(control$nthreads)) {
-            foreach::registerDoSEQ()
-        } else if (control$nthreads <= 1) {
-            foreach::registerDoSEQ()
-        } else if (control$nthreads > 1) {
-            remove_parallelization_conf <- T
-            doMC::registerDoMC(control$nthreads)
-        }
-    }
-
-    ## Cluster for multidplyr
-    ## cluster <- multidplyr::new_cluster(control$nthreads)
+    ## Make Cluster
+    cluster <- parallel::makeCluster(control$avbl_cores)
 
 
     ###########################################
@@ -276,7 +268,8 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
                               data = matriz.datos[prcp_occ_indexes,],
                               family = stats::binomial(probit),
                               method = "fREML",
-                              control = list(nthreads = control$nthreads))
+                              cluster = cluster,
+                              control = list(nthreads = control$avbl_cores))
     tiempo.prcp_occ_fit <- proc.time() - t
 
     matriz.datos[prcp_occ_indexes, "prcp_occ_residuals"] <- residuals(prcp_occ_fit, type = 'response')
@@ -321,26 +314,32 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
         prcp_amt_fm         <- stats::update( prcp_amt_fm, prcp_amt_cov_fm )
     }
 
+
+    doMC::registerDoMC(control$avbl_cores)
     t.a <- proc.time()
-    prcp_amt_fit <- foreach::foreach(m = 1:12, .multicombine = T) %dopar% {
-        t <- proc.time()
-        prcp_amt_fit_partial <- mgcv::gam(formula = prcp_amt_fm,
-                                          data = matriz.datos[gamma_indexes,] %>%
-                                              dplyr::filter(as.logical(prcp_occ) & month == m),
-                                          family = stats::Gamma(link = log),
-                                          method = 'REML',
-                                          control = list(nthreads = control$nthreads))
-        tiempo.prcp_amt_fit_partial <- proc.time() - t
+    prcp_amt_fit <- purrr::map(
+        .x = 1:12,
+        .f = function(m) {
+            t <- proc.time()
+            prcp_amt_fit_partial <- mgcv::gam(formula = prcp_amt_fm,
+                                              data = matriz.datos[gamma_indexes,] %>%
+                                                  dplyr::filter(as.logical(prcp_occ) & month == m),
+                                              family = stats::Gamma(link = log),
+                                              method = 'REML',
+                                              cluster = cluster,
+                                              control = list(nthreads = control$avbl_cores))
+            tiempo.prcp_amt_fit_partial <- proc.time() - t
 
-        # Se agregan datos de control
-        prcp_amt_fit_partial[["dates_used_fitting"]] <- matriz.datos[gamma_indexes, ] %>%
-            dplyr::filter(as.logical(prcp_occ) & month == m) %>%
-            dplyr::pull(date)
-        prcp_amt_fit_partial[["execution_time"]]     <- tiempo.prcp_amt_fit_partial
-        # End of prcp_amt fit
+            # Se agregan datos de control
+            prcp_amt_fit_partial[["dates_used_fitting"]] <- matriz.datos[gamma_indexes, ] %>%
+                dplyr::filter(as.logical(prcp_occ) & month == m) %>%
+                dplyr::pull(date)
+            prcp_amt_fit_partial[["execution_time"]]     <- tiempo.prcp_amt_fit_partial
+            # End of prcp_amt fit
 
-        return (prcp_amt_fit_partial)
-    }
+            return (prcp_amt_fit_partial)
+        }
+    )
     tiempo.prcp_amt_fit <- proc.time() - t.a
 
     ## Fit model for precipitation amounts.
@@ -391,7 +390,8 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     tmax_fit <- mgcv::bam(formula = tmax_fm,
                           data = matriz.datos[tmax_indexes,],
                           method = "fREML",
-                          control = list(nthreads = control$nthreads))
+                          cluster = cluster,
+                          control = list(nthreads = control$avbl_cores))
     tiempo.tmax_fit <- proc.time() - t
 
     matriz.datos[tmax_indexes, "tmax_residuals"] <- residuals(tmax_fit, type = 'response')
@@ -452,7 +452,8 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     tmin_fit <- mgcv::bam(formula = tmin_fm,
                           data = matriz.datos[tmin_indexes,],
                           method = "fREML",
-                          control = list(nthreads = control$nthreads))
+                          cluster = cluster,
+                          control = list(nthreads = control$avbl_cores))
     tiempo.tmin_fit <- proc.time() - t
 
     matriz.datos[tmin_indexes, "tmin_residuals"] <- residuals(tmin_fit, type = 'response')
@@ -490,7 +491,7 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
 
     # Save residuals to returned model
     model[["residuals"]]    <- matriz.datos %>%
-        dplyr::select(station_id, date, prcp, tmax, tmin, prcp_occ_residuals, tmax_residuals, tmin_residuals)
+        dplyr::select(station_id, date, prcp, tmax, tmin, tipo_dia, prcp_occ_residuals, tmax_residuals, tmin_residuals)
 
     # Save execution time to returned model
     model[['exec_times']][["summ_cli_time"]] <- tiempo.summarised_climate
@@ -513,9 +514,9 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     #########################
 
 
-    ## Remove parallelization conf, if necessary
-    if(remove_parallelization_conf)
-        foreach::registerDoSEQ()
+     ## Remive luster for mgcv
+    if (!is.null(cluster))
+        parallel::stopCluster(cluster)
 
     ## Return model
     model

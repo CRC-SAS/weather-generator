@@ -68,25 +68,29 @@ sim.stns.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end
                              control = glmwgen:::glmwgen_simulation_control(), verbose = T) {
     model <- object
 
-    if(class(object) != 'glmwgen') stop(paste('Received a model of class', class(object), 'and a model of class "glmwgen" was expected.'))
+    if(class(object) != 'glmwgen')
+        stop(paste('Received a model of class', class(object), 'and a model of class "glmwgen" was expected.'))
 
     simulation_locations <- model$stations
 
-    if(!is.null(seed)) set.seed(seed)
+    if(!is.null(seed))
+        set.seed(seed)
 
     if(!('proj4string' %in% names(attributes(simulation_locations)))) {
         warning('simulation_locations is not a spacial points object, attempting to convert it with stations projection string.')
         simulation_locations <- SpatialPoints(simulation_locations, proj4string=model$stations_proj4string)
     }
 
-    if(end_date <= start_date) stop('End date should be greater than start date')
+    if(end_date <= start_date)
+        stop('End date should be greater than start date')
 
     years_in_sim_dates <- base::seq.int(lubridate::year(start_date), lubridate::year(end_date))
     years_in_senal_cov <- dplyr::distinct(model$seasonal, year) %>% dplyr::pull()
     if (!all(is.element(years_in_sim_dates, years_in_senal_cov)))
         stop("Simulation years aren't in model$seasonal!")
 
-    if(nsim < 1) stop('Number of simulations should be greater than one')
+    if(nsim < 1)
+        stop('Number of simulations should be greater than one')
 
 
     #########################################

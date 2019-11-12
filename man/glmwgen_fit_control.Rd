@@ -6,7 +6,7 @@
 \usage{
 glmwgen_fit_control(prcp_occurrence_threshold = 0.1,
   use_external_seasonal_climate = T, climate_missing_threshold = 0.2,
-  use_covariates = F, nthreads = 2)
+  use_covariates = F, avbl_cores = 2)
 }
 \description{
 Provides fine control of different parameters that will be used to fit a weather model.

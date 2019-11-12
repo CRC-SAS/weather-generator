@@ -1,3 +1,17 @@
+
+make_distance_matrix <- function(stations) {
+    # create distance matrix
+    dist_mat <- sp::spDists(sf::as_Spatial(stations))
+    # rename cols and rows
+    colnames(dist_mat) <- stations$station_id
+    rownames(dist_mat) <- stations$station_id
+    # diagonal element isn't explicitly
+    # equal to zero, so define as such
+    diag(dist_mat) <- 0
+    # return result
+    return (dist_mat)
+}
+
 make_distance_grid <- function(fit_stations, simulation_locations) {
     is_projected <- sp::is.projected(fit_stations)
 

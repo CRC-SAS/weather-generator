@@ -1,3 +1,76 @@
+
+
+
+# Definicion de funcion para la generación de campos gaussianos para ocurrencia de temperatura
+random_field_noise_temperature <- function(month_parameters, grid, month_number, var_name, crs_value) {
+
+    # Extraer parametros correspondientes a la variable y mes determinado
+    month_params_vario_tmax <- month_parameters[[month_number]]$variogram_parameters[[var_name[1]]]
+    month_params_vario_tmin <- month_parameters[[month_number]]$variogram_parameters[[var_name[2]]]
+
+    # Crear modelo con los parametros
+    model <- RandomFields::RMbiwm(nudiag = c(0.5, 0.5),
+                                  nured12 = 1,
+                                  cdiag = c(month_params_vario_tmax[2], month_params_vario_tmin[2]),
+                                  rhored = 1,
+                                  s=c(month_params_vario_tmax[3],
+                                      month_params_vario_tmin[3],
+                                      0.5*sum(month_params_vario_tmax[3], month_params_vario_tmin[3])))
+
+    # Simular sobre una grilla regular
+    campos_simulados <- RandomFields::RFsimulate(model, x = grid, grid = F)
+
+    # Extraer resultados
+    # campos.simulados.df <- RandomFields::RFspDataFrame2conventional(campos_simulados, data.frame = T)
+
+    # Crear objeto sf
+    campo <- grid %>%
+        dplyr::mutate(x_coord = x_coord*1000, y_coord = y_coord*1000) %>%
+        sf::st_as_sf(coords = c('x_coord', 'y_coord')) %>%
+        sf::st_set_crs(value = crs_value) %>%
+        dplyr::mutate(id = 1:n(),
+                      tmax_residuals = campos_simulados[, 1],
+                      tmin_residuals = campos_simulados[, 2]) %>%
+        dplyr::select(tmax_residuals, tmin_residuals)
+
+    # Devolver resultados
+    return(campo)
+
+}
+
+# Definicion de funcion para la generación de campos gaussianos para ocurrencia de precipitacion
+random_field_noise_prcp <- function(month_parameters, grid, month_number, var_name, crs_value) {
+
+    # Extraer parametros correspondientes a la variable y mes determinado
+    month_params_vario_prcp <- month_parameters[[month_number]]$variogram_parameters[[var_name]]
+
+    # Crear modelo con los parametros
+    model <-RandomFields::RMexp(var = month_params_vario_prcp[[2]],
+                                scale = month_params_vario_prcp[[3]])
+
+    # Simular sobre una grilla regular
+    campos_simulados <- RandomFields::RFsimulate(model, x = grid, grid = F)
+
+    # Extraer resultados
+    # campos.simulados.df <- RandomFields::RFspDataFrame2conventional(campos_simulados, data.frame = T)
+
+    # Crear objeto sf
+    campo <- grid %>%
+        dplyr::mutate(x_coord = x_coord*1000, y_coord = y_coord*1000) %>%
+        sf::st_as_sf(coords = c('x_coord', 'y_coord')) %>%
+        sf::st_set_crs(value = crs_value) %>%
+        dply::mutate(id = 1:n(),
+                     prcp_residuals = campos_simulados) %>%
+        dplyr::select(prcp_residuals)
+
+    # Devolver resultados
+    return(campo)
+
+}
+
+##############
+## OLD METHODS
+
 noise_method <- proto::proto(
     new = function(self, model, simulation_locations, control, noise_function = no_noise) {
         cache <- NULL
