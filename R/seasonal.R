@@ -1,18 +1,19 @@
 
-summarise_seasonal_climate <- function(datos_climaticos, umbral.faltantes = 0.2) {
+summarise_seasonal_climate <- function(datos_climaticos, umbral_faltantes = 0.2) {
     ## compute seasonal averages for tmax and tmin, and sum for prcp, with quality control and missing values imputation
     purrr::map_dfr(
         .x = unique(dplyr::pull(datos_climaticos, station_id)),
-        .f = function(stn.id) {
+        .f = function(stn_id) {
 
-            datos.stn.id <- dplyr::filter(datos_climaticos, station_id == stn.id) %>%
+            datos_stn_id <- datos_climaticos %>%
+                dplyr::filter(station_id == stn_id) %>%
                 tidyr::complete(date = base::seq.Date(from = lubridate::floor_date(min(date), "year") ,
                                                       to   = lubridate::ceiling_date(max(date), "year") - lubridate::days(1),
                                                       by   = "days"),
-                                fill = list(station_id = stn.id)) %>%
+                                fill = list(station_id = stn_id)) %>%
                 dplyr::mutate(season = lubridate::quarter(date, fiscal_start = 12), year = lubridate::year(date))
 
-            estadisticas <- datos.stn.id %>%
+            estadisticas <- datos_stn_id %>%
                 dplyr::group_by(station_id, year, season) %>%
                 dplyr::summarise(cantidad_datos = dplyr::n(),
                                  cantidad_tmax = sum(ifelse(is.na(tmax), 0, 1)),
@@ -24,23 +25,20 @@ summarise_seasonal_climate <- function(datos_climaticos, umbral.faltantes = 0.2)
                 dplyr::mutate(proporcion_faltantes_tmax = 1 - cantidad_tmax/cantidad_datos,
                               proporcion_faltantes_tmin = 1 - cantidad_tmin/cantidad_datos,
                               proporcion_faltantes_prcp = 1 - cantidad_prcp/cantidad_datos) %>%
-                dplyr::mutate(mean_tmax = dplyr::if_else(proporcion_faltantes_tmax > umbral.faltantes, as.double(NA), mean_tmax),
-                              mean_tmin = dplyr::if_else(proporcion_faltantes_tmin > umbral.faltantes, as.double(NA), mean_tmin),
-                              sum_prcp  = dplyr::if_else(proporcion_faltantes_prcp > umbral.faltantes, as.double(NA), sum_prcp)) %>%
+                dplyr::mutate(mean_tmax = dplyr::if_else(proporcion_faltantes_tmax > umbral_faltantes, as.double(NA), mean_tmax),
+                              mean_tmin = dplyr::if_else(proporcion_faltantes_tmin > umbral_faltantes, as.double(NA), mean_tmin),
+                              sum_prcp  = dplyr::if_else(proporcion_faltantes_prcp > umbral_faltantes, as.double(NA), sum_prcp)) %>%
                 dplyr::ungroup() %>%
-                dplyr::select(station_id, year, season, sum_prcp, mean_tmax, mean_tmin) %>%
-                base::as.data.frame()
+                dplyr::select(station_id, year, season, sum_prcp, mean_tmax, mean_tmin)
 
             # Imputar datos faltantes (solo si es necesario)
             if (anyNA(estadisticas$sum_prcp) || anyNA(estadisticas$mean_tmax) || anyNA(estadisticas$mean_tmin)) {
-                estadisticas.missmda   <- missMDA::imputePCA(X = dplyr::select(estadisticas, sum_prcp, mean_tmax, mean_tmin))
-                estadisticas.imputadas <- cbind(dplyr::select(estadisticas, station_id, year, season), estadisticas.missmda$completeObs)
-                return (estadisticas.imputadas)
+                estadisticas_as_df     <- estadisticas %>% base::as.data.frame()
+                estadisticas_missmda   <- missMDA::imputePCA(X = dplyr::select(estadisticas_as_df, sum_prcp, mean_tmax, mean_tmin))
+                estadisticas_imputadas <- cbind(dplyr::select(estadisticas, station_id, year, season), estadisticas_missmda$completeObs)
+                return (estadisticas_imputadas %>% tibble::as_tibble())
             }
             return (estadisticas) # en caso que no sea necesario imputar nada, estadisticas tiene los resultados finales
         }
     )
 }
-
-
-# rm(season, values_after, values_before, yr, season_data, season_len_data, d_montot, d_avg_montot)

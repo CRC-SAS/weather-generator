@@ -45,8 +45,10 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     invalid_records <- c(which(climate$tmax < climate$tmin), which(climate$prcp < 0))
 
     if(length(invalid_records) > 0) {
+        str_stns <- paste(unique(climate[invalid_records, 'station_id']), collapse = ", " )
         warning(glue::glue('Setting to NA {length(invalid_records)} records with maximum ',
-                           'temperature < minimum temperature and/or negative rainfalls.'))
+                           'temperature < minimum temperature and/or negative rainfalls. ',
+                           'The afected stations are: {str_stns}.'))
         climate[invalid_records, c('tmax', 'tmin', 'prcp')] <- NA
     }
 
@@ -113,9 +115,10 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
 
     model[["control"]] <- control
 
-    model[["seasonal"]] <- summarised_climate
     model[["stations"]] <- stations
     model[['stns_crs']] <- sf::st_crs(stations)
+
+    model[["seasonal_data"]] <- summarised_climate
 
     model[["start_climatology"]] <- climate %>%
         dplyr::group_by(station_id, month = lubridate::month(date), day = lubridate::day(date)) %>%
@@ -132,7 +135,7 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     #######################################################
     ## Set the progress bar to know how long this will take
     pb <- progress::progress_bar$new(
-        format = " fitting: :what | global progress: [:bar] :percent (in :elapsed)",
+        format = " fitting: :what | previous progress: [:bar] :percent (in :elapsed)",
         total = 100, clear = FALSE, width= 80, show_after = 0)
 
 
@@ -151,13 +154,13 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     t.p <- proc.time()
 
     # Group by stations and conf cluster
-    matriz.datos <- climate %>%
+    models_data <- climate %>%
         dplyr::mutate(prcp_occ_threshold = control$prcp_occurrence_threshold) %>%
         dplyr::group_by(station_id)
 
     # Crear matriz con todas las estaciones
     t <- proc.time()
-    matriz.datos <- matriz.datos %>%
+    models_data <- models_data %>%
         # Complete missing dates
         tidyr::complete(date = base::seq.Date(min(date), max(date), by = "days")) %>%
         # Creacion de dataset por estacion
@@ -193,23 +196,23 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     tiempo.add_covariates <- proc.time() - t
 
     # Ungroup and collect data from cluster
-    matriz.datos <- matriz.datos %>%
+    models_data <- models_data %>%
         dplyr::ungroup()
 
     ##############
     # Progress Bar
     pb$tick(5, tokens = list(what = "init fit"))
 
-    # Add stations's latitude and longitude to matriz.datos
+    # Add stations's latitude and longitude to models_data
     t <- proc.time()
-    matriz.datos <- matriz.datos %>%
+    models_data <- models_data %>%
     dplyr::left_join(stations %>% dplyr::select(station_id, lat_dec, lon_dec),
                      by = 'station_id')
     tiempo.join_stations <- proc.time() - t
 
     # Se agrega row_num para diferenciar unívocamente cada registro
     t <- proc.time()
-    matriz.datos <- matriz.datos %>%
+    models_data <- models_data %>%
         dplyr::mutate(row_num = row_number())
     tiempo.add_row_numbers <- proc.time() - t
 
@@ -241,7 +244,7 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     # Remove NAs
     prcp_occ_fit_noNA_cols <- c('prcp_occ', 'prcp_occ_prev', 'ST1', 'ST2', 'ST3', 'ST4',
                                 'doy', 'time', 'row_num')
-    prcp_occ_indexes <- matriz.datos %>% tidyr::drop_na(prcp_occ_fit_noNA_cols) %>% dplyr::pull(row_num)
+    prcp_occ_indexes <- models_data %>% tidyr::drop_na(prcp_occ_fit_noNA_cols) %>% dplyr::pull(row_num)
 
     # Create formula
     prcp_occ_fm <- prcp_occ ~ s(tipo_dia_prev, bs = 're') +
@@ -250,7 +253,7 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
         te(lat_dec, lon_dec, doy, d = c(2, 1), bs = c('tp', 'cc'), k = length(unique_stations))
 
     if (control$use_covariates) {
-        prcp_occ_cov <- matriz.datos %>% dplyr::select(dplyr::matches('ST\\d')) %>% names
+        prcp_occ_cov <- models_data %>% dplyr::select(dplyr::matches('ST\\d')) %>% names
         prcp_occ_cov_fm_str <- paste("s(", prcp_occ_cov, ") + ",
                                      "ti(", prcp_occ_cov, ", lat_dec, lon_dec, d = c(1, 2), bs='cs')",
                                      collapse = " + ")
@@ -265,19 +268,19 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
 
     t <- proc.time()
     prcp_occ_fit <- mgcv::bam(formula = prcp_occ_fm,
-                              data = matriz.datos[prcp_occ_indexes,],
+                              data = models_data[prcp_occ_indexes,],
                               family = stats::binomial(probit),
                               method = "fREML",
                               cluster = cluster,
                               control = list(nthreads = control$avbl_cores))
     tiempo.prcp_occ_fit <- proc.time() - t
 
-    matriz.datos[prcp_occ_indexes, "prcp_occ_residuals"] <- residuals(prcp_occ_fit, type = 'response')
+    models_data[prcp_occ_indexes, "prcp_occ_residuals"] <- residuals(prcp_occ_fit, type = 'response')
 
     # Se agregan datos de control
-    prcp_occ_fit[["dates_used_fitting"]] <- matriz.datos[prcp_occ_indexes, ] %>%
+    prcp_occ_fit[["dates_used_fitting"]] <- models_data[prcp_occ_indexes, ] %>%
         dplyr::pull(date)
-    prcp_occ_fit[["residuals_tibble"]]   <- matriz.datos[prcp_occ_indexes, ] %>%
+    prcp_occ_fit[["residuals_tibble"]]   <- models_data[prcp_occ_indexes, ] %>%
         dplyr::select(date, residual = prcp_occ_residuals)
     prcp_occ_fit[["execution_time"]]     <- tiempo.prcp_occ_fit
     # End of prcp_occ fit
@@ -301,28 +304,26 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     # Remove NAs
     prcp_amt_fit_noNA_cols <- c('prcp_amt', 'prcp_occ_prev', 'ST1', "ST2", 'ST3', 'ST4',
                                 'doy', 'time', 'row_num')
-    gamma_indexes <- matriz.datos %>% tidyr::drop_na(prcp_amt_fit_noNA_cols) %>% dplyr::pull(row_num)
+    gamma_indexes <- models_data %>% tidyr::drop_na(prcp_amt_fit_noNA_cols) %>% dplyr::pull(row_num)
 
     # Create formula
     prcp_amt_fm <- prcp_amt ~ prcp_occ_prev + s(lat_dec, lon_dec, k = length(unique_stations))
 
     if (control$use_covariates) {
-        prcp_amt_cov <- matriz.datos %>% dplyr::select(dplyr::matches('ST\\d')) %>% names
+        prcp_amt_cov <- models_data %>% dplyr::select(dplyr::matches('ST\\d')) %>% names
         prcp_amt_cov_fm_str <- paste(prcp_amt_cov, collapse = " + ")
         prcp_amt_cov_fm     <- stats::as.formula(paste('~ . +', prcp_amt_cov_fm_str))
         # prcp_amt_cov_fm <- ~ . + ST1 + ST2 + ST3 + ST4
         prcp_amt_fm         <- stats::update( prcp_amt_fm, prcp_amt_cov_fm )
     }
 
-
-    doMC::registerDoMC(control$avbl_cores)
     t.a <- proc.time()
     prcp_amt_fit <- purrr::map(
         .x = 1:12,
         .f = function(m) {
             t <- proc.time()
             prcp_amt_fit_partial <- mgcv::gam(formula = prcp_amt_fm,
-                                              data = matriz.datos[gamma_indexes,] %>%
+                                              data = models_data[gamma_indexes,] %>%
                                                   dplyr::filter(as.logical(prcp_occ) & month == m),
                                               family = stats::Gamma(link = log),
                                               method = 'REML',
@@ -331,7 +332,7 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
             tiempo.prcp_amt_fit_partial <- proc.time() - t
 
             # Se agregan datos de control
-            prcp_amt_fit_partial[["dates_used_fitting"]] <- matriz.datos[gamma_indexes, ] %>%
+            prcp_amt_fit_partial[["dates_used_fitting"]] <- models_data[gamma_indexes, ] %>%
                 dplyr::filter(as.logical(prcp_occ) & month == m) %>%
                 dplyr::pull(date)
             prcp_amt_fit_partial[["execution_time"]]     <- tiempo.prcp_amt_fit_partial
@@ -339,7 +340,7 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
 
             return (prcp_amt_fit_partial)
         }
-    )
+    ) %>% purrr::set_names(readr::date_names_lang("en")$mon_ab)
     tiempo.prcp_amt_fit <- proc.time() - t.a
 
     ## Fit model for precipitation amounts.
@@ -361,7 +362,7 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     # Remove NAs
     tx_fit_noNA_cols <- c('tmax', 'tmax_prev', 'tmin_prev', 'prcp_occ', 'prcp_occ_prev',
                           'mean_tmax', 'mean_tmin', 'row_num')
-    tmax_indexes <- matriz.datos %>% tidyr::drop_na(tx_fit_noNA_cols) %>% dplyr::pull(row_num)
+    tmax_indexes <- models_data %>% tidyr::drop_na(tx_fit_noNA_cols) %>% dplyr::pull(row_num)
 
     # Create formula
     tmax_fm <- tmax ~ te(tmax_prev, tmin_prev, lat_dec, lon_dec, d = c(2, 2), k = length(unique_stations)) +
@@ -370,8 +371,8 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
         ti(lat_dec, lon_dec, doy, bs = c('tp', 'cc'), d = c(2, 1), k = length(unique_stations))
 
     if (control$use_covariates) {
-        tmax_cov <- matriz.datos %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
-        tmin_cov <- matriz.datos %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
+        tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
+        tmin_cov <- models_data %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
         tmax_cov_fm_str <- paste("te(", tmax_cov, ", ", tmin_cov, ", lat_dec, lon_dec, d = c(2, 2))",
                                  collapse = " + ")
         tmax_cov_fm_1   <- stats::as.formula(paste('~ . +', tmax_cov_fm_str))
@@ -388,18 +389,18 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
 
     t <- proc.time()
     tmax_fit <- mgcv::bam(formula = tmax_fm,
-                          data = matriz.datos[tmax_indexes,],
+                          data = models_data[tmax_indexes,],
                           method = "fREML",
                           cluster = cluster,
                           control = list(nthreads = control$avbl_cores))
     tiempo.tmax_fit <- proc.time() - t
 
-    matriz.datos[tmax_indexes, "tmax_residuals"] <- residuals(tmax_fit, type = 'response')
+    models_data[tmax_indexes, "tmax_residuals"] <- residuals(tmax_fit, type = 'response')
 
     # Se agregan datos de control
-    tmax_fit[["dates_used_fitting"]] <- matriz.datos[tmax_indexes, ] %>%
+    tmax_fit[["dates_used_fitting"]] <- models_data[tmax_indexes, ] %>%
         dplyr::pull(date)
-    tmax_fit[["residuals_tibble"]]   <- matriz.datos[tmax_indexes, ] %>%
+    tmax_fit[["residuals_tibble"]]   <- models_data[tmax_indexes, ] %>%
         dplyr::select(date, residual = tmax_residuals)
     tmax_fit[["execution_time"]]     <- tiempo.tmax_fit
     # End of tx fit
@@ -423,7 +424,7 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     # Remove NAs
     tn_fit_noNA_cols <- c('tmin', 'tmax_prev', 'tmin_prev', 'prcp_occ', 'prcp_occ_prev',
                           'mean_tmax', 'mean_tmin', 'row_num')
-    tmin_indexes <- matriz.datos %>% tidyr::drop_na(tn_fit_noNA_cols) %>% dplyr::pull(row_num)
+    tmin_indexes <- models_data %>% tidyr::drop_na(tn_fit_noNA_cols) %>% dplyr::pull(row_num)
 
     # Create formula
     tmin_fm <- tmin ~ te(tmin_prev, tmax_prev, lat_dec, lon_dec, d = c(2, 2), k = length(unique_stations)) +
@@ -432,8 +433,8 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
         ti(lat_dec, lon_dec, doy, bs = c('tp', 'cc'), d = c(2, 1), k = length(unique_stations))
 
     if (control$use_covariates) {
-        tmax_cov <- matriz.datos %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
-        tmin_cov <- matriz.datos %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
+        tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
+        tmin_cov <- models_data %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
         tmin_cov_fm_str <- paste("te(", tmax_cov, ", ", tmin_cov, ", lat_dec, lon_dec, d = c(2, 2))",
                                  collapse = " + ")
         tmin_cov_fm_1   <- stats::as.formula(paste('~ . +', tmin_cov_fm_str))
@@ -450,18 +451,18 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
 
     t <- proc.time()
     tmin_fit <- mgcv::bam(formula = tmin_fm,
-                          data = matriz.datos[tmin_indexes,],
+                          data = models_data[tmin_indexes,],
                           method = "fREML",
                           cluster = cluster,
                           control = list(nthreads = control$avbl_cores))
     tiempo.tmin_fit <- proc.time() - t
 
-    matriz.datos[tmin_indexes, "tmin_residuals"] <- residuals(tmin_fit, type = 'response')
+    models_data[tmin_indexes, "tmin_residuals"] <- residuals(tmin_fit, type = 'response')
 
     # Se agregan datos de control
-    tmin_fit[["dates_used_fitting"]] <- matriz.datos[tmin_indexes, ] %>%
+    tmin_fit[["dates_used_fitting"]] <- models_data[tmin_indexes, ] %>%
         dplyr::pull(date)
-    tmin_fit[["residuals_tibble"]]   <- matriz.datos[tmin_indexes, ] %>%
+    tmin_fit[["residuals_tibble"]]   <- models_data[tmin_indexes, ] %>%
         dplyr::select(date, residual = tmin_residuals)
     tmin_fit[["execution_time"]]     <- tiempo.tmin_fit
     # End of tn fit
@@ -484,14 +485,13 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     ## Preparar datos de salida
 
     # Save gam results to returned model
-    model[["prcp_occ_fit"]] <- prcp_occ_fit
-    model[["prcp_amt_fit"]] <- prcp_amt_fit
-    model[["tmax_fit"]]     <- tmax_fit
-    model[["tmin_fit"]]     <- tmin_fit
+    model[['fitted_models']][["prcp_occ_fit"]] <- prcp_occ_fit
+    model[['fitted_models']][["prcp_amt_fit"]] <- prcp_amt_fit
+    model[['fitted_models']][["tmax_fit"]]     <- tmax_fit
+    model[['fitted_models']][["tmin_fit"]]     <- tmin_fit
 
-    # Save residuals to returned model
-    model[["residuals"]]    <- matriz.datos %>%
-        dplyr::select(station_id, date, prcp, tmax, tmin, tipo_dia, prcp_occ_residuals, tmax_residuals, tmin_residuals)
+    # Save models data to returned model
+    model[["models_data"]]  <- models_data
 
     # Save execution time to returned model
     model[['exec_times']][["summ_cli_time"]] <- tiempo.summarised_climate
