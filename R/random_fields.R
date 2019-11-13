@@ -1,8 +1,7 @@
 
 
-
 # Definicion de funcion para la generación de campos gaussianos para ocurrencia de temperatura
-random_field_noise_temperature <- function(month_parameters, grid, month_number, var_name, crs_value) {
+random_field_noise_temperature <- function(month_parameters, grid, month_number, var_name, coord_ref_system) {
 
     # Extraer parametros correspondientes a la variable y mes determinado
     month_params_vario_tmax <- month_parameters[[month_number]]$variogram_parameters[[var_name[1]]]
@@ -27,7 +26,7 @@ random_field_noise_temperature <- function(month_parameters, grid, month_number,
     campo <- grid %>%
         dplyr::mutate(x_coord = x_coord*1000, y_coord = y_coord*1000) %>%
         sf::st_as_sf(coords = c('x_coord', 'y_coord')) %>%
-        sf::st_set_crs(value = crs_value) %>%
+        sf::st_set_crs(value = coord_ref_system) %>%
         dplyr::mutate(id = 1:n(),
                       tmax_residuals = campos_simulados[, 1],
                       tmin_residuals = campos_simulados[, 2]) %>%
@@ -38,8 +37,9 @@ random_field_noise_temperature <- function(month_parameters, grid, month_number,
 
 }
 
+
 # Definicion de funcion para la generación de campos gaussianos para ocurrencia de precipitacion
-random_field_noise_prcp <- function(month_parameters, grid, month_number, var_name, crs_value) {
+random_field_noise_prcp <- function(month_parameters, grid, month_number, var_name, coord_ref_system) {
 
     # Extraer parametros correspondientes a la variable y mes determinado
     month_params_vario_prcp <- month_parameters[[month_number]]$variogram_parameters[[var_name]]
@@ -58,7 +58,7 @@ random_field_noise_prcp <- function(month_parameters, grid, month_number, var_na
     campo <- grid %>%
         dplyr::mutate(x_coord = x_coord*1000, y_coord = y_coord*1000) %>%
         sf::st_as_sf(coords = c('x_coord', 'y_coord')) %>%
-        sf::st_set_crs(value = crs_value) %>%
+        sf::st_set_crs(value = coord_ref_system) %>%
         dply::mutate(id = 1:n(),
                      prcp_residuals = campos_simulados) %>%
         dplyr::select(prcp_residuals)
@@ -67,6 +67,7 @@ random_field_noise_prcp <- function(month_parameters, grid, month_number, var_na
     return(campo)
 
 }
+
 
 ##############
 ## OLD METHODS
