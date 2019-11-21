@@ -4,7 +4,7 @@
 \alias{calibrate.glmwgen}
 \title{Weather model calibration}
 \usage{
-calibrate.glmwgen(climate, stations, seasonal.climate = NULL,
+calibrate.glmwgen(climate, stations, seasonal_climate = NULL,
   control = glmwgen:::glmwgen_fit_control(), verbose = T)
 }
 \description{

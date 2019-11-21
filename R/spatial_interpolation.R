@@ -1,3 +1,74 @@
+
+
+interpolate_month_day <- function(model, simulation_points, seed, month, day) {
+
+    # Creación de la matriz de simulación
+    simulation_matrix <- model$models_data %>%
+        dplyr::mutate(year = lubridate::year(date),
+                      month = lubridate::month(date),
+                      day = lubridate::day(date),
+                      time = as.numeric(date)/1000) %>%
+        dplyr::left_join(model$stations, by = "station_id") %>%
+        dplyr::select(station_id, date, year, month, day,
+                      season, prcp_occ, tmax, tmin, tipo_dia,
+                      longitude, latitude, geometry) %>%
+        sf::st_as_sf(crs = sf::st_crs(model$stations))
+
+    # Creación de la matriz de distancias
+    distance_matrix <- glmwgen:::make_distance_matrix(model$stations)
+
+    # Generación de valores inciales para el variograma
+    variograms_for_initial_values <-
+        glmwgen:::setting_variograms_for_initial_values(
+            simulation_matrix = simulation_matrix,
+            distance_matrix = distance_matrix,
+            grid = simulation_points %>% tibble::as_tibble() %>%
+                dplyr::select(longitude, latitude),
+            seed = seed,
+            init_values_month = month,
+            init_values_day = day)
+
+    # Matriz de valores a interpolar
+    data_to_be_interpolated <- simulation_matrix %>%
+        dplyr::filter(month == !!month, day == !!day) %>%
+        dplyr::group_by(station_id, longitude, latitude) %>%
+        dplyr::summarise(prcp_occ = mean(prcp_occ, na.rm = TRUE),
+                         tmax = mean(tmax, na.rm = TRUE),
+                         tmin = mean(tmin, na.rm = TRUE)) %>%
+        sf::st_transform(sf::st_crs(simulation_points))
+
+    # Valores interpolados de ocurrencia
+    prcp_occ_interpolation <-
+        automap::autoKrige(prcp_occ~1,
+                           data_to_be_interpolated %>% sf::as_Spatial(),
+                           simulation_points %>% sf::as_Spatial()) %>%
+        sf::st_as_sf(x = .$krige_output, crs = sf::st_crs(simulation_points)) %>%
+        dplyr::mutate(noise = variograms_for_initial_values$random_fields$prcp,
+                      prcp_occ = as.numeric(var1.pred + noise > 0))
+
+    # Valores interpolados de temperatura maxima
+    tmax_interpolation <-
+        automap::autoKrige(tmax~1,
+                           data_to_be_interpolated %>% sf::as_Spatial(),
+                           simulation_points %>% sf::as_Spatial()) %>%
+        sf::st_as_sf(x = .$krige_output, crs = sf::st_crs(simulation_points)) %>%
+        dplyr::mutate(noise = variograms_for_initial_values$random_fields$tmax,
+                      tmax = var1.pred + noise)
+
+    # Valores interpolados de temperatura mínima
+    tmin_interpolation <-
+        automap::autoKrige(tmin~1,
+                           data_to_be_interpolated %>% sf::as_Spatial(),
+                           simulation_points %>% sf::as_Spatial()) %>%
+        sf::st_as_sf(x = .$krige_output, crs = sf::st_crs(simulation_points)) %>%
+        dplyr::mutate(noise = variograms_for_initial_values$random_fields$tmin,
+                      tmin = var1.pred + noise)
+
+    return (prcp_occ_interpolation %>% dplyr::select(prcp_occ) %>%
+                sf::st_join(tmax_interpolation %>% dplyr::select(tmax)) %>%
+                sf::st_join(tmin_interpolation %>% dplyr::select(tmin)))
+}
+
 # krige_covariate <- function(model, station_coordinates_grid, simulation_coordinates_grid, covariate) {
 #     variogram <- fields::vgram(loc = station_coordinates_grid, y = covariate,
 #                                breaks = seq(0, max(model$distance_matrix),

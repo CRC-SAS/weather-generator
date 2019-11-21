@@ -1,15 +1,21 @@
 
-generate_month_params <- function(residuals, distance_matrix) {
+generate_month_params <- function(residuals, observed_climate, stations) {
     month_params <- purrr::map(
         .x = 1:12,
         .f = function(m) {
+
+            ## OBS:
+            # Estamos trabajando con coordenadas métricas, sin embargo,
+            # el paquete RandomFields trabaja mejor en metros, por la tanto,
+            # pasamos distance_matrix a kilometros, dividiendo por 1000!!
+            distance_matrix <- glmwgen:::make_distance_matrix(stations) / 1000
 
             month_residuals <- residuals %>%
                 dplyr::filter(lubridate::month(date) == m) %>%
                 dplyr::mutate(., year = lubridate::year(date)) %>%
                 dplyr::arrange(date, station_id)
 
-            month_climate   <- residuals %>%
+            month_climate   <- observed_climate %>%
                 dplyr::filter(lubridate::month(date) == m) %>%
                 dplyr::mutate(., year = lubridate::year(date)) %>%
                 dplyr::select(date, year, station_id, tmax, tmin, prcp, tipo_dia) %>%
@@ -69,7 +75,7 @@ generate_month_params <- function(residuals, distance_matrix) {
                 tidyr::spread(., key = station_id, value = tmin) %>%
                 dplyr::select(., colnames(distance_matrix))
 
-            n_stations <- length(unique(rownames(distance_matrix)))
+            n_stations <- length(unique(stations))
 
             # Crear matrices de covarianza
             prcp_cor <- stats::cor(probit_residuals_matrix, use = "pairwise.complete")

@@ -3,6 +3,14 @@
 # Definicion de funcion para la generación de campos gaussianos para ocurrencia de temperatura
 random_field_noise_temperature <- function(month_parameters, grid, month_number, var_name, coord_ref_system) {
 
+    ## OBS:
+    # Estamos trabajando con coordenadas métricas, sin embargo,
+    # el paquete RandomFields trabaja mejor en metros, por la tanto,
+    # pasamos grid a kilometros, dividiendo cada columna por 1000!!
+    grid <- grid %>%
+        dplyr::mutate(longitude = longitude / 1000,
+                      latitude = latitude / 1000)
+
     # Extraer parametros correspondientes a la variable y mes determinado
     month_params_vario_tmax <- month_parameters[[month_number]]$variogram_parameters[[var_name[1]]]
     month_params_vario_tmin <- month_parameters[[month_number]]$variogram_parameters[[var_name[2]]]
@@ -12,22 +20,22 @@ random_field_noise_temperature <- function(month_parameters, grid, month_number,
                                   nured12 = 1,
                                   cdiag = c(month_params_vario_tmax[2], month_params_vario_tmin[2]),
                                   rhored = 1,
-                                  s=c(month_params_vario_tmax[3],
-                                      month_params_vario_tmin[3],
-                                      0.5*sum(month_params_vario_tmax[3], month_params_vario_tmin[3])))
+                                  s = c(month_params_vario_tmax[3],
+                                        month_params_vario_tmin[3],
+                                        0.5*sum(month_params_vario_tmax[3], month_params_vario_tmin[3])))
 
     # Simular sobre una grilla regular
-    campos_simulados <- RandomFields::RFsimulate(model, x = grid, grid = F)
+    campos_simulados <- RandomFields::RFsimulate(model, x = grid, grid = F, coord_sys="cartesian", coordunits="km")
 
     # Extraer resultados
     # campos.simulados.df <- RandomFields::RFspDataFrame2conventional(campos_simulados, data.frame = T)
 
-    # Crear objeto sf
+    # Crear objeto sf (se vuelve, longitude y latitude, a metros)
     campo <- grid %>%
-        dplyr::mutate(x_coord = x_coord*1000, y_coord = y_coord*1000) %>%
-        sf::st_as_sf(coords = c('x_coord', 'y_coord')) %>%
+        dplyr::mutate(longitude = longitude*1000, latitude = latitude*1000) %>%
+        sf::st_as_sf(coords = c('longitude', 'latitude')) %>%
         sf::st_set_crs(value = coord_ref_system) %>%
-        dplyr::mutate(id = 1:n(),
+        dplyr::mutate(id = dplyr::row_number(),
                       tmax_residuals = campos_simulados[, 1],
                       tmin_residuals = campos_simulados[, 2]) %>%
         dplyr::select(tmax_residuals, tmin_residuals)
@@ -41,6 +49,14 @@ random_field_noise_temperature <- function(month_parameters, grid, month_number,
 # Definicion de funcion para la generación de campos gaussianos para ocurrencia de precipitacion
 random_field_noise_prcp <- function(month_parameters, grid, month_number, var_name, coord_ref_system) {
 
+    ## OBS:
+    # Estamos trabajando con coordenadas métricas, sin embargo,
+    # el paquete RandomFields trabaja mejor en metros, por la tanto,
+    # pasamos grid a kilometros, dividiendo cada columna por 1000!!
+    grid <- grid %>%
+        dplyr::mutate(longitude = longitude / 1000,
+                      latitude = latitude / 1000)
+
     # Extraer parametros correspondientes a la variable y mes determinado
     month_params_vario_prcp <- month_parameters[[month_number]]$variogram_parameters[[var_name]]
 
@@ -49,18 +65,18 @@ random_field_noise_prcp <- function(month_parameters, grid, month_number, var_na
                                 scale = month_params_vario_prcp[[3]])
 
     # Simular sobre una grilla regular
-    campos_simulados <- RandomFields::RFsimulate(model, x = grid, grid = F)
+    campos_simulados <- RandomFields::RFsimulate(model, x = grid, grid = F, coord_sys="cartesian", coordunits="km")
 
     # Extraer resultados
     # campos.simulados.df <- RandomFields::RFspDataFrame2conventional(campos_simulados, data.frame = T)
 
     # Crear objeto sf
     campo <- grid %>%
-        dplyr::mutate(x_coord = x_coord*1000, y_coord = y_coord*1000) %>%
-        sf::st_as_sf(coords = c('x_coord', 'y_coord')) %>%
+        dplyr::mutate(longitude = longitude*1000, latitude = latitude*1000) %>%
+        sf::st_as_sf(coords = c('longitude', 'latitude')) %>%
         sf::st_set_crs(value = coord_ref_system) %>%
-        dply::mutate(id = 1:n(),
-                     prcp_residuals = campos_simulados) %>%
+        dplyr::mutate(id = dplyr::row_number(),
+                      prcp_residuals = campos_simulados) %>%
         dplyr::select(prcp_residuals)
 
     # Devolver resultados

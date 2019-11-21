@@ -5,12 +5,14 @@
 glmwgen_fit_control <- function(prcp_occurrence_threshold = 0.1,
                                 use_external_seasonal_climate = T,
                                 climate_missing_threshold = 0.2,
-                                use_covariates = F, avbl_cores = 2) {
+                                use_covariates = F, avbl_cores = 2,
+                                planar_crs_in_metric_coords = 22185) {
 
     return(list(prcp_occurrence_threshold = prcp_occurrence_threshold,
                 use_external_seasonal_climate = use_external_seasonal_climate,
                 climate_missing_threshold = climate_missing_threshold,
-                use_covariates = use_covariates, avbl_cores = avbl_cores))
+                use_covariates = use_covariates, avbl_cores = avbl_cores,
+                planar_crs_in_metric_coords = planar_crs_in_metric_coords))
 }
 
 
@@ -18,7 +20,7 @@ glmwgen_fit_control <- function(prcp_occurrence_threshold = 0.1,
 #' @description Fits a weather model from historical data.
 #' @import dplyr
 #' @export
-calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
+calibrate.glmwgen <- function(climate, stations, seasonal_climate = NULL,
                               control = glmwgen:::glmwgen_fit_control(),
                               verbose = T) {
 
@@ -27,15 +29,15 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
 
     ###############################################################
 
-    if (control$use_external_seasonal_climate & is.null(seasonal.climate))
-        stop("If use_external_seasonal_climate is True, seasonal.climate can't be NULL!!")
+    if (control$use_external_seasonal_climate & is.null(seasonal_climate))
+        stop("If use_external_seasonal_climate is True, seasonal_climate can't be NULL!!")
 
-    if (!control$use_external_seasonal_climate & !is.null(seasonal.climate)) {
-        warning('Entered seasonal.climate will be descarted because use_external_seasonal_climate is set as False!')
-        seasonal.climate <- NULL
+    if (!control$use_external_seasonal_climate & !is.null(seasonal_climate)) {
+        warning('Entered seasonal_climate will be descarted because use_external_seasonal_climate is set as False!')
+        seasonal_climate <- NULL
     }
 
-    glmwgen:::check.input.data(climate, stations, seasonal.climate)
+    glmwgen:::check.fit.input.data(climate, stations, seasonal_climate)
 
     ###############################################################
 
@@ -55,6 +57,9 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     ###############################################################
 
     stations <- stations %>%
+        sf::st_transform(control$planar_crs_in_metric_coords) %>%
+        dplyr::mutate(longitude = sf::st_coordinates(geometry)[,'X'],
+                      latitude  = sf::st_coordinates(geometry)[,'Y']) %>%
         dplyr::arrange(station_id)
 
     # Se obtienen los estaciones en el df con datos climaticos
@@ -69,17 +74,17 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
 
     if (control$use_external_seasonal_climate) {
 
-        seasonal.climate <- seasonal.climate %>%
+        seasonal_climate <- seasonal_climate %>%
             dplyr::arrange(station_id, year, season)
 
         years_in_climate <- dplyr::distinct(climate, lubridate::year(date)) %>% dplyr::pull()
-        years_in_seasonal.climate <- dplyr::distinct(seasonal.climate, year) %>% dplyr::pull()
-        if (!dplyr::all_equal(years_in_climate, years_in_seasonal.climate))
-            stop("Years in climate and years in seasonal.climate don't match!")
+        years_in_seasonal_climate <- dplyr::distinct(seasonal_climate, year) %>% dplyr::pull()
+        if (!dplyr::all_equal(years_in_climate, years_in_seasonal_climate))
+            stop("Years in climate and years in seasonal_climate don't match!")
     }
 
     t <- proc.time()
-    summarised_climate <- seasonal.climate
+    summarised_climate <- seasonal_climate
     if (is.null(summarised_climate) | !control$use_external_seasonal_climate)
         summarised_climate <- glmwgen:::summarise_seasonal_climate(climate, control$climate_missing_threshold)
     tiempo.summarised_climate <- proc.time() - t
@@ -116,15 +121,16 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     model[["control"]] <- control
 
     model[["stations"]] <- stations
-    model[['stns_crs']] <- sf::st_crs(stations)
 
     model[["seasonal_data"]] <- summarised_climate
+
+    model[["crs_used_to_fit"]] <- sf::st_crs(control$planar_crs_in_metric_coords)
 
     model[["start_climatology"]] <- climate %>%
         dplyr::group_by(station_id, month = lubridate::month(date), day = lubridate::day(date)) %>%
         dplyr::summarise(tmax = mean(tmax, na.rm = T),
-                  tmin = mean(tmin, na.rm = T),
-                  prcp = mean(prcp, na.rm = T)) %>%
+                         tmin = mean(tmin, na.rm = T),
+                         prcp = mean(prcp, na.rm = T)) %>%
         dplyr::ungroup()
 
 
@@ -152,6 +158,7 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     #####################################
     # Control de tiempo de la preparación
     t.p <- proc.time()
+
 
     # Group by stations and conf cluster
     models_data <- climate %>%
@@ -206,7 +213,7 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     # Add stations's latitude and longitude to models_data
     t <- proc.time()
     models_data <- models_data %>%
-    dplyr::left_join(stations %>% dplyr::select(station_id, lat_dec, lon_dec),
+    dplyr::left_join(stations %>% dplyr::select(station_id, latitude, longitude),
                      by = 'station_id')
     tiempo.join_stations <- proc.time() - t
 
@@ -248,21 +255,21 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
 
     # Create formula
     prcp_occ_fm <- prcp_occ ~ s(tipo_dia_prev, bs = 're') +
-        s(lat_dec, lon_dec, bs = 'tp', k = length(unique_stations)) +
+        s(latitude, longitude, bs = 'tp', k = length(unique_stations)) +
         s(time, bs = 'gp', k = 20) + s(doy, bs = 'cc', k = 20) +
-        te(lat_dec, lon_dec, doy, d = c(2, 1), bs = c('tp', 'cc'), k = length(unique_stations))
+        te(latitude, longitude, doy, d = c(2, 1), bs = c('tp', 'cc'), k = length(unique_stations))
 
     if (control$use_covariates) {
         prcp_occ_cov <- models_data %>% dplyr::select(dplyr::matches('ST\\d')) %>% names
         prcp_occ_cov_fm_str <- paste("s(", prcp_occ_cov, ") + ",
-                                     "ti(", prcp_occ_cov, ", lat_dec, lon_dec, d = c(1, 2), bs='cs')",
+                                     "ti(", prcp_occ_cov, ", latitude, longitude, d = c(1, 2), bs='cs')",
                                      collapse = " + ")
         prcp_occ_cov_fm <- stats::as.formula(paste('~ . +', prcp_occ_cov_fm_str))
         # prcp_occ_cov_fm <- ~ . +
-        #     s(ST1) + ti(ST1, lat_dec, lon_dec, d = c(1, 2), bs="cs") +
-        #     s(ST2) + ti(ST2, lat_dec, lon_dec, d = c(1, 2), bs="cs") +
-        #     s(ST3) + ti(ST3, lat_dec, lon_dec, d = c(1, 2), bs="cs") +
-        #     s(ST4) + ti(ST4, lat_dec, lon_dec, d = c(1, 2), bs="cs")
+        #     s(ST1) + ti(ST1, latitude, longitude, d = c(1, 2), bs="cs") +
+        #     s(ST2) + ti(ST2, latitude, longitude, d = c(1, 2), bs="cs") +
+        #     s(ST3) + ti(ST3, latitude, longitude, d = c(1, 2), bs="cs") +
+        #     s(ST4) + ti(ST4, latitude, longitude, d = c(1, 2), bs="cs")
         prcp_occ_fm     <- stats::update( prcp_occ_fm, prcp_occ_cov_fm )
     }
 
@@ -307,7 +314,7 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     gamma_indexes <- models_data %>% tidyr::drop_na(prcp_amt_fit_noNA_cols) %>% dplyr::pull(row_num)
 
     # Create formula
-    prcp_amt_fm <- prcp_amt ~ prcp_occ_prev + s(lat_dec, lon_dec, k = length(unique_stations))
+    prcp_amt_fm <- prcp_amt ~ prcp_occ_prev + s(latitude, longitude, k = length(unique_stations))
 
     if (control$use_covariates) {
         prcp_amt_cov <- models_data %>% dplyr::select(dplyr::matches('ST\\d')) %>% names
@@ -365,24 +372,24 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     tmax_indexes <- models_data %>% tidyr::drop_na(tx_fit_noNA_cols) %>% dplyr::pull(row_num)
 
     # Create formula
-    tmax_fm <- tmax ~ te(tmax_prev, tmin_prev, lat_dec, lon_dec, d = c(2, 2), k = length(unique_stations)) +
+    tmax_fm <- tmax ~ te(tmax_prev, tmin_prev, latitude, longitude, d = c(2, 2), k = length(unique_stations)) +
         prcp_occ + prcp_occ_prev + s(time, bs = 'gp', k = 10) +
-        s(lat_dec, lon_dec, k = length(unique_stations)) + s(doy, bs = c("cc"), k = 30) +
-        ti(lat_dec, lon_dec, doy, bs = c('tp', 'cc'), d = c(2, 1), k = length(unique_stations))
+        s(latitude, longitude, k = length(unique_stations)) + s(doy, bs = c("cc"), k = 30) +
+        ti(latitude, longitude, doy, bs = c('tp', 'cc'), d = c(2, 1), k = length(unique_stations))
 
     if (control$use_covariates) {
         tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
         tmin_cov <- models_data %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
-        tmax_cov_fm_str <- paste("te(", tmax_cov, ", ", tmin_cov, ", lat_dec, lon_dec, d = c(2, 2))",
+        tmax_cov_fm_str <- paste("te(", tmax_cov, ", ", tmin_cov, ", latitude, longitude, d = c(2, 2))",
                                  collapse = " + ")
         tmax_cov_fm_1   <- stats::as.formula(paste('~ . +', tmax_cov_fm_str))
-        tmax_cov_fm_2   <- ~ . + te(doy, lat_dec, lon_dec, d = c(1, 2), bs = c('cc', 'tp'))
+        tmax_cov_fm_2   <- ~ . + te(doy, latitude, longitude, d = c(1, 2), bs = c('cc', 'tp'))
         # tmax_cov_fm <- ~ . +
-        #     te(SX1, SN1, lat_dec, lon_dec, d = c(2, 2)) +
-        #     te(SX2, SN2, lat_dec, lon_dec, d = c(2, 2)) +
-        #     te(SX3, SN3, lat_dec, lon_dec, d = c(2, 2)) +
-        #     te(SX4, SN4, lat_dec, lon_dec, d = c(2, 2)) +
-        #     te(doy, lat_dec, lon_dec, d = c(1, 2), bs = c('cc', 'tp'))
+        #     te(SX1, SN1, latitude, longitude, d = c(2, 2)) +
+        #     te(SX2, SN2, latitude, longitude, d = c(2, 2)) +
+        #     te(SX3, SN3, latitude, longitude, d = c(2, 2)) +
+        #     te(SX4, SN4, latitude, longitude, d = c(2, 2)) +
+        #     te(doy, latitude, longitude, d = c(1, 2), bs = c('cc', 'tp'))
         tmax_fm         <- stats::update( tmax_fm, tmax_cov_fm_1 )
         tmax_fm         <- stats::update( tmax_fm, tmax_cov_fm_2 )
     }
@@ -427,24 +434,24 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     tmin_indexes <- models_data %>% tidyr::drop_na(tn_fit_noNA_cols) %>% dplyr::pull(row_num)
 
     # Create formula
-    tmin_fm <- tmin ~ te(tmin_prev, tmax_prev, lat_dec, lon_dec, d = c(2, 2), k = length(unique_stations)) +
+    tmin_fm <- tmin ~ te(tmin_prev, tmax_prev, latitude, longitude, d = c(2, 2), k = length(unique_stations)) +
         prcp_occ + prcp_occ_prev + s(time, bs = 'gp', k = 100) +
-        s(lat_dec, lon_dec, k = length(unique_stations)) + s(doy, bs = c("cc"), k = 30) +
-        ti(lat_dec, lon_dec, doy, bs = c('tp', 'cc'), d = c(2, 1), k = length(unique_stations))
+        s(latitude, longitude, k = length(unique_stations)) + s(doy, bs = c("cc"), k = 30) +
+        ti(latitude, longitude, doy, bs = c('tp', 'cc'), d = c(2, 1), k = length(unique_stations))
 
     if (control$use_covariates) {
         tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
         tmin_cov <- models_data %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
-        tmin_cov_fm_str <- paste("te(", tmax_cov, ", ", tmin_cov, ", lat_dec, lon_dec, d = c(2, 2))",
+        tmin_cov_fm_str <- paste("te(", tmax_cov, ", ", tmin_cov, ", latitude, longitude, d = c(2, 2))",
                                  collapse = " + ")
         tmin_cov_fm_1   <- stats::as.formula(paste('~ . +', tmin_cov_fm_str))
-        tmin_cov_fm_2   <- ~ . + te(doy, lat_dec, lon_dec, d = c(1, 2), bs = c('cc', 'tp'))
+        tmin_cov_fm_2   <- ~ . + te(doy, latitude, longitude, d = c(1, 2), bs = c('cc', 'tp'))
         # tmin_cov_fm <- ~ . +
-        #     te(SX1, SN1, lat_dec, lon_dec, d = c(2, 2)) +
-        #     te(SX2, SN2, lat_dec, lon_dec, d = c(2, 2)) +
-        #     te(SX3, SN3, lat_dec, lon_dec, d = c(2, 2)) +
-        #     te(SX4, SN4, lat_dec, lon_dec, d = c(2, 2)) +
-        #     te(doy, lat_dec, lon_dec, d = c(1, 2), bs = c('cc', 'tp'))
+        #     te(SX1, SN1, latitude, longitude, d = c(2, 2)) +
+        #     te(SX2, SN2, latitude, longitude, d = c(2, 2)) +
+        #     te(SX3, SN3, latitude, longitude, d = c(2, 2)) +
+        #     te(SX4, SN4, latitude, longitude, d = c(2, 2)) +
+        #     te(doy, latitude, longitude, d = c(1, 2), bs = c('cc', 'tp'))
         tmin_fm         <- stats::update( tmin_fm, tmin_cov_fm_1 )
         tmin_fm         <- stats::update( tmin_fm, tmin_cov_fm_2 )
     }
@@ -491,7 +498,13 @@ calibrate.glmwgen <- function(climate, stations, seasonal.climate = NULL,
     model[['fitted_models']][["tmin_fit"]]     <- tmin_fit
 
     # Save models data to returned model
-    model[["models_data"]]  <- models_data
+    model[["models_data"]]      <- models_data %>%
+        dplyr::select(station_id, date, season, prcp, tmax, tmin, prcp_occ, tipo_dia, prcp_amt,
+                      prcp_occ_prev, tipo_dia_prev, prcp_amt_prev, tmax_prev, tmin_prev)
+
+    # Save residuals to returned model
+    model[["models_residuals"]] <- models_data %>%
+        dplyr::select(station_id, date, dplyr::ends_with("residuals"), tipo_dia)
 
     # Save execution time to returned model
     model[['exec_times']][["summ_cli_time"]] <- tiempo.summarised_climate

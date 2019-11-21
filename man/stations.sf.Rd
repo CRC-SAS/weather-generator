@@ -4,7 +4,7 @@
 \alias{stations.sf}
 \title{Create stations simple feature (sf)}
 \usage{
-stations.sf(station_id, lon_dec, lat_dec, crs, ...)
+stations.sf(station_id, longitude, latitude, crs, ...)
 }
 \description{
 Create stations simple feature (sf).

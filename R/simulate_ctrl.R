@@ -41,12 +41,6 @@ get_temperatures_seasonal_covariate <- function(years, season_number, seasonal_v
                 tn = get_seasonal_covariate(years, season_number, seasonal_values, 'tn')))
 }
 
-#' @title Simulations control configuration
-#' @description Provides fine control of different parameters that will be used to create new weather series.
-#' @export
-glmwgen_simulation_control <- function(Rt = NULL, multicombine = F, cache_size = 1) {
-    return(list(Rt = Rt, multicombine = multicombine, cache_size = cache_size))
-}
 
 #' @title Transform simulation result to tibble
 #' @description This function transforms the simulation result, a named array, to a tibble.

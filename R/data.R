@@ -55,34 +55,63 @@ as.climate.tibble <- function(object, map_cols = list(date = "date", station_id 
 #' @title Create stations simple feature (sf)
 #' @description Create stations simple feature (sf).
 #' @export
-stations.sf <- function(station_id, lon_dec, lat_dec, crs, ...) {
+stations.sf <- function(station_id, longitude, latitude, crs, ...) {
     stations <- tibble::tibble(station_id = as.integer(station_id),
-                               lon_dec = as.numeric(lon_dec),
-                               lat_dec = as.numeric(lat_dec), ...) %>%
-        dplyr::mutate(latitud = lat_dec,
-                      longitud = lon_dec) %>%
-        sf::st_as_sf(coords = c('longitud', 'latitud'), crs = crs)
+                               longitude = as.numeric(longitude),
+                               latitude = as.numeric(latitude), ...) %>%
+        sf::st_as_sf(coords = c('longitude', 'latitude'), crs = crs)
     return (stations)
 }
 
 #' @title Transform object to stations simple feature (sf)
 #' @description Transform object to stations simple feature (sf).
 #' @export
-as.stations.sf <- function(object, crs, map_cols = list(station_id = "station_id", lon_dec = "lon_dec", lat_dec = "lat_dec")) {
-    req_cols <- list(station_id = "station_id", lon_dec = "lon_dec", lat_dec = "lat_dec")
+as.stations.sf <- function(object, crs, map_cols = list(station_id = "station_id",
+                                                        longitude = "lon_dec", latitude = "lat_dec")) {
+    req_cols <- list(station_id = "station_id", longitude = "lon_dec", latitude = "lat_dec")
     lst_cols <- setdiff(names(req_cols), names(map_cols))
     map_cols <- c(map_cols, req_cols[lst_cols])
 
     stations <- object %>% tibble::as_tibble() %>%
         dplyr::rename(station_id = !!rlang::sym(map_cols$station_id),
-                      lon_dec = !!rlang::sym(map_cols$lon_dec),
-                      lat_dec = !!rlang::sym(map_cols$lat_dec) ) %>%
+                      longitude = !!rlang::sym(map_cols$longitude),
+                      latitude = !!rlang::sym(map_cols$latitude) ) %>%
         dplyr::mutate(station_id = as.integer(station_id),
-                      lon_dec = as.numeric(lon_dec),
-                      lat_dec = as.numeric(lat_dec)) %>%
-        dplyr::mutate(latitud = lat_dec,
-                      longitud = lon_dec) %>%
-        sf::st_as_sf(coords = c('longitud', 'latitud'), crs = crs)
+                      longitude = as.numeric(longitude),
+                      latitude = as.numeric(latitude)) %>%
+        sf::st_as_sf(coords = c('longitude', 'latitude'), crs = crs)
+    return (stations)
+}
+
+
+#' @title Create simulation locations simple feature (sf)
+#' @description Create simulation locations simple feature (sf).
+#' @export
+sim_loc.sf <- function(station_id, longitude, latitude, crs, ...) {
+    stations <- tibble::tibble(station_id = as.integer(station_id),
+                               longitude = as.numeric(longitude),
+                               latitude = as.numeric(latitude), ...) %>%
+        sf::st_as_sf(coords = c('longitude', 'latitude'), crs = crs)
+    return (stations)
+}
+
+#' @title Transform object to simulation locations simple feature (sf)
+#' @description Transform object to simulation locations simple feature (sf).
+#' @export
+as.sim_loc.sf <- function(object, crs, map_cols = list(station_id = "station_id",
+                                                       longitude = "longitude", latitude = "latitude")) {
+    req_cols <- list(station_id = "station_id", longitude = "longitude", latitude = "latitude")
+    lst_cols <- setdiff(names(req_cols), names(map_cols))
+    map_cols <- c(map_cols, req_cols[lst_cols])
+
+    stations <- object %>% tibble::as_tibble() %>%
+        dplyr::rename(station_id = !!rlang::sym(map_cols$station_id),
+                      longitude = !!rlang::sym(map_cols$longitude),
+                      latitude = !!rlang::sym(map_cols$latitude) ) %>%
+        dplyr::mutate(station_id = as.integer(station_id),
+                      longitude = as.numeric(longitude),
+                      latitude = as.numeric(latitude)) %>%
+        sf::st_as_sf(coords = c('longitude', 'latitude'), crs = crs)
     return (stations)
 }
 
@@ -91,20 +120,20 @@ check.object <- function(object, obj.name, obj.class, obj.cols) {
 
     if (!all(class(object) %in% obj.class)) {
         warning (glue::glue("{obj.name} must be a {if ('sf' %in% obj.class) 'sf'} tibble"), call. = FALSE, immediate. = TRUE)
-        stop ("Entry data for glmwgen::calibrate.glmwgen() aren't in the correct format!", call. = FALSE)
+        stop ("Entry data aren't in the correct format!", call. = FALSE)
     }
 
     if (!all(names(obj.cols) %in% names(object))) {
         warning (paste(glue::glue("{obj.name} must have the following columns:"),
                        glue::glue("{toString(lapply(names(obj.cols), function(c) glue::glue('{c} ({obj.cols[[c]]})')))}")),
                  call. = FALSE, immediate. = TRUE)
-        stop ("Entry data for glmwgen::calibrate.glmwgen() aren't in the correct format!", call. = FALSE)
+        stop ("Entry data aren't in the correct format!", call. = FALSE)
     }
 
     for (c in names(obj.cols)) {
         if (class(dplyr::pull(object,!!c))[[1]] != obj.cols[[c]]) {
             warning (glue::glue("{obj.name} column named {c} must be {obj.cols[[c]]}"), call. = FALSE, immediate. = TRUE)
-            stop ("Entry data for glmwgen::calibrate.glmwgen() aren't in the correct format!", call. = FALSE)
+            stop ("Entry data aren't in the correct format!", call. = FALSE)
         }
     }
 
@@ -116,23 +145,23 @@ check.ends.with.columns <- function(object, obj.name, obj.cols) {
         if (sum(endsWith(names(object), c)) != 1) {
             warning (glue::glue("{obj.name} must have exactly one column ending with: {c}!"),
                      call. = FALSE, immediate. = TRUE)
-            stop ("Entry data for glmwgen::calibrate.glmwgen() aren't in the correct format!", call. = FALSE)
+            stop ("Entry data aren't in the correct format!", call. = FALSE)
         }
     }
 
     for (c in names(obj.cols)) {
         if (class(dplyr::pull(dplyr::select(object, dplyr::ends_with(c))))[[1]] != obj.cols[[c]]) {
             warning (glue::glue("{obj.name} column named {c} must be {obj.cols[[c]]}"), call. = FALSE, immediate. = TRUE)
-            stop ("Entry data for glmwgen::calibrate.glmwgen() aren't in the correct format!", call. = FALSE)
+            stop ("Entry data aren't in the correct format!", call. = FALSE)
         }
     }
 
 }
 
-check.input.data <- function(climate, stations, seasonal.climate) {
+check.fit.input.data <- function(climate, stations, seasonal.climate) {
 
     climate.columns <- c(date = "Date", station_id = "integer", tmax = "numeric", tmin = "numeric", prcp = "numeric")
-    stations.columns <- c(station_id = "integer", lon_dec = "numeric", lat_dec = "numeric", geometry = "sfc_POINT")
+    stations.columns <- c(station_id = "integer", geometry = "sfc_POINT")
     seasonal.invariant.columns <- c(station_id = "integer", year = "numeric", season = "numeric")
     seasonal.ends.with.columns <- c(tmax = "numeric", tmin = "numeric", prcp = "numeric")
 
@@ -143,5 +172,13 @@ check.input.data <- function(climate, stations, seasonal.climate) {
         check.object(seasonal.climate, "seasonal.climate", c("tbl_df", "tbl", "data.frame"), seasonal.invariant.columns)
         check.ends.with.columns(seasonal.climate, "seasonal.climate", seasonal.ends.with.columns)
     }
+
+}
+
+check.simulation.input.data <- function(simulation_locations) {
+
+    sim_loc.columns <- c(geometry = "sfc_POINT")
+
+    check.object(simulation_locations, "stations", c("sf", "tbl_df", "tbl", "data.frame"), sim_loc.columns)
 
 }
