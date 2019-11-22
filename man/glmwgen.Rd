@@ -3,7 +3,6 @@
 \docType{package}
 \name{glmwgen}
 \alias{glmwgen}
-\alias{glmwgen-package}
 \title{glmwgen: general lineal model weather generator}
 \description{
 Weather series generation based on general linear models?

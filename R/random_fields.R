@@ -1,7 +1,7 @@
 
 
 # Definicion de funcion para la generación de campos gaussianos para ocurrencia de temperatura
-random_field_noise_temperature <- function(month_parameters, grid, month_number, var_name, coord_ref_system) {
+random_field_noise_temperature <- function(month_parameters, grid, month_number, var_name, coord_ref_system, seed) {
 
     ## OBS:
     # Estamos trabajando con coordenadas métricas, sin embargo,
@@ -19,13 +19,13 @@ random_field_noise_temperature <- function(month_parameters, grid, month_number,
     model <- RandomFields::RMbiwm(nudiag = c(0.5, 0.5),
                                   nured12 = 1,
                                   cdiag = c(month_params_vario_tmax[2], month_params_vario_tmin[2]),
-                                  rhored = 1,
+                                  rhored = month_parameters[[month_number]]$correlation,
                                   s = c(month_params_vario_tmax[3],
                                         month_params_vario_tmin[3],
                                         0.5*sum(month_params_vario_tmax[3], month_params_vario_tmin[3])))
 
     # Simular sobre una grilla regular
-    campos_simulados <- RandomFields::RFsimulate(model, x = grid, grid = F, coord_sys="cartesian", coordunits="km")
+    campos_simulados <- RandomFields::RFsimulate(model, x = grid, grid = F, coord_sys="cartesian", coordunits="km", seed=seed)
 
     # Extraer resultados
     # campos.simulados.df <- RandomFields::RFspDataFrame2conventional(campos_simulados, data.frame = T)
@@ -47,7 +47,7 @@ random_field_noise_temperature <- function(month_parameters, grid, month_number,
 
 
 # Definicion de funcion para la generación de campos gaussianos para ocurrencia de precipitacion
-random_field_noise_prcp <- function(month_parameters, grid, month_number, var_name, coord_ref_system) {
+random_field_noise_prcp <- function(month_parameters, grid, month_number, var_name, coord_ref_system, seed) {
 
     ## OBS:
     # Estamos trabajando con coordenadas métricas, sin embargo,
@@ -65,7 +65,7 @@ random_field_noise_prcp <- function(month_parameters, grid, month_number, var_na
                                 scale = month_params_vario_prcp[[3]])
 
     # Simular sobre una grilla regular
-    campos_simulados <- RandomFields::RFsimulate(model, x = grid, grid = F, coord_sys="cartesian", coordunits="km")
+    campos_simulados <- RandomFields::RFsimulate(model, x = grid, grid = F, coord_sys="cartesian", coordunits="km", seed=seed)
 
     # Extraer resultados
     # campos.simulados.df <- RandomFields::RFspDataFrame2conventional(campos_simulados, data.frame = T)

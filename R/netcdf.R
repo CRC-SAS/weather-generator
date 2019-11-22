@@ -92,7 +92,7 @@ GuardarRealizacionNetCDF <- function(nc_file, numero_realizacion, sim_dates, ras
     raster_variable <- variables[[variable]]
     if (length(raster_variable) > 0) {
       stack_variable  <- raster::flip(raster::stack(raster_variable), direction = "y")
-      array_variable  <- base::aperm(as.array(stack_variable), perm = c(2, 1, 3))
+      array_variable  <- base::aperm(raster::as.array(stack_variable), perm = c(2, 1, 3))
       ncdf4::ncvar_put(nc = nc,
                        varid = variable,
                        vals  = array_variable,

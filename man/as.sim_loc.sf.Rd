@@ -4,8 +4,12 @@
 \alias{as.sim_loc.sf}
 \title{Transform object to simulation locations simple feature (sf)}
 \usage{
-as.sim_loc.sf(object, crs, map_cols = list(station_id = "station_id",
-  longitude = "longitude", latitude = "latitude"))
+as.sim_loc.sf(
+  object,
+  crs,
+  map_cols = list(station_id = "station_id", longitude = "longitude", latitude =
+    "latitude")
+)
 }
 \description{
 Transform object to simulation locations simple feature (sf).

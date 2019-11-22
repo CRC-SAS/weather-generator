@@ -4,8 +4,11 @@
 \alias{as.climate.tibble}
 \title{Transform object to climate tibble}
 \usage{
-as.climate.tibble(object, map_cols = list(date = "date", station_id =
-  "station_id", tmax = "tmax", tmin = "tmin", prcp = "prcp"))
+as.climate.tibble(
+  object,
+  map_cols = list(date = "date", station_id = "station_id", tmax = "tmax", tmin =
+    "tmin", prcp = "prcp")
+)
 }
 \description{
 Transform object to climate tibble

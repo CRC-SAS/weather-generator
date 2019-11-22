@@ -4,8 +4,12 @@
 \alias{as.stations.sf}
 \title{Transform object to stations simple feature (sf)}
 \usage{
-as.stations.sf(object, crs, map_cols = list(station_id = "station_id",
-  longitude = "lon_dec", latitude = "lat_dec"))
+as.stations.sf(
+  object,
+  crs,
+  map_cols = list(station_id = "station_id", longitude = "lon_dec", latitude =
+    "lat_dec")
+)
 }
 \description{
 Transform object to stations simple feature (sf).

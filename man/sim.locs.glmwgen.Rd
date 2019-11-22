@@ -4,9 +4,16 @@
 \alias{sim.locs.glmwgen}
 \title{Simulates new weather trajectories in interpolated locations}
 \usage{
-sim.locs.glmwgen(object, nsim = 1, seed = NULL, start_date = NA,
-  end_date = NA, simulation_locations = NULL,
-  control = glmwgen:::glmwgen_simulation_control(), verbose = T)
+sim.locs.glmwgen(
+  object,
+  nsim = 1,
+  seed = NULL,
+  start_date = NA,
+  end_date = NA,
+  simulation_locations = NULL,
+  control = glmwgen:::glmwgen_simulation_control(),
+  verbose = T
+)
 }
 \arguments{
 \item{object}{A glmwgen model.}

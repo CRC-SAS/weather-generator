@@ -15,6 +15,10 @@ glmwgen_simulation_control <- function(nsim = 1, seed = NULL,
                 avbl_cores = avbl_cores))
 }
 
+
+#OBS:
+#se importa xts para que automap no tire el mensaje de sobre-escritura de metodos entre zoo y xts
+
 #' @title Simulates new weather trajectories in stations
 #' @description Simulates new weather trajectories.
 #' @param model A glmwgen model.
@@ -95,7 +99,9 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
         set.seed(control$seed)
 
     # Para ...
-    realizations_seeds <- ceiling(runif(min = 1, max = 10000000, n = control$nsim))
+    realizations_seeds <- NULL
+    if(!is.null(control$seed))
+        realizations_seeds <- ceiling(runif(min = 1, max = 10000000, n = control$nsim))
 
 
 
@@ -122,7 +128,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     }
 
     ## Make Cluster for mgcv::predict.bam
-    cluster <- parallel::makeCluster(control$avbl_cores)
+    # cluster <- parallel::makeCluster(control$avbl_cores)
 
 
 
@@ -157,9 +163,9 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     ## Interpolación de valores iniciales
     interpolated_data_start_date_prev <-
         glmwgen:::interpolate_month_day(model, simulation_points,
-                                        control$seed,
-                                        lubridate::month(start_date-1),
-                                        lubridate::day(start_date-1))
+                                        seed = control$seed,
+                                        month = lubridate::month(start_date-1),
+                                        day = lubridate::day(start_date-1))
 
 
     ###########################
@@ -190,8 +196,8 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     #######################################################
     ## Set the progress bar to know how long this will take
     pb <- progress::progress_bar$new(
-        format = paste(" realization: :r of ", control$nsim ," | day: :d of ", ndates,
-                       " | sim: :what | previous progress: [:bar] :percent (in :elapsed)"),
+        format = paste(" nsim: :r/", control$nsim ," | day: :d/", ndates,
+                       " | previous progress: :percent (in :elapsed)"),
         total = 100*control$nsim*ndates, clear = FALSE, width= 80, show_after = 0)
 
 
@@ -205,7 +211,8 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
     ######
     ##
-    ctrl_sim <- foreach::foreach(r = 1:control$nsim, .combine = dplyr::bind_rows, .packages = c('dplyr')) %dopar% {
+    #microbenchmark::microbenchmark({
+    ctrl_sim <- foreach::foreach(r = 1:control$nsim, .combine = dplyr::bind_rows, .export = "pd", .packages = c('dplyr')) %do% {
 
 
         ###########################################################################
@@ -244,13 +251,13 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             current_month <- lubridate::month(simulation_dates$date[d])
 
 
-            ############################
-            ## Ocurrencia de lluvia ----
+            #######################################
+            ## Ocurrencia de lluvia (prcp_occ) ----
 
             # Simulacion de ocurrencia de lluvia
             SIMocc <- mgcv::predict.bam(model$fitted_models$prcp_occ_fit,
                                         newdata = simulation_points.d,
-                                        cluster = cluster,
+                                        #cluster = cluster,  # no mejora mucho el tiempo
                                         newdata.guaranteed = TRUE) # una optimizacion
 
             # Raster con los valores "climáticos"
@@ -264,15 +271,15 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
                 grid = tibble_of_points,
                 month_number = current_month,
                 var_name = 'prcp',
-                coord_ref_system = model$crs_used_to_fit) %>%
+                coord_ref_system = model$crs_used_to_fit,
+                seed = realizations_seeds[d]) %>%
                 glmwgen:::sf2raster('prcp_residuals')
 
             # Raster con los valores simulados
             SIMocc_points.d <- SIMocc_points_climate.d + SIMocc_points_noise.d
 
-            # Raster de ocurrencia de lluvia
-            SIMocc_points.d <- raster::reclassify(SIMocc_points.d,
-                                                  clasification_matrix)
+            # Raster con los valores simulados reclasificados a 0 y/o 1
+            SIMocc_points.d <- raster::reclassify(SIMocc_points.d, clasification_matrix)
 
             # Agregar valores de ocurrencia a la grilla de simulacion
             simulation_points.d <- simulation_points.d %>%
@@ -282,16 +289,161 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
 
 
-            ###################
-            ## Temperatura ----
+            ########################################
+            ## Temperatura (ambas, tmax y tmin) ----
+
+            #  Raster con los valores de "ruido" para días secos
+            temperature_random_fields_dry <-
+                glmwgen:::random_field_noise_temperature(
+                    month_parameters = month_params,
+                    month_number = current_month,
+                    grid = tibble_of_points,
+                    var_name = c('tmax_dry', 'tmin_dry'),
+                    coord_ref_system = sf::st_crs(model$crs_used_to_fit),
+                    seed = realizations_seeds[d])
+
+            # Procesamiento de residuos para dias secos
+            rasters_secos.d <- purrr::map(
+                .x = c("tmin", "tmax"),
+                .f = function(variable, objeto_sf) {
+                    return (glmwgen:::sf2raster(objeto_sf, paste0(variable, '_residuals')))
+                }, objeto_sf = temperature_random_fields_dry
+            )
+            names(rasters_secos.d) <- c("tmin", "tmax")
+
+            # Raster con los valores de "ruido" para días lluviosos
+            temperature_random_fields_wet <-
+                glmwgen:::random_field_noise_temperature(
+                    month_parameters = month_params,
+                    month_number = current_month,
+                    grid = tibble_of_points,
+                    var_name = c('tmax_wet', 'tmin_wet'),
+                    coord_ref_system = sf::st_crs(model$crs_used_to_fit),
+                    seed = realizations_seeds[d])
+
+            # Procesamiento de residuos para dias humedos
+            rasters_humedos.d <- purrr::map(
+                .x = c("tmin", "tmax"),
+                .f = function(variable, objeto_sf) {
+                    return (glmwgen:::sf2raster(objeto_sf, paste0(variable, '_residuals')))
+                }, objeto_sf = temperature_random_fields_wet
+            )
+            names(rasters_humedos.d) <- c("tmin", "tmax")
+
+            #Ahora vamos a generar 2 rasters: uno para tmax y otro para tmin
+            #Cada raster tiene los residuos de las variables correspondientes
+            #considerando la ocurrencia de dia seco o humedo
+            SIMmax_points_noise.d <-
+                glmwgen:::ensamblar_raster_residuos(rasters_humedos.d$tmax, rasters_secos.d$tmax, SIMocc_points.d)
+            SIMmin_points_noise.d <-
+                glmwgen:::ensamblar_raster_residuos(rasters_humedos.d$tmin, rasters_secos.d$tmin, SIMocc_points.d)
+
+
+
+            #################################
+            ## Temperatura Máxima (tmax) ----
+
+            # Simulacion de temperatura máxima
+            SIMmax <- mgcv::predict.bam(model$fitted_models$tmax_fit,
+                                        newdata = simulation_points.d,
+                                        #cluster = cluster,  # no mejora mucho el tiempo
+                                        newdata.guaranteed = TRUE) # una optimizacion
+
+            # Raster con los valores "climáticos"
+            SIMmax_points_climate.d <- simulation_points %>%
+                dplyr::mutate(SIMmax = !!SIMmax) %>%
+                glmwgen:::sf2raster('SIMmax')
+
+            # Raster con los valores simulados
+            SIMmax_points.d <- SIMmax_points_climate.d + SIMmax_points_noise.d
+
+            # Agregar valores de temperatura mínima a los puntos de simulación
+            simulation_points.d <- simulation_points.d %>%
+                dplyr::mutate(tmax = raster::extract(SIMmax_points.d, simulation_points))
+
+
+
+            #################################
+            ## Temperatura Mínima (tmin) ----
+
+            # Simulacion de temperatura mínima
+            SIMmin <- mgcv::predict.bam(model$fitted_models$tmin_fit,
+                                        newdata = simulation_points.d,
+                                        #cluster = cluster,  # no mejora mucho el tiempo
+                                        newdata.guaranteed = TRUE) # una optimizacion
+
+            # Raster con los valores "climáticos"
+            SIMmin_points_climate.d <- simulation_points %>%
+                dplyr::mutate(SIMmin = !!SIMmin) %>%
+                glmwgen:::sf2raster('SIMmin')
+
+            # Raster con los valores simulados
+            SIMmin_points.d <- SIMmin_points_climate.d + SIMmin_points_noise.d
+
+            # Agregar valores de temperatura mínima a los puntos de simulación
+            simulation_points.d <- simulation_points.d %>%
+                dplyr::mutate(tmin = raster::extract(SIMmin_points.d, simulation_points))
+
+
+
+            ########################################
+            ## Montos de lluvia (prcp_amt) ----
+
+            # Filtrar el modelo a usar por el mes en curso
+            prcp_amt_fit <- model$fitted_models$prcp_amt_fit[[current_month]]
+
+            # Estimación del parametro de forma
+            alphaamt  <- MASS::gamma.shape(prcp_amt_fit)$alpha
+            # Estimación de los parametros de escala
+            betaamt <- base::exp(mgcv::predict.bam(prcp_amt_fit,
+                                   newdata = simulation_points.d,
+                                   #cluster = cluster,  # no mejora mucho el tiempo
+                                   newdata.guaranteed = TRUE))/alphaamt
+
+            # Simulacion de montos
+            SIMamt <- stats::qgamma(stats::pnorm(raster::extract(SIMocc_points_noise.d, simulation_points)),
+                             shape = rep(alphaamt, length(betaamt)), scale = betaamt)
+
+            # Raster con los valores "climáticos"
+            SIMamt_points_climate.d <- simulation_points %>%
+                dplyr::mutate(SIMamt = !!SIMamt) %>%
+                glmwgen:::sf2raster('SIMamt')
+
+            # Enmascarar pixeles sin ocurrencia de lluvia
+            SIMamt_points.d <- SIMamt_points_climate.d * SIMocc_points.d
+
+            # Agregar valores de los montos de prcp a los puntos de simulación
+            simulation_points.d <- simulation_points.d %>%
+                dplyr::mutate(prcp_amt = raster::extract(SIMamt_points.d, simulation_points))
+
+
+
+            ####################################################################
+            ## Preparar simulation_points.d para la simulación del siguiente día
+
+            simulation_points.d <- simulation_points.d %>%
+                dplyr::mutate(date = simulation_dates$date[d+1],
+                              doy = lubridate::yday(date),
+                              time = as.numeric(date)/1000,
+                              prcp_occ = NA_integer_,
+                              tipo_dia = NA_character_,
+                              prcp_amt = NA_real_,
+                              tmax = NA_real_,
+                              tmin = NA_real_,
+                              prcp_occ_prev = raster::extract(SIMocc_points.d, simulation_points),
+                              tipo_dia_prev = factor(prcp_occ_prev, levels = c('0', '1'),
+                                                     labels = c("Seco", "Lluvioso")),
+                              tmax_prev = raster::extract(SIMmax_points.d, simulation_points),
+                              tmin_prev = raster::extract(SIMmin_points.d, simulation_points))
+
 
 
             ###########################
             ## Devolver resultados ----
             return (tibble::tibble(date = simulation_dates$date[d],
                                    raster_prcp = list(SIMocc_points.d),
-                                   raster_tmax = list(),
-                                   raster_tmin = list()))
+                                   raster_tmax = list(SIMmax_points.d),
+                                   raster_tmin = list(SIMmin_points.d)))
 
         }
 
@@ -300,18 +452,25 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
         ## Control de tiempo de ejecución
         tiempo.rasters <- proc.time() - t.rasters
 
-
-        ########################################
-        ## Guardar realizacion en archivo NetCDF
-        glmwgen:::GuardarRealizacionNetCDF('prueba.nc',
-                                           numero_realizacion = r,
-                                           sim_dates = simulation_dates$date,
-                                           raster_tmax = rasters$raster_tmax,
-                                           raster_tmin = rasters$raster_tmin,
-                                           raster_prcp = rasters$raster_prcp)
-
-        return (tibble::tibble(nsim = r, tiempo = list(tiempo.rasters)))
+        return (tibble::tibble(nsim = r, rasters = list(rasters),
+                               tiempo = list(tiempo.rasters)))
     }
+    #}, times = 10)
+
+
+    ########################################
+    ## Guardar realizacion en archivo NetCDF
+    purrr::walk2(
+        ctrl_sim %>% dplyr::pull(nsim),
+        ctrl_sim %>% dplyr::pull(rasters),
+        function(r, rasters) {
+            glmwgen:::GuardarRealizacionNetCDF('prueba.nc',
+                                               numero_realizacion = r,
+                                               sim_dates = simulation_dates$date,
+                                               raster_tmax = rasters$raster_tmax,
+                                               raster_tmin = rasters$raster_tmin,
+                                               raster_prcp = rasters$raster_prcp)
+        })
 
 
     #################################
@@ -341,8 +500,8 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
 
     ## Remive luster for mgcv
-    if (!is.null(cluster))
-        parallel::stopCluster(cluster)
+    # if (!is.null(cluster))
+    #     parallel::stopCluster(cluster)
 
 
     ## Remove parallelization conf, if necessary

@@ -41,7 +41,8 @@ interpolate_month_day <- function(model, simulation_points, seed, month, day) {
     prcp_occ_interpolation <-
         automap::autoKrige(prcp_occ~1,
                            data_to_be_interpolated %>% sf::as_Spatial(),
-                           simulation_points %>% sf::as_Spatial()) %>%
+                           simulation_points %>% sf::as_Spatial(),
+                           debug.level = 0) %>%
         sf::st_as_sf(x = .$krige_output, crs = sf::st_crs(simulation_points)) %>%
         dplyr::mutate(noise = variograms_for_initial_values$random_fields$prcp,
                       prcp_occ = as.numeric(var1.pred + noise > 0))
@@ -50,7 +51,8 @@ interpolate_month_day <- function(model, simulation_points, seed, month, day) {
     tmax_interpolation <-
         automap::autoKrige(tmax~1,
                            data_to_be_interpolated %>% sf::as_Spatial(),
-                           simulation_points %>% sf::as_Spatial()) %>%
+                           simulation_points %>% sf::as_Spatial(),
+                           debug.level = 0) %>%
         sf::st_as_sf(x = .$krige_output, crs = sf::st_crs(simulation_points)) %>%
         dplyr::mutate(noise = variograms_for_initial_values$random_fields$tmax,
                       tmax = var1.pred + noise)
@@ -59,7 +61,8 @@ interpolate_month_day <- function(model, simulation_points, seed, month, day) {
     tmin_interpolation <-
         automap::autoKrige(tmin~1,
                            data_to_be_interpolated %>% sf::as_Spatial(),
-                           simulation_points %>% sf::as_Spatial()) %>%
+                           simulation_points %>% sf::as_Spatial(),
+                           debug.level = 0) %>%
         sf::st_as_sf(x = .$krige_output, crs = sf::st_crs(simulation_points)) %>%
         dplyr::mutate(noise = variograms_for_initial_values$random_fields$tmin,
                       tmin = var1.pred + noise)

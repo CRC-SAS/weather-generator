@@ -114,6 +114,11 @@ generate_month_params <- function(residuals, observed_climate, stations) {
             tmin_params_wet <- stats::optim(par = c(sill_initial_value_wet, max(distance_matrix)), fn = glmwgen:::partially_apply_LS(tmin_vario_wet, distance_matrix, base_p = c(0)))$par
             tmin_params_wet <- c(0, tmin_params_wet)
 
+            # Save correlation between temperature residues
+            correlation <- stats::cor(month_residuals$tmax_residuals,
+                                      month_residuals$tmin_residuals,
+                                      use = 'complete.obs')
+
             # Guardar resultados
             variogram_parameters <- list(prcp = prcp_params,
                                          tmax_dry = tmax_params_dry,
@@ -136,7 +141,8 @@ generate_month_params <- function(residuals, observed_climate, stations) {
                     tmin_dry = tmin_vario_dry,
                     tmin_wet = tmin_vario_wet,
                     prcp = prcp_cor
-                )
+                ),
+                correlation = correlation
             ))
         }
     )

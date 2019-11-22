@@ -4,8 +4,13 @@
 \alias{sim.glmwgen}
 \title{Simulates new weather trajectories in stations}
 \usage{
-sim.glmwgen(model, simulation_locations, start_date, end_date,
-  control = glmwgen:::glmwgen_simulation_control())
+sim.glmwgen(
+  model,
+  simulation_locations,
+  start_date,
+  end_date,
+  control = glmwgen:::glmwgen_simulation_control()
+)
 }
 \arguments{
 \item{model}{A glmwgen model.}
