@@ -85,6 +85,44 @@ random_field_noise_prcp <- function(month_parameters, grid, month_number, var_na
 }
 
 
+# ...
+not_spatially_correlated_random_field_noise_temperature <- function(models_residuals, simulation_dates, realizations_seeds, actual_realization) {
+
+    models_residuals <- models_residuals %>%
+        dplyr::mutate(month = lubridate::month(date))
+
+    simulation_dates <- simulation_dates %>%
+        dplyr::mutate(month = lubridate::month(date))
+
+    ruidos_aleatorios <- tibble::tibble(station = integer(), date = lubridate::ymd(), tipo_dia = factor(),
+                                        tmax_noise = double(), tmin_noise = double())
+
+    for ( station_id in unique(models_residuals$station_id) ) {
+        for ( mes in unique(lubridate::month(simulation_dates$date)) ) {
+            for ( tipo_dia in unique(models_residuals %>% tidyr::drop_na(tipo_dia) %>% dplyr::pull(tipo_dia)) ) {
+
+                set.seed(realizations_seeds[actual_realization]) # para cuando necesitamos repetir resultados
+
+                ruidos_teperatura <- MASS::mvrnorm(n = nrow(simulation_dates %>% dplyr::filter(month == mes)),
+                                                   mu = models_residuals[[station_id]][[mes]][[prcp]][["media"]],
+                                                   Sigma = models_residuals[[station_id]][[mes]][[prcp]][["matriz.covarianza"]],
+                                                   empirical = TRUE) %>%
+                    magrittr::set_colnames(c("tmax_noise", "tmin_noise"))
+
+                ruidos_aleatorios <- ruidos_aleatorios %>%
+                    dplyr::bind_rows(tibble::tibble(
+                        station   = as.integer(station_id),
+                        date      = simulation_dates %>% dplyr::filter(month == mes) %>% dplyr::pull(date),
+                        tipo_dia  = tipo_dia,
+                        tmax_noise  = ruidos_teperatura[,"tmax_noise"],
+                        tmin_noise  = ruidos_teperatura[,"tmin_noise"]))
+            }
+        }
+    }
+    return (ruidos_aleatorios)
+}
+
+
 ##############
 ## OLD METHODS
 

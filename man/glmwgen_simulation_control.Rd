@@ -4,7 +4,13 @@
 \alias{glmwgen_simulation_control}
 \title{Simulations control configuration}
 \usage{
-glmwgen_simulation_control(nsim = 1, seed = NULL, avbl_cores = 2)
+glmwgen_simulation_control(
+  nsim = 1,
+  seed = NULL,
+  avbl_cores = 2,
+  bbox_offset = 1e+05,
+  use_spatially_correlated_noise = T
+)
 }
 \arguments{
 \item{nsim}{number of response vectors to simulate. Defaults to 1.}
