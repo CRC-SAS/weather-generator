@@ -9,6 +9,7 @@ glmwgen_simulation_control(
   seed = NULL,
   avbl_cores = 2,
   bbox_offset = 1e+05,
+  sim_loc_as_grid = T,
   use_spatially_correlated_noise = T
 )
 }

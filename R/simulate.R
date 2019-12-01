@@ -17,21 +17,22 @@
 #' @param avbl_cores ...
 #' @export
 glmwgen_simulation_control <- function(nsim = 1, seed = NULL, avbl_cores = 2,
-                                       bbox_offset = 100000,
+                                       bbox_offset = 100000, sim_loc_as_grid = T,
                                        use_spatially_correlated_noise = T) {
 
     prcp_noise_genrating_function = glmwgen:::random_field_noise_prcp
     temperature_noise_genrating_function = glmwgen:::random_field_noise_temperature
 
-    # if(!use_spatially_correlated_noise) {
-    #     prcp_noise_genrating_function = glmwgen:::random_field_noise_prcp
-    #     temperature_noise_genrating_function = glmwgen:::not_spatially_correlated_random_field_noise_temperature
-    # }
+    if(!use_spatially_correlated_noise) {
+        prcp_noise_generating_function = glmwgen:::not_spatially_correlated_random_field_noise_prcp
+        temperature_noise_generating_function = glmwgen:::not_spatially_correlated_random_field_noise_temperature
+    }
 
-    return(list(nsim = nsim, seed = seed, avbl_cores = avbl_cores, bbox_offset = bbox_offset,
+    return(list(nsim = nsim, seed = seed, avbl_cores = avbl_cores,
+                bbox_offset = bbox_offset, sim_loc_as_grid = sim_loc_as_grid,
                 use_spatially_correlated_noise = use_spatially_correlated_noise,
-                prcp_noise_genrating_function = prcp_noise_genrating_function,
-                temperature_noise_genrating_function = temperature_noise_genrating_function))
+                prcp_noise_generating_function = prcp_noise_generating_function,
+                temperature_noise_generating_function = temperature_noise_generating_function))
 }
 
 
@@ -39,7 +40,7 @@ glmwgen_simulation_control <- function(nsim = 1, seed = NULL, avbl_cores = 2,
 #' @title Simulates new weather trajectories in stations
 #' @description Simulates new weather trajectories.
 #' @param model A glmwgen model.
-#' @param simulation_locations a SpatialPoints object with the points at which weather should be simulated.
+#' @param simulation_locations a sf object with the points at which weather should be simulated.
 #'          If not set, the locations used to fit the model will be used.
 #' @param start_date a start date in text format (will be converted using as.Date) or a date object.
 #' @param end_date an end date in text format (will be converted using as.Date) or a date object.
@@ -159,7 +160,6 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             #doMC::registerDoMC(control$avbl_cores)
             cluster <- parallel::makeCluster(control$avbl_cores)
             doSNOW::registerDoSNOW(cluster)
-            #doParallel::registerDoParallel(cl)
         }
     }
 
@@ -175,21 +175,44 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     simulation_dates <-
         tibble::tibble(date = seq.Date(from = as.Date(start_date),
                                        to = as.Date(end_date),
-                                       by = "days"))
+                                       by = "days")) %>%
+        dplyr::mutate(month = lubridate::month(date))
     ## Numbers of days to be simulated
     ndates <- nrow(simulation_dates)
 
 
-    ####################################
+    ##################################
     ## Matriz con los puntos a simular
     simulation_points <- simulation_locations %>%
         sf::st_transform(model$crs_used_to_fit) %>%
         dplyr::mutate(point_id = dplyr::row_number(),
                       longitude = sf::st_coordinates(geometry)[,'X'],
                       latitude  = sf::st_coordinates(geometry)[,'Y'])
-    ## Tibble to be used as grid for many functions
-    tibble_of_points <- tibble::as_tibble(simulation_points) %>%
-        dplyr::select(longitude, latitude)
+
+
+    ##################################
+    ## Raster con los puntos a simular
+    if (control$sim_loc_as_grid) {
+        pnts_dist_matrix  <- glmwgen:::make_distance_matrix(simulation_locations)
+        min_dist_btw_pnts <- floor(min(pnts_dist_matrix[upper.tri(pnts_dist_matrix)]))
+        raster_resolution <- c(min_dist_btw_pnts, min_dist_btw_pnts)
+        simulation_raster <- raster::rasterFromXYZ(
+            xyz = sf::st_coordinates(simulation_points),
+            res = raster_resolution,
+            crs = model$crs_used_to_fit)
+    }
+    if(!control$sim_loc_as_grid) {
+        stns_dist_matrix  <- glmwgen:::make_distance_matrix(model$stations)
+        min_dist_btw_stns <- floor(min(stns_dist_matrix[upper.tri(stns_dist_matrix)]))
+        raster_resolution <- c(min_dist_btw_stns, min_dist_btw_stns)
+        simulation_raster <- raster::raster(
+            xmn = sl_bbox_offset[['xmin']],
+            xmx = sl_bbox_offset[['xmax']],
+            ymn = sl_bbox_offset[['ymin']],
+            ymx = sl_bbox_offset[['ymax']],
+            resolution = raster_resolution,
+            crs = model$crs_used_to_fit)
+    }
 
 
     #####################################
@@ -202,22 +225,18 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
                                             day = lubridate::day(start_date-1))
 
 
-    ###########################
-    ## Global months paramteres
+    #########################################
+    ## Global paramteres for noise generators
     if(control$use_spatially_correlated_noise)
-        month_params <- glmwgen:::generate_month_params(
+        gen_noise_params <- glmwgen:::generate_month_params(
             residuals = model$models_residuals,
             observed_climate = model$models_data,
             stations = model$stations)
-
-
-    ##############################
-    ## Global residuals statistics
     if(!control$use_spatially_correlated_noise)
-        residuals_statistics <- glmwgen:::generate_residuals_statistics(
-            residuals = model$models_residuals,
-            observed_climate = model$models_data
-        )
+        gen_noise_params <- glmwgen:::generate_residuals_statistics(
+            models_residuals = model$models_residuals)
+
+
 
     ############################################
     ## Matriz de clasificacion de días lluviosos
@@ -241,7 +260,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     pb <- progress::progress_bar$new(
         format = paste(" realization: :r /", control$nsim ,
                        " | progress: :percent (in :elapsed) | eta: :eta"),
-        total = control$nsim, clear = TRUE, width= 80, show_after = 0)
+        total = control$nsim, clear = FALSE, width= 80, show_after = 0)
 
     invisible(pb$tick(0, tokens = list(r = 1)))
 
@@ -268,6 +287,9 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
         ## Para que las funciones de RandomFields devuelvan lo esperado!! ----
         RandomFields::RFoptions(spConform=FALSE)
 
+        ##################################################
+        ## Para cuando necesitamos repetir resultados ----
+        set.seed(realizations_seeds[actual_realization])
 
         #################################################################################
         ## Creacion de los puntos de simulacion para el dia i (eq. daily covariates) ----
@@ -332,19 +354,18 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             #microbenchmark::microbenchmark({
             SIMocc_points_climate.d <- simulation_points %>%
                 dplyr::mutate(SIMocc = !!SIMocc) %>%
-                glmwgen:::sf2raster('SIMocc')
+                glmwgen:::sf2raster('SIMocc', simulation_raster)
             #}, times = 10) # 8 milisegundos
 
             # Raster con los valores de "ruido"
             #microbenchmark::microbenchmark({
             SIMocc_points_noise.d <- glmwgen:::random_field_noise_prcp(
-                month_parameters = month_params,
-                grid = tibble_of_points,
+                simulation_points = simulation_points,
+                month_parameters = gen_noise_params,
                 month_number = current_month,
                 var_name = 'prcp',
-                coord_ref_system = model$crs_used_to_fit,
                 seed = realizations_seeds[d]) %>%
-                glmwgen:::sf2raster('prcp_residuals')
+                glmwgen:::sf2raster('prcp_residuals', simulation_raster)
             #}, times = 10) # 45 milisegundos
 
             # Raster con los valores simulados
@@ -374,11 +395,10 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             #microbenchmark::microbenchmark({
             temperature_random_fields_dry <-
                 glmwgen:::random_field_noise_temperature(
-                    month_parameters = month_params,
+                    simulation_points = simulation_points,
+                    gen_noise_params = gen_noise_params,
                     month_number = current_month,
-                    grid = tibble_of_points,
-                    var_name = c('tmax_dry', 'tmin_dry'),
-                    coord_ref_system = sf::st_crs(model$crs_used_to_fit),
+                    selector = c('tmax_dry', 'tmin_dry'),
                     seed = realizations_seeds[d])
             #}, times = 10) # 180 milisegundos
 
@@ -399,11 +419,10 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             #microbenchmark::microbenchmark({
             temperature_random_fields_wet <-
                 glmwgen:::random_field_noise_temperature(
-                    month_parameters = month_params,
+                    simulation_points = simulation_points,
+                    gen_noise_params = gen_noise_params,
                     month_number = current_month,
-                    grid = tibble_of_points,
-                    var_name = c('tmax_wet', 'tmin_wet'),
-                    coord_ref_system = sf::st_crs(model$crs_used_to_fit),
+                    selector = c('tmax_wet', 'tmin_wet'),
                     seed = realizations_seeds[d])
             #}, times = 10) # 180 milisegundos
 
@@ -641,6 +660,10 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     #########################
     ## FINALIZAR EJECUCIÓN ##
     #########################
+
+
+    ## Cerrar progress bar
+    pb$terminate()
 
 
     ## Remove parallelization conf, if necessary

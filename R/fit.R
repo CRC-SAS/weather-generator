@@ -527,6 +527,10 @@ calibrate.glmwgen <- function(climate, stations, seasonal_climate = NULL,
     #########################
 
 
+    ## Cerrar progress bar
+    pb$terminate()
+
+
      ## Remive luster for mgcv
     if (!is.null(cluster))
         parallel::stopCluster(cluster)

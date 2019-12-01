@@ -1,25 +1,27 @@
 
 
 # Definicion de funcion para la generación de campos gaussianos para ocurrencia de temperatura
-random_field_noise_temperature <- function(month_parameters, grid, month_number, var_name, coord_ref_system, seed) {
+random_field_noise_temperature <- function(simulation_points, gen_noise_params, month_number, selector, seed) {
 
     ## OBS:
     # Estamos trabajando con coordenadas métricas, sin embargo,
     # el paquete RandomFields trabaja mejor en metros, por la tanto,
     # pasamos grid a kilometros, dividiendo cada columna por 1000!!
-    grid <- grid %>%
+    grid <- simulation_points %>%
+        dplyr::select(longitude, latitude) %>%
+        sf::st_drop_geometry() %>%
         dplyr::mutate(longitude = longitude / 1000,
                       latitude = latitude / 1000)
 
     # Extraer parametros correspondientes a la variable y mes determinado
-    month_params_vario_tmax <- month_parameters[[month_number]]$variogram_parameters[[var_name[1]]]
-    month_params_vario_tmin <- month_parameters[[month_number]]$variogram_parameters[[var_name[2]]]
+    month_params_vario_tmax <- gen_noise_params[[month_number]]$variogram_parameters[[selector[1]]]
+    month_params_vario_tmin <- gen_noise_params[[month_number]]$variogram_parameters[[selector[2]]]
 
     # Crear modelo con los parametros
     model <- RandomFields::RMbiwm(nudiag = c(0.5, 0.5),
                                   nured12 = 1,
                                   cdiag = c(month_params_vario_tmax[2], month_params_vario_tmin[2]),
-                                  rhored = month_parameters[[month_number]]$correlation,
+                                  rhored = gen_noise_params[[month_number]]$correlation,
                                   s = c(month_params_vario_tmax[3],
                                         month_params_vario_tmin[3],
                                         0.5*sum(month_params_vario_tmax[3], month_params_vario_tmin[3])))
@@ -31,10 +33,7 @@ random_field_noise_temperature <- function(month_parameters, grid, month_number,
     # campos.simulados.df <- RandomFields::RFspDataFrame2conventional(campos_simulados, data.frame = T)
 
     # Crear objeto sf (se vuelve, longitude y latitude, a metros)
-    campo <- grid %>%
-        dplyr::mutate(longitude = longitude*1000, latitude = latitude*1000) %>%
-        sf::st_as_sf(coords = c('longitude', 'latitude')) %>%
-        sf::st_set_crs(value = coord_ref_system) %>%
+    campo <- simulation_points %>%
         dplyr::mutate(id = dplyr::row_number(),
                       tmax_residuals = campos_simulados[, 1],
                       tmin_residuals = campos_simulados[, 2]) %>%
@@ -47,18 +46,20 @@ random_field_noise_temperature <- function(month_parameters, grid, month_number,
 
 
 # Definicion de funcion para la generación de campos gaussianos para ocurrencia de precipitacion
-random_field_noise_prcp <- function(month_parameters, grid, month_number, var_name, coord_ref_system, seed) {
+random_field_noise_prcp <- function(simulation_points, gen_noise_params, month_number, selector, seed) {
 
     ## OBS:
     # Estamos trabajando con coordenadas métricas, sin embargo,
     # el paquete RandomFields trabaja mejor en metros, por la tanto,
     # pasamos grid a kilometros, dividiendo cada columna por 1000!!
-    grid <- grid %>%
+    grid <- simulation_points %>%
+        dplyr::select(longitude, latitude) %>%
+        sf::st_drop_geometry() %>%
         dplyr::mutate(longitude = longitude / 1000,
                       latitude = latitude / 1000)
 
     # Extraer parametros correspondientes a la variable y mes determinado
-    month_params_vario_prcp <- month_parameters[[month_number]]$variogram_parameters[[var_name]]
+    month_params_vario_prcp <- gen_noise_params[[month_number]]$variogram_parameters[[selector]]
 
     # Crear modelo con los parametros
     model <-RandomFields::RMexp(var = month_params_vario_prcp[[2]],
@@ -71,10 +72,7 @@ random_field_noise_prcp <- function(month_parameters, grid, month_number, var_na
     # campos.simulados.df <- RandomFields::RFspDataFrame2conventional(campos_simulados, data.frame = T)
 
     # Crear objeto sf
-    campo <- grid %>%
-        dplyr::mutate(longitude = longitude*1000, latitude = latitude*1000) %>%
-        sf::st_as_sf(coords = c('longitude', 'latitude')) %>%
-        sf::st_set_crs(value = coord_ref_system) %>%
+    campo <- simulation_points %>%
         dplyr::mutate(id = dplyr::row_number(),
                       prcp_residuals = campos_simulados) %>%
         dplyr::select(prcp_residuals)
@@ -86,42 +84,45 @@ random_field_noise_prcp <- function(month_parameters, grid, month_number, var_na
 
 
 # ...
-not_spatially_correlated_random_field_noise_temperature <- function(models_residuals, simulation_dates, realizations_seeds, actual_realization) {
+not_spatially_correlated_random_field_noise_temperature <- function(simulation_points, gen_noise_params, month_number, selector, seed) {
 
-    models_residuals <- models_residuals %>%
-        dplyr::mutate(month = lubridate::month(date))
+    # para repetir resultados
+    set.seed(seed)
 
-    simulation_dates <- simulation_dates %>%
-        dplyr::mutate(month = lubridate::month(date))
+    campos_simulados <- gen_noise_params %>%
+        dplyr::filter(month == month_number, tipo_dia == selector) %>%
+        dplyr::rowwise() %>%
+        dplyr::mutate(ruidos =
+            list(MASS::mvrnorm(mu = c(mean.tmax_residuals, mean.tmin_residuals),
+                               Sigma = matrix(c(var.tmax_residuals, cov.residuals, cov.residuals, var.tmin_residuals), 2, 2),
+                               empirical = FALSE) %>% #Alessio, falla con TRUE, podemos usar FALSE??
+                     magrittr::set_names(c("tmax_noise", "tmin_noise"))
+                 )) %>%
+        dplyr::mutate(tmax_noise = ruidos["tmax_noise"],
+                      tmin_noise = ruidos["tmin_noise"])
 
-    ruidos_aleatorios <- tibble::tibble(station = integer(), date = lubridate::ymd(), tipo_dia = factor(),
-                                        tmax_noise = double(), tmin_noise = double())
+    # Crear objeto sf
+    campo <- simulation_points %>%
+        dplyr::left_join(campos_simulados, by = "station_id") %>%
+        dplyr::rename(tmax_residuals = tmax_noise, tmin_residuals = tmin_noise) %>%
+        dplyr::select(tmax_residuals, tmin_residuals)
 
-    for ( station_id in unique(models_residuals$station_id) ) {
-        for ( mes in unique(lubridate::month(simulation_dates$date)) ) {
-            for ( tipo_dia in unique(models_residuals %>% tidyr::drop_na(tipo_dia) %>% dplyr::pull(tipo_dia)) ) {
-
-                set.seed(realizations_seeds[actual_realization]) # para cuando necesitamos repetir resultados
-
-                ruidos_teperatura <- MASS::mvrnorm(n = nrow(simulation_dates %>% dplyr::filter(month == mes)),
-                                                   mu = models_residuals[[station_id]][[mes]][[prcp]][["media"]],
-                                                   Sigma = models_residuals[[station_id]][[mes]][[prcp]][["matriz.covarianza"]],
-                                                   empirical = TRUE) %>%
-                    magrittr::set_colnames(c("tmax_noise", "tmin_noise"))
-
-                ruidos_aleatorios <- ruidos_aleatorios %>%
-                    dplyr::bind_rows(tibble::tibble(
-                        station   = as.integer(station_id),
-                        date      = simulation_dates %>% dplyr::filter(month == mes) %>% dplyr::pull(date),
-                        tipo_dia  = tipo_dia,
-                        tmax_noise  = ruidos_teperatura[,"tmax_noise"],
-                        tmin_noise  = ruidos_teperatura[,"tmin_noise"]))
-            }
-        }
-    }
-    return (ruidos_aleatorios)
+    return (campo)
 }
 
+
+not_spatially_correlated_random_field_noise_prcp <- function(simulation_points, gen_noise_params, month_number, selector, seed) {
+
+    # para repetir resultados
+    set.seed(seed)
+
+    # Crear objeto sf
+    campo <- simulation_points %>% dplyr::rowwise() %>%
+        dplyr::mutate(prcp_residuals = stats::rnorm(n = 1, mean = 0, sd = 1)) %>%
+        dplyr::select(prcp_residuals)
+
+    return (campo)
+}
 
 ##############
 ## OLD METHODS

@@ -1,12 +1,17 @@
 
 # Funcion para pasar de objeto SF a raster
-sf2raster <- function(objeto_sf, variable) {
-    # Genero data frame con las coordenadas del objeto SF
-    raster_objeto <- data.frame(sf::st_coordinates(objeto_sf)) %>%
-        # Agrego una variable Z que corresponda a la variable de interes
-        dplyr::mutate(z = dplyr::pull(objeto_sf, !!variable)) %>%
-        # Transformo data frame a raster
-        raster::rasterFromXYZ(.)
+sf2raster <- function(objeto_sf, variable, raster=NULL) {
+    if (is.null(raster)) {
+        # Genero data frame con las coordenadas del objeto SF
+        raster_objeto <- data.frame(sf::st_coordinates(objeto_sf)) %>%
+            # Agrego una variable Z que corresponda a la variable de interes
+            dplyr::mutate(z = dplyr::pull(objeto_sf, !!variable)) %>%
+            # Transformo data frame a raster
+            raster::rasterFromXYZ(.)
+    } else {
+        # Genero data frame con las coordenadas del objeto SF
+        raster_objeto <- raster::rasterize(x=objeto_sf, y=raster, field=variable)
+    }
     # Defino CRS para el raster tomando el mismo del objeto SF
     raster::crs(raster_objeto) <- sf::st_crs(objeto_sf)$proj4string
     # Devuelvo el raster

@@ -1,54 +1,40 @@
 
-generate_residuals_statistics <- function(residuals) {
+generate_random_temperatura_noise <- function(residuals_statistics, simulation_dates) {
+    ruidos_aleatorios <- residuals_statistics %>%
+        dplyr::filter(month %in% unique(simulation_dates$month)) %>%
+        purrr::pmap_dfr(
+            function(station_id, month, tipo_dia, sd.tmax_residuals, sd.tmin_residuals,
+                     mean.tmax_residuals, mean.tmin_residuals, cov.residuals,
+                     var.tmax_residuals, var.tmin_residuals) {
+                ruidos <- MASS::mvrnorm(n = nrow(simulation_dates %>% dplyr::filter(month == !!month)),
+                                        mu = c(mean.tmax_residuals, mean.tmin_residuals),
+                                        Sigma = matrix(c(var.tmax_residuals, cov.residuals, cov.residuals, var.tmin_residuals), 2, 2),
+                                        empirical = TRUE) %>%
+                    magrittr::set_colnames(c("tmax_noise", "tmin_noise"))
+                tibble::tibble(station_id = as.integer(station_id),
+                               date       = simulation_dates %>% dplyr::filter(month == !!month) %>% dplyr::pull(date),
+                               tipo_dia   = tipo_dia,
+                               tmax_noise = ruidos[,"tmax_noise"],
+                               tmin_noise = ruidos[,"tmin_noise"])
+            })
+}
 
-    residuals_statistics <- residuals %>%
-        dplyr::select(station, date, month, tmax_residuals, tmin_residuals) %>%
-        dplyr::group_by(month) %>%
+generate_residuals_statistics <- function(models_residuals) {
+
+    residuals_statistics <- models_residuals %>% tidyr::drop_na() %>%
+        dplyr::select(station_id, date, tmax_residuals, tmin_residuals, tipo_dia) %>%
+        dplyr::mutate(month = lubridate::month(date)) %>%
+        dplyr::group_by(station_id, month) %>%
         dplyr::mutate(sd.tmax_residuals = stats::sd(tmax_residuals, na.rm = T),
                       sd.tmin_residuals = stats::sd(tmin_residuals, na.rm = T)) %>%
         dplyr::group_by(tipo_dia, add = T) %>%
         dplyr::mutate(mean.tmax_residuals = mean(tmax_residuals, na.rm = T),
                       mean.tmin_residuals = mean(tmin_residuals, na.rm = T),
-                      cov.residuals     = stats::cov(tmax_residuals, tmin_residuals, use = "pairwise.complete.obs"),
+                      cov.residuals       = stats::cov(tmax_residuals, tmin_residuals, use = "pairwise.complete.obs"),
                       var.tmax_residuals  = stats::var(tmax_residuals, na.rm = T),
-                      var.tmin_residuals  = stats::var(tmin_residuals, na.rm = T))
-
-    # residuals_statistics <- foreach::foreach(mes = 1:12, .multicombine = T) %dopar% {
-    #
-    #     # month_residuals <- residuals %>%
-    #     #     dplyr::filter(lubridate::month(date) == m) %>%
-    #     #     dplyr::mutate(year = lubridate::year(date)) %>%
-    #     #     dplyr::arrange(date, station_id)
-    #     #
-    #     # month_climate   <- observed_climate %>%
-    #     #     dplyr::filter(lubridate::month(date) == m) %>%
-    #     #     dplyr::mutate(year = lubridate::year(date)) %>%
-    #     #     dplyr::select(date, year, station_id, tmax, tmin, prcp, tipo_dia) %>%
-    #     #     tidyr::drop_na()
-    #
-    #     month_residuals <- statistics %>%
-    #         dplyr::filter(month == mes)
-    #
-    #     estadisticos.con.prcp <- month_residuals %>%
-    #         dplyr::filter(as.logical(prcp_occ)) %>%
-    #         dplyr::distinct(mean.tmax_residuals, mean.tmin_residuals,
-    #                         cov.residuals,
-    #                         var.tmax_residuals, var.tmin_residuals) %>%
-    #         list(., est.media = c(.$mean.tx_residuals, .$mean.tn_residuals),
-    #              est.mat.cov  = matrix(c(.$var.tx_residuals, .$cov.residuals, .$cov.residuals, .$var.tn_residuals), 2, 2)) %>%
-    #         rlang::set_names(c("estadisticos", "media", "matriz.covarianza"))
-    #
-    #     estadisticos.sin.prcp <- month_residuals %>%
-    #         dplyr::filter(!as.logical(prcp_occ)) %>%
-    #         dplyr::distinct(mean.tx_residuals, mean.tn_residuals,
-    #                         cov.residuals,
-    #                         var.tx_residuals, var.tn_residuals) %>%
-    #         list(., est.media = c(.$mean.tx_residuals, .$mean.tn_residuals),
-    #              est.mat.cov  = matrix(c(.$var.tx_residuals, .$cov.residuals, .$cov.residuals, .$var.tn_residuals), 2, 2)) %>%
-    #         rlang::set_names(c("estadisticos", "media", "matriz.covarianza"))
-    #
-    #     return (list(con.prcp = estadisticos.sin.prcp, sin.prcp = estadisticos.sin.prcp))
-    # }
+                      var.tmin_residuals  = stats::var(tmin_residuals, na.rm = T)) %>%
+        dplyr::select(-date, -tmax_residuals, -tmin_residuals) %>%
+        dplyr::ungroup() %>% dplyr::distinct()
 
     return (residuals_statistics)
 }

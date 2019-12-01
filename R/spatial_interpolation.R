@@ -22,8 +22,9 @@ interpolate_month_day <- function(model, simulation_points, seed, month, day) {
         glmwgen:::setting_variograms_for_initial_values(
             simulation_matrix = simulation_matrix,
             distance_matrix = distance_matrix,
-            grid = simulation_points %>% tibble::as_tibble() %>%
-                dplyr::select(longitude, latitude),
+            grid = simulation_points %>%
+                dplyr::select(longitude, latitude) %>%
+                sf::st_drop_geometry(),
             seed = seed,
             init_values_month = month,
             init_values_day = day)
