@@ -218,11 +218,16 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     #####################################
     ## Interpolación de valores iniciales
     if(control$use_spatially_correlated_noise)
-        interpolated_data_start_date_prev <-
+        start_date_prev_day_climatology <-
             glmwgen:::interpolate_month_day(model, simulation_points,
                                             seed = control$seed,
                                             month = lubridate::month(start_date-1),
                                             day = lubridate::day(start_date-1))
+    if(!control$use_spatially_correlated_noise)
+        start_date_prev_day_climatology <-
+            glmwgen:::start_climatology_month_day(model, simulation_points,
+                                                  month = lubridate::month(start_date-1),
+                                                  day = lubridate::day(start_date-1))
 
 
     #########################################
@@ -294,7 +299,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
         #################################################################################
         ## Creacion de los puntos de simulacion para el dia i (eq. daily covariates) ----
         simulation_points.d <- simulation_points %>%
-            sf::st_join(interpolated_data_start_date_prev) %>%
+            sf::st_join(start_date_prev_day_climatology) %>%
             dplyr::rename(prcp_occ_prev = prcp_occ,
                           tmax_prev = tmax,
                           tmin_prev = tmin) %>%
@@ -359,7 +364,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
             # Raster con los valores de "ruido"
             #microbenchmark::microbenchmark({
-            SIMocc_points_noise.d <- glmwgen:::random_field_noise_prcp(
+            SIMocc_points_noise.d <- control$prcp_noise_genrating_function(
                 simulation_points = simulation_points,
                 month_parameters = gen_noise_params,
                 month_number = current_month,
@@ -394,7 +399,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             #  Raster con los valores de "ruido" para días secos
             #microbenchmark::microbenchmark({
             temperature_random_fields_dry <-
-                glmwgen:::random_field_noise_temperature(
+                control$temperature_noise_generating_function(
                     simulation_points = simulation_points,
                     gen_noise_params = gen_noise_params,
                     month_number = current_month,
@@ -418,7 +423,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             # Raster con los valores de "ruido" para días lluviosos
             #microbenchmark::microbenchmark({
             temperature_random_fields_wet <-
-                glmwgen:::random_field_noise_temperature(
+                control$temperature_noise_generating_function(
                     simulation_points = simulation_points,
                     gen_noise_params = gen_noise_params,
                     month_number = current_month,

@@ -1,4 +1,19 @@
 
+start_climatology_month_day <- function(model, simulation_points, month, day) {
+
+    start_climatology <- model$start_climatology %>%
+        dplyr::filter(month == lubridate::month(start_date-1),
+                      day == lubridate::day(start_date-1)) %>%
+        dplyr::mutate(prcp_occ = as.integer(prcp > 0))
+
+    start_climatology_sf <- simulation_points %>%
+        dplyr::left_join(start_climatology, by = "station_id") %>%
+        dplyr::select(prcp_occ, tmax, tmin)
+
+    return (start_climatology_sf)
+
+}
+
 generate_random_temperatura_noise <- function(residuals_statistics, simulation_dates) {
     ruidos_aleatorios <- residuals_statistics %>%
         dplyr::filter(month %in% unique(simulation_dates$month)) %>%

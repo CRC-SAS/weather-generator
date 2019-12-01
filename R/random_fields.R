@@ -3,6 +3,12 @@
 # Definicion de funcion para la generación de campos gaussianos para ocurrencia de temperatura
 random_field_noise_temperature <- function(simulation_points, gen_noise_params, month_number, selector, seed) {
 
+    if (selector == "Lluvioso")
+        selector = c('tmax_wet', 'tmin_wet')
+
+    if (selector == "Seco")
+        selector = c('tmax_dry', 'tmin_dry')
+
     ## OBS:
     # Estamos trabajando con coordenadas métricas, sin embargo,
     # el paquete RandomFields trabaja mejor en metros, por la tanto,
@@ -88,6 +94,12 @@ not_spatially_correlated_random_field_noise_temperature <- function(simulation_p
 
     # para repetir resultados
     set.seed(seed)
+
+    if (all(endsWith(selector, "_wet")))
+        selector = "Lluvioso"
+
+    if (all(endsWith(selector, "_dry")))
+        selector = "Seco"
 
     campos_simulados <- gen_noise_params %>%
         dplyr::filter(month == month_number, tipo_dia == selector) %>%
