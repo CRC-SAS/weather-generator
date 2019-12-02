@@ -278,8 +278,9 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     ## Crear objeto para guardar los resultados
     glmwgen:::CrearNetCDF('prueba.nc',
                 num_realizations = control$nsim,
+                sim_dates = simulation_dates$date,
                 simulation_raster = simulation_raster,
-                sim_dates = simulation_dates$date)
+                coord_ref_system = sf::st_crs(simulation_points))
 
 
     ######

@@ -1,6 +1,6 @@
 
 # Definición de función para la creación de archivos NetCDF
-CrearNetCDF <- function(nc_file, num_realizations, sim_dates, simulation_raster) {
+CrearNetCDF <- function(nc_file, num_realizations, sim_dates, simulation_raster, coord_ref_system) {
   # Obtener valores para dimensiones X a Y
   coordenadas <- raster::rasterToPoints(simulation_raster)
   x_vals      <- sort(unique(coordenadas[, 1]))
@@ -64,7 +64,7 @@ CrearNetCDF <- function(nc_file, num_realizations, sim_dates, simulation_raster)
   # Agregado de atributos
   ncdf4::ncatt_put(nc, varid = 0,
                    attname = "CRS",
-                   attval = sf::st_crs(simulation_points)$proj4string,
+                   attval = coord_ref_system$proj4string,
                    verbose = FALSE)
   ncdf4::ncatt_put(nc, varid = 0,
                    attname = "Conventions",
