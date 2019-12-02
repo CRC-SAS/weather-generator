@@ -20,8 +20,8 @@ glmwgen_simulation_control <- function(nsim = 1, seed = NULL, avbl_cores = 2,
                                        bbox_offset = 100000, sim_loc_as_grid = T,
                                        use_spatially_correlated_noise = T) {
 
-    prcp_noise_genrating_function = glmwgen:::random_field_noise_prcp
-    temperature_noise_genrating_function = glmwgen:::random_field_noise_temperature
+    prcp_noise_generating_function = glmwgen:::random_field_noise_prcp
+    temperature_noise_generating_function = glmwgen:::random_field_noise_temperature
 
     if(!use_spatially_correlated_noise) {
         prcp_noise_generating_function = glmwgen:::not_spatially_correlated_random_field_noise_prcp
@@ -278,7 +278,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     ## Crear objeto para guardar los resultados
     glmwgen:::CrearNetCDF('prueba.nc',
                 num_realizations = control$nsim,
-                simulation_points = simulation_points,
+                simulation_raster = simulation_raster,
                 sim_dates = simulation_dates$date)
 
 
@@ -294,7 +294,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
         ##################################################
         ## Para cuando necesitamos repetir resultados ----
-        set.seed(realizations_seeds[actual_realization])
+        set.seed(realizations_seeds[r])
 
         #################################################################################
         ## Creacion de los puntos de simulacion para el dia i (eq. daily covariates) ----
@@ -364,11 +364,11 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
             # Raster con los valores de "ruido"
             #microbenchmark::microbenchmark({
-            SIMocc_points_noise.d <- control$prcp_noise_genrating_function(
+            SIMocc_points_noise.d <- control$prcp_noise_generating_function(
                 simulation_points = simulation_points,
-                month_parameters = gen_noise_params,
+                gen_noise_params = gen_noise_params,
                 month_number = current_month,
-                var_name = 'prcp',
+                selector = 'prcp',
                 seed = realizations_seeds[d]) %>%
                 glmwgen:::sf2raster('prcp_residuals', simulation_raster)
             #}, times = 10) # 45 milisegundos
@@ -412,7 +412,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             rasters_secos.d <- purrr::map(
                 .x = c("tmin", "tmax"),
                 .f = function(variable, objeto_sf) {
-                    return (glmwgen:::sf2raster(objeto_sf, paste0(variable, '_residuals')))
+                    return (glmwgen:::sf2raster(objeto_sf, paste0(variable, '_residuals'), simulation_raster))
                 }, objeto_sf = temperature_random_fields_dry
             )
             #}, times = 10) # 14 milisegundos
@@ -436,7 +436,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             rasters_humedos.d <- purrr::map(
                 .x = c("tmin", "tmax"),
                 .f = function(variable, objeto_sf) {
-                    return (glmwgen:::sf2raster(objeto_sf, paste0(variable, '_residuals')))
+                    return (glmwgen:::sf2raster(objeto_sf, paste0(variable, '_residuals'), simulation_raster))
                 }, objeto_sf = temperature_random_fields_wet
             )
             #}, times = 10) # 14 milisegundos
@@ -473,7 +473,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             #microbenchmark::microbenchmark({
             SIMmax_points_climate.d <- simulation_points %>%
                 dplyr::mutate(SIMmax = !!SIMmax) %>%
-                glmwgen:::sf2raster('SIMmax')
+                glmwgen:::sf2raster('SIMmax', simulation_raster)
             #}, times = 10) # 8 milisegundos
 
             # Raster con los valores simulados
@@ -504,7 +504,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             #microbenchmark::microbenchmark({
             SIMmin_points_climate.d <- simulation_points %>%
                 dplyr::mutate(SIMmin = !!SIMmin) %>%
-                glmwgen:::sf2raster('SIMmin')
+                glmwgen:::sf2raster('SIMmin', simulation_raster)
             #}, times = 10) # 8 milisegundos
 
             # Raster con los valores simulados
@@ -550,7 +550,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             #microbenchmark::microbenchmark({
             SIMamt_points_climate.d <- simulation_points %>%
                 dplyr::mutate(SIMamt = !!SIMamt) %>%
-                glmwgen:::sf2raster('SIMamt')
+                glmwgen:::sf2raster('SIMamt', simulation_raster)
             #}, times = 10) # 8 milisegundos
 
             # Enmascarar pixeles sin ocurrencia de lluvia

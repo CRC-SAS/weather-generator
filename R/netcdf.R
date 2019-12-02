@@ -1,8 +1,8 @@
 
 # Definición de función para la creación de archivos NetCDF
-CrearNetCDF <- function(nc_file, num_realizations, sim_dates, simulation_points) {
+CrearNetCDF <- function(nc_file, num_realizations, sim_dates, simulation_raster) {
   # Obtener valores para dimensiones X a Y
-  coordenadas <- sf::st_coordinates(simulation_points)
+  coordenadas <- raster::rasterToPoints(simulation_raster)
   x_vals      <- sort(unique(coordenadas[, 1]))
   y_vals      <- sort(unique(coordenadas[, 2]))
   t_vals      <- julian(sim_dates)

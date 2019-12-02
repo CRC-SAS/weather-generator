@@ -3,10 +3,10 @@
 # Definicion de funcion para la generación de campos gaussianos para ocurrencia de temperatura
 random_field_noise_temperature <- function(simulation_points, gen_noise_params, month_number, selector, seed) {
 
-    if (selector == "Lluvioso")
+    if (length(selector) == 1 && selector == "Lluvioso")
         selector = c('tmax_wet', 'tmin_wet')
 
-    if (selector == "Seco")
+    if (length(selector) == 1 && selector == "Seco")
         selector = c('tmax_dry', 'tmin_dry')
 
     ## OBS:
@@ -128,9 +128,13 @@ not_spatially_correlated_random_field_noise_prcp <- function(simulation_points, 
     # para repetir resultados
     set.seed(seed)
 
-    # Crear objeto sf
-    campo <- simulation_points %>% dplyr::rowwise() %>%
+    campos_simulados <- simulation_points %>% dplyr::rowwise() %>%
         dplyr::mutate(prcp_residuals = stats::rnorm(n = 1, mean = 0, sd = 1)) %>%
+        dplyr::select(station_id, prcp_residuals)
+
+    # Crear objeto sf
+    campo <- simulation_points %>%
+        dplyr::left_join(campos_simulados, by = "station_id") %>%
         dplyr::select(prcp_residuals)
 
     return (campo)
