@@ -22,7 +22,7 @@ glmwgen_fit_control <- function(prcp_occurrence_threshold = 0.1,
 #' @export
 calibrate.glmwgen <- function(climate, stations, seasonal_climate = NULL,
                               control = glmwgen:::glmwgen_fit_control(),
-                              verbose = T) {
+                              verbose = F) {
 
     ## Se crea el objeto a ser retornado al culminar el ajuste!
     model <- list()

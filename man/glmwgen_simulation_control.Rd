@@ -10,7 +10,8 @@ glmwgen_simulation_control(
   avbl_cores = 2,
   bbox_offset = 1e+05,
   sim_loc_as_grid = T,
-  use_spatially_correlated_noise = T
+  use_spatially_correlated_noise = T,
+  manage_parallelization_externally = F
 )
 }
 \arguments{

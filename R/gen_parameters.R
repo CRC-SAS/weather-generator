@@ -2,8 +2,7 @@
 start_climatology_month_day <- function(model, simulation_points, month, day) {
 
     start_climatology <- model$start_climatology %>%
-        dplyr::filter(month == lubridate::month(start_date-1),
-                      day == lubridate::day(start_date-1)) %>%
+        dplyr::filter(month == !!month, day == !!day) %>%
         dplyr::mutate(prcp_occ = as.integer(prcp > 0))
 
     start_climatology_sf <- simulation_points %>%

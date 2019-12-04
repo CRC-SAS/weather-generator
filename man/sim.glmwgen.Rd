@@ -9,7 +9,8 @@ sim.glmwgen(
   simulation_locations,
   start_date,
   end_date,
-  control = glmwgen:::glmwgen_simulation_control()
+  control = glmwgen:::glmwgen_simulation_control(),
+  verbose = F
 )
 }
 \arguments{

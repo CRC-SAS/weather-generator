@@ -9,7 +9,7 @@ calibrate.glmwgen(
   stations,
   seasonal_climate = NULL,
   control = glmwgen:::glmwgen_fit_control(),
-  verbose = T
+  verbose = F
 )
 }
 \description{

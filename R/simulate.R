@@ -18,7 +18,8 @@
 #' @export
 glmwgen_simulation_control <- function(nsim = 1, seed = NULL, avbl_cores = 2,
                                        bbox_offset = 100000, sim_loc_as_grid = T,
-                                       use_spatially_correlated_noise = T) {
+                                       use_spatially_correlated_noise = T,
+                                       manage_parallelization_externally = F) {
 
     prcp_noise_generating_function = glmwgen:::random_field_noise_prcp
     temperature_noise_generating_function = glmwgen:::random_field_noise_temperature
@@ -31,6 +32,7 @@ glmwgen_simulation_control <- function(nsim = 1, seed = NULL, avbl_cores = 2,
     return(list(nsim = nsim, seed = seed, avbl_cores = avbl_cores,
                 bbox_offset = bbox_offset, sim_loc_as_grid = sim_loc_as_grid,
                 use_spatially_correlated_noise = use_spatially_correlated_noise,
+                manage_parallelization_externally = manage_parallelization_externally,
                 prcp_noise_generating_function = prcp_noise_generating_function,
                 temperature_noise_generating_function = temperature_noise_generating_function))
 }
@@ -49,10 +51,16 @@ glmwgen_simulation_control <- function(nsim = 1, seed = NULL, avbl_cores = 2,
 #' @import foreach
 #' @export
 sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
-                        control = glmwgen:::glmwgen_simulation_control()) {
+                        control = glmwgen:::glmwgen_simulation_control(),
+                        verbose = F) {
 
     ## Objeto a ser retornado
     gen_climate <- list()
+
+    ###############################################################
+
+    suppressPackageStartupMessages(library("dplyr"))
+    suppressPackageStartupMessages(library("foreach"))
 
     ###############################################################
 
@@ -119,6 +127,17 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
     ###############################################################
 
+    if(is.na(control$avbl_cores) || is.null(control$avbl_cores))
+        stop('The control parameter avbl_cores must be at least 1.')
+
+    ###############################################################
+
+    if(!foreach::getDoParRegistered() && control$manage_parallelization_externally)
+        stop('The control parameter manage_parallelization_externally was set as True, but',
+             'neither sequential nor parallel backend was registered for the foreach package.')
+
+    ###############################################################
+
 
 
     ############################
@@ -148,20 +167,24 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     ## the parallelization configuration
     remove_parallelization_conf <- F
 
-    ## Register a sequential backend if the user didn't register a parallel
-    ## in order to avoid a warning message if we use %dopar%.
-    if(!foreach::getDoParRegistered()) {
-        if(is.na(control$avbl_cores) | is.null(control$avbl_cores)) {
+    ## Register a sequential or a parallel backend for the foreach package
+    if(!control$manage_parallelization_externally) {
+        if (control$avbl_cores == 1) {
             foreach::registerDoSEQ()
-        } else if (control$avbl_cores <= 1) {
-            foreach::registerDoSEQ()
-        } else if (control$avbl_cores > 1) {
+        } else {
             remove_parallelization_conf <- T
-            #doMC::registerDoMC(control$avbl_cores)
-            cluster <- parallel::makeCluster(control$avbl_cores)
+            # Create cluster
+            cluster  <- snow::makeCluster(type = "SOCK",
+                                          spec = rep('localhost', length.out = control$avbl_cores),
+                                          outfile = ifelse(verbose, "outfile.txt", snow::defaultClusterOptions$outfile))
+            # Register cluster as backend for the %dopar% function
             doSNOW::registerDoSNOW(cluster)
         }
     }
+
+    ## Register the number of workers to decide
+    ## how manage progress bar in child processes
+    nworkers <- foreach::getDoParWorkers()
 
 
 
@@ -263,12 +286,19 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     #######################################################
     ## Set the progress bar to know how long this will take
     pb <- progress::progress_bar$new(
-        format = paste(" realization: :r /", control$nsim ,
-                       " | progress: :percent (in :elapsed) | eta: :eta"),
-        total = control$nsim, clear = FALSE, width= 80, show_after = 0)
+        format = paste0(ifelse(nworkers == 1, " realization:", "finished realizations:"),
+                        " :r / ", control$nsim, ifelse(nworkers == 1, paste0(" | day: :d / ", ndates), ""),
+                        " | progress: :bar :percent (in :elapsed) | eta: :eta"),
+        total = ifelse(nworkers == 1, control$nsim*ndates, control$nsim),
+        clear = FALSE, width= 90, show_after = 0)
 
-    invisible(pb$tick(0, tokens = list(r = 1)))
+    ####################################################
+    ## For print something until first realization finish
+    if(nworkers > 1 && !verbose)
+        pb$tick(0, tokens = list(r = 0))
 
+    #####################################################
+    ## For manage the progress bar in parallel executions
     progress_pb <- function(r) {
         pb$tick(1, tokens = list(r = r))
     }
@@ -287,7 +317,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     ##
     #microbenchmark::microbenchmark({
     ctrl_sim <- foreach::foreach(r = 1:control$nsim, .combine = dplyr::bind_rows, .packages = c('dplyr'),
-                                 .options.snow = list(progress = progress_pb)) %dopar% {
+                                 .options.snow = list(progress = progress_pb), .verbose=verbose) %dopar% {
 
         ######################################################################
         ## Para que las funciones de RandomFields devuelvan lo esperado!! ----
@@ -333,9 +363,6 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
         ## Ver version anterior para más detalles (commit: 1898e5a)
         #microbenchmark::microbenchmark({
         rasters <- purrr::map_dfr(1:ndates, function(d) {
-            ##################################################
-            ## Control de tiempo de ejecución para un día ----
-            #microbenchmark::microbenchmark({
 
 
             #######################
@@ -590,8 +617,9 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
 
             #################################################
-            ## Control de tiempo de ejecución para un día ----
-            #}, times = 10) # 2.5 segundos
+            ## Progress Bar (for non parallel execution) ----
+            if(nworkers == 1)
+                pb$tick(1, tokens = list(r = r, d = d))
 
 
 
@@ -614,11 +642,6 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
         ## Control de tiempo de ejecución
         tiempo.rasters <- proc.time() - t.rasters
 
-
-
-        ##############
-        # Progress Bar
-        #pb$tick(1, tokens = list(r = r, d = d))
 
 
         return (tibble::tibble(nsim = r, rasters = list(rasters),
@@ -675,7 +698,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     ## Remove parallelization conf, if necessary
     if(remove_parallelization_conf) {
         foreach::registerDoSEQ()
-        parallel::stopCluster(cluster)
+        snow::stopCluster(cluster)
     }
 
 
