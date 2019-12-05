@@ -176,7 +176,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             # Create cluster
             cluster  <- snow::makeCluster(type = "SOCK",
                                           spec = rep('localhost', length.out = control$avbl_cores),
-                                          outfile = ifelse(verbose, "outfile.txt", snow::defaultClusterOptions$outfile))
+                                          outfile = ifelse(verbose, "", snow::defaultClusterOptions$outfile))
             # Register cluster as backend for the %dopar% function
             doSNOW::registerDoSNOW(cluster)
         }
@@ -191,6 +191,11 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     ##################################
     ## PREPARACIÓN DE LA SIMULACIÓN ##
     ##################################
+
+
+    ############################################################
+    ## Define name of the output netcdf4 file (as absolute path)
+    netcdf_filename <- paste0(getwd(), "/prueba.nc")
 
 
     ####################################
@@ -265,7 +270,6 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             models_residuals = model$models_residuals)
 
 
-
     ############################################
     ## Matriz de clasificacion de días lluviosos
     clasification_matrix <- matrix(c(-Inf, 0, 0, 0, Inf, 1),
@@ -292,12 +296,10 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
         total = ifelse(nworkers == 1, control$nsim*ndates, control$nsim),
         clear = FALSE, width= 90, show_after = 0)
 
-    ####################################################
     ## For print something until first realization finish
     if(nworkers > 1 && !verbose)
         pb$tick(0, tokens = list(r = 0))
 
-    #####################################################
     ## For manage the progress bar in parallel executions
     progress_pb <- function(r) {
         pb$tick(1, tokens = list(r = r))
@@ -306,7 +308,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
     ###########################################
     ## Crear objeto para guardar los resultados
-    glmwgen:::CrearNetCDF('prueba.nc',
+    glmwgen:::CrearNetCDF(netcdf_filename,
                 num_realizations = control$nsim,
                 sim_dates = simulation_dates$date,
                 simulation_raster = simulation_raster,
@@ -628,7 +630,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             return (
                 tibble::tibble(
                     date = simulation_dates$date[d],
-                    raster_prcp = list(SIMocc_points.d),
+                    raster_prcp = list(SIMamt_points.d),
                     raster_tmax = list(SIMmax_points.d),
                     raster_tmin = list(SIMmin_points.d),
                     csim_points = list(current_sim_points)
@@ -644,6 +646,19 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
 
 
+        ########################################
+        ## Guardar realizacion en archivo NetCDF
+        ## Falla cuando un sub-proceso intenta abrir el archivo,
+        ## pero esté ya fue abierto por otro sub-proceso!!!
+        # glmwgen:::GuardarRealizacionNetCDF(netcdf_filename,
+        #                                    numero_realizacion = r,
+        #                                    sim_dates = simulation_dates$date,
+        #                                    raster_tmax = rasters$raster_tmax,
+        #                                    raster_tmin = rasters$raster_tmin,
+        #                                    raster_prcp = rasters$raster_prcp)
+
+
+
         return (tibble::tibble(nsim = r, rasters = list(rasters),
                                tiempo = list(tiempo.rasters)))
     }
@@ -656,7 +671,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
         ctrl_sim %>% dplyr::pull(nsim),
         ctrl_sim %>% dplyr::pull(rasters),
         function(r, rasters) {
-            glmwgen:::GuardarRealizacionNetCDF('prueba.nc',
+            glmwgen:::GuardarRealizacionNetCDF(netcdf_filename,
                                                numero_realizacion = r,
                                                sim_dates = simulation_dates$date,
                                                raster_tmax = rasters$raster_tmax,
@@ -677,6 +692,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     gen_climate[['seed']] <- control$seed
     gen_climate[['realizations_seeds']] <- realizations_seeds
     gen_climate[['simulation_coordinates']] <- simulation_points
+    gen_climate[['netcf4_file_with_results']] <- netcdf_filename
 
     names(ctrl_sim$tiempo) <- paste0("sim_", ctrl_sim$nsim)
     gen_climate[['exec_times']][["gen_rast_time"]] <- ctrl_sim$tiempo
