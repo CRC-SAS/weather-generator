@@ -11,6 +11,8 @@ glmwgen_simulation_control(
   bbox_offset = 1e+05,
   sim_loc_as_grid = T,
   use_spatially_correlated_noise = T,
+  use_temporary_files_to_save_ram = T,
+  remove_temp_files_used_to_save_ram = T,
   manage_parallelization_externally = F
 )
 }

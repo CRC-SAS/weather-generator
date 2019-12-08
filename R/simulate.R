@@ -19,6 +19,8 @@
 glmwgen_simulation_control <- function(nsim = 1, seed = NULL, avbl_cores = 2,
                                        bbox_offset = 100000, sim_loc_as_grid = T,
                                        use_spatially_correlated_noise = T,
+                                       use_temporary_files_to_save_ram = T,
+                                       remove_temp_files_used_to_save_ram = T,
                                        manage_parallelization_externally = F) {
 
     prcp_noise_generating_function = glmwgen:::random_field_noise_prcp
@@ -32,6 +34,8 @@ glmwgen_simulation_control <- function(nsim = 1, seed = NULL, avbl_cores = 2,
     return(list(nsim = nsim, seed = seed, avbl_cores = avbl_cores,
                 bbox_offset = bbox_offset, sim_loc_as_grid = sim_loc_as_grid,
                 use_spatially_correlated_noise = use_spatially_correlated_noise,
+                use_temporary_files_to_save_ram = use_temporary_files_to_save_ram,
+                remove_temp_files_used_to_save_ram = remove_temp_files_used_to_save_ram,
                 manage_parallelization_externally = manage_parallelization_externally,
                 prcp_noise_generating_function = prcp_noise_generating_function,
                 temperature_noise_generating_function = temperature_noise_generating_function))
@@ -98,7 +102,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     ## Solo pueden usarse ruidos NO correlacionados espacialmente
     ## para simular en los puntos utilizados en el ajuste
     if(!control$use_spatially_correlated_noise)
-        if(any(!diag(sf::st_intersects(simulation_locations, model$stations, sparse = F))))
+        if(any(lapply(sf::st_equals(simulation_locations, model$stations), length) != 1))
             stop('Los ruidos NO correlacionados espacialmente solo pueden ser usados cuando ',
                  'los puntos a ser simulados son los mismos que fueron utilizados en el ajuste!')
 
@@ -352,6 +356,13 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             dplyr::mutate(tmin = NA_real_) %>%
             # para control de paralelización
             dplyr::mutate(nsim = r)
+
+
+        #######################################
+        ## Tiempos a tomar por cada realización
+        tiempos <- tibble::tibble(tiempo.gen_rast = list(),
+                                  tiempo.save_rds = list())
+        tiempos <- tiempos %>% dplyr::add_row()
 
 
         #################################
@@ -640,9 +651,9 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
 
 
-        #################################
-        ## Control de tiempo de ejecución
-        tiempo.rasters <- proc.time() - t.rasters
+        ############################################
+        ## Tomar tiempo de generación de los rasters
+        tiempos <- dplyr::mutate(tiempos, tiempo.gen_rast = list(proc.time() - t.rasters))
 
 
 
@@ -658,25 +669,74 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
         #                                    raster_prcp = rasters$raster_prcp)
 
 
+        ###################################################################
+        ## Se guarda en memoria el tibble con los rasters de la realización
+        rasters_path <- paste0(getwd(), "/realizacion_", r ,".rds")
+        if(control$use_temporary_files_to_save_ram) {
+            t.saveRDS <- proc.time()
+            base::saveRDS(rasters, rasters_path)
+            tiempos <- dplyr::mutate(tiempos, tiempo.save_rds = list(proc.time() - t.saveRDS))
+        }
 
-        return (tibble::tibble(nsim = r, rasters = list(rasters),
-                               tiempo = list(tiempo.rasters)))
+
+
+        ######################
+        ## Liberar memoria RAM
+        if(control$use_temporary_files_to_save_ram)
+            rm(rasters)
+
+
+
+        #################
+        ## Retorno final
+        return (tibble::tibble(nsim = r,
+                               rasters = ifelse(control$use_temporary_files_to_save_ram,
+                                                list(rasters_path), list(rasters))
+                               ) %>% dplyr::bind_cols(tiempos))
     }
     #}, times = 2)
 
 
     ########################################
     ## Guardar realizacion en archivo NetCDF
-    purrr::walk2(
+    ctrl_gen <- purrr::map2_dfr(
         ctrl_sim %>% dplyr::pull(nsim),
         ctrl_sim %>% dplyr::pull(rasters),
         function(r, rasters) {
+
+            #######################################
+            ## Tiempos a tomar por cada realización
+            tiempos <- tibble::tibble(tiempo.read_rds = list(),
+                                      tiempo.gen_ncdf = list())
+            tiempos <- tiempos %>% dplyr::add_row()
+
+            ######################################
+            ## Leer archivos con rasters generados
+            if(control$use_temporary_files_to_save_ram) {
+                t.read_rds <- proc.time()
+                rasters <- base::readRDS(rasters)
+                tiempos <- dplyr::mutate(tiempos, tiempo.read_rds = list(proc.time() - t.read_rds))
+            }
+
+            ###########################
+            ## Generar archivos netcdf4
+            t.gen_ncdf <- proc.time()
             glmwgen:::GuardarRealizacionNetCDF(netcdf_filename,
                                                numero_realizacion = r,
                                                sim_dates = simulation_dates$date,
                                                raster_tmax = rasters$raster_tmax,
                                                raster_tmin = rasters$raster_tmin,
                                                raster_prcp = rasters$raster_prcp)
+            tiempos <- dplyr::mutate(tiempos, tiempo.gen_ncdf = list(proc.time() - t.gen_ncdf))
+
+            ######################
+            ## Liberar memoria RAM
+            if(control$use_temporary_files_to_save_ram)
+                rm(rasters)
+
+            #################
+            ## Retorno final
+            return (tibble::tibble(nsim = r) %>% dplyr::bind_cols(tiempos))
         })
 
 
@@ -694,8 +754,20 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     gen_climate[['simulation_coordinates']] <- simulation_points
     gen_climate[['netcf4_file_with_results']] <- netcdf_filename
 
-    names(ctrl_sim$tiempo) <- paste0("sim_", ctrl_sim$nsim)
-    gen_climate[['exec_times']][["gen_rast_time"]] <- ctrl_sim$tiempo
+    names(ctrl_sim$tiempo.gen_rast) <- paste0("sim_", ctrl_sim$nsim)
+    gen_climate[['exec_times']][["gen_rast_time"]] <- ctrl_sim$tiempo.gen_rast
+
+    if(control$use_temporary_files_to_save_ram) {
+        names(ctrl_sim$tiempo.save_rds) <- paste0("sim_", ctrl_sim$nsim)
+        gen_climate[['exec_times']][["rds_save_time"]] <- ctrl_sim$tiempo.save_rds
+    }
+    if(control$use_temporary_files_to_save_ram) {
+        names(ctrl_gen$tiempo.read_rds) <- paste0("sim_", ctrl_gen$nsim)
+        gen_climate[['exec_times']][["rds_read_time"]] <- ctrl_gen$tiempo.read_rds
+    }
+
+    names(ctrl_gen$tiempo.gen_ncdf) <- paste0("sim_", ctrl_gen$nsim)
+    gen_climate[['exec_times']][["gen_ncdf_time"]] <- ctrl_gen$tiempo.gen_ncdf
     gen_climate[['exec_times']][["exec_tot_time"]] <- tiempo.sim
 
     class(gen_climate) <- c(class(gen_climate), 'glmwgen.climate')
@@ -716,6 +788,12 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
         foreach::registerDoSEQ()
         snow::stopCluster(cluster)
     }
+
+
+    ## Remove temporary files
+    if(control$use_temporary_files_to_save_ram && control$remove_temp_files_used_to_save_ram)
+        purrr::walk( ctrl_sim %>% dplyr::pull(rasters),
+                     function(filename) { file.remove(filename) })
 
 
     ## Return result
