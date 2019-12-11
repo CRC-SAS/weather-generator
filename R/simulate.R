@@ -56,7 +56,17 @@ glmwgen_simulation_control <- function(nsim = 1, seed = NULL, avbl_cores = 2,
 #' @export
 sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
                         control = glmwgen:::glmwgen_simulation_control(),
-                        verbose = F) {
+                        seasonal_climate = NULL, verbose = F) {
+
+    #OBS:
+    # si seasonal_climate != NULL se debió ajustar con seasonal covariables, sino stop
+
+    # TODO:
+    # 1- quitar rasters de ejecución día a día () --> opcional
+    # 2- paralizar prcp_occ y prcp_amt con tmax y tmin
+    # 3- agregar covariables
+    # 4- cambiar ruidos de monto de precipitacion para no tener montos de lluvia tan altos
+    # 5-
 
     ## Objeto a ser retornado
     gen_climate <- list()
