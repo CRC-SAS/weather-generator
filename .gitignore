@@ -5,6 +5,7 @@
 *.Ruserdata
 *.DS_Store
 *.nc
+*.rds
 _workshop/data*
 .Rproj.user
 results/
