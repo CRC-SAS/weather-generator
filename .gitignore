@@ -7,3 +7,4 @@
 *.nc
 _workshop/data*
 .Rproj.user
+results/

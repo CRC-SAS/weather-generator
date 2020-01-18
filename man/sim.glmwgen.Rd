@@ -10,6 +10,8 @@ sim.glmwgen(
   start_date,
   end_date,
   control = glmwgen:::glmwgen_simulation_control(),
+  output_filename = "sim_results.nc",
+  seasonal_climate = NULL,
   verbose = F
 )
 }

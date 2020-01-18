@@ -1,6 +1,87 @@
 
+# Interpolación de covariables
+interpolate_covariates <- function(simulation_points, seasonal_climate, simulation_dates) {
 
-interpolate_month_day <- function(model, simulation_points, seed, month, day) {
+    # OBS:
+    # Al interpolar las covariables, no se tiene en cuenta si el usario optó por usar ruidos
+    # correlacionados espacialmente o no. Además, aunque solo sea necesario interpolar covariables
+    # para una sola estación (porque para las demás ya hay covariables), de todas formas se
+    # interpolan covariables para todas las estaciones, ignorando las covariables observadas
+    # y utilizando en su lugar las covariables interpoladas!! Esto el funcionamiento previsto!
+
+    # Datos estacionales para todas las localidades
+    datos.estacionales <- seasonal_climate %>%
+        dplyr::left_join(stations %>% dplyr::select(station_id, longitude, latitude), by = 'station_id') %>%
+        sf::st_as_sf() %>% sf::st_transform(sf::st_crs(simulation_points))
+
+    # Transformación a objeto sp para la interpolación
+    simulation_points.sp <- simulation_points %>% sf::as_Spatial()
+
+    # Combinaciones posibles de años y trimestres para la interpolación
+    combinaciones <- purrr::transpose(
+        purrr::cross2(.x = unique(simulation_dates$year),
+                      .y =unique(simulation_dates$season)))
+
+    # Interpolación de acumulados de lluvia
+    datos_interpolados <- purrr::pmap_dfr(
+        .l = combinaciones,
+        .f = function(year, season) {
+
+            interpolacion.valores.iniciales.sp <- datos.estacionales %>%
+                dplyr::filter(year == !!year & season == !!season) %>%
+                sf::as_Spatial()
+
+            # Valores interpolados de ocurrencia
+            datos_interpolados_prcp <-
+                automap::autoKrige(sum_prcp~longitude+latitude,
+                                   interpolacion.valores.iniciales.sp,
+                                   simulation_points.sp,
+                                   debug.level = 0) %>%
+                sf::st_as_sf(x = .$krige_output, crs = sf::st_crs(simulation_points)) %>%
+                dplyr::mutate(var1.pred = if_else(var1.pred < 0, 0, var1.pred)) %>%
+                dplyr::select(sum_prcp = var1.pred)
+
+
+            # Valores interpolados de temperatura máxima
+            datos_interpolados_tmax <-
+                automap::autoKrige(mean_tmax~longitude+latitude,
+                                   interpolacion.valores.iniciales.sp,
+                                   simulation_points.sp,
+                                   debug.level = 0) %>%
+                sf::st_as_sf(x = .$krige_output, crs = sf::st_crs(simulation_points)) %>%
+                dplyr::select(mean_tmax = var1.pred)
+
+
+            # Valores interpolados de temperatura mínima
+            datos_interpolados_tmin <-
+                automap::autoKrige(mean_tmin~longitude+latitude,
+                                   interpolacion.valores.iniciales.sp,
+                                   simulation_points.sp,
+                                   debug.level = 0) %>%
+                sf::st_as_sf(x = .$krige_output, crs = sf::st_crs(simulation_points)) %>%
+                dplyr::select(mean_tmin = var1.pred)
+
+
+            # Crear data frame con los valores interpolados
+            # Este df hay que unirlo a la grilla de simulación para cada día de la simulacion
+            # para la union tenemos las coordenadas, anos y estaciones.
+            datos_interpolados_prcp_tmax_tmin <- datos_interpolados_prcp %>%
+                sf::st_join(datos_interpolados_tmax) %>%
+                sf::st_join(datos_interpolados_tmin) %>%
+                dplyr::mutate(year = !!year, season = !!season) %>%
+                dplyr::select(year, season, sum_prcp, mean_tmax, mean_tmin)
+
+            return(datos_interpolados_prcp_tmax_tmin)
+        }
+    )
+
+    return (datos_interpolados)
+
+}
+
+# Generacion de campos gaussianos para la alteración de los valores iniciales,
+# haciendo uso de los datos utilizados para realizar el ajuste
+generate_variograms_for_initial_values <- function(model, simulation_points, seed, month, day) {
 
     # Creación de la matriz de simulación
     simulation_matrix <- model$models_data %>%
@@ -17,7 +98,7 @@ interpolate_month_day <- function(model, simulation_points, seed, month, day) {
     # Creación de la matriz de distancias
     distance_matrix <- glmwgen:::make_distance_matrix(model$stations)
 
-    # Generación de valores inciales para el variograma
+    # Generación de variogramas
     variograms_for_initial_values <-
         glmwgen:::setting_variograms_for_initial_values(
             simulation_matrix = simulation_matrix,
@@ -29,14 +110,26 @@ interpolate_month_day <- function(model, simulation_points, seed, month, day) {
             init_values_month = month,
             init_values_day = day)
 
+    return (variograms_for_initial_values)
+
+}
+
+
+interpolate_start_climatology <- function(model, simulation_points, seed, month, day) {
+
+    # OBS:
+    # Al interpolar los datos para el día previo al día de inicio de la simulación, no se
+    # tiene en cuenta si el usario optó por usar ruidos correlacionados espacialmente o no.
+    # Esto es correcto, es el funcionamiento previsto y no un error!
+
+    # Generación de valores inciales para el variograma
+    variograms_for_initial_values <-
+        glmwgen:::generate_variograms_for_initial_values(model, simulation_points, seed, month, day)
+
     # Matriz de valores a interpolar
-    data_to_be_interpolated <- simulation_matrix %>%
-        dplyr::filter(month == !!month, day == !!day) %>%
-        dplyr::group_by(station_id, longitude, latitude) %>%
-        dplyr::summarise(prcp_occ = mean(prcp_occ, na.rm = TRUE),
-                         tmax = mean(tmax, na.rm = TRUE),
-                         tmin = mean(tmin, na.rm = TRUE)) %>%
-        sf::st_transform(sf::st_crs(simulation_points))
+    data_to_be_interpolated <- model$start_climatology %>%
+        dplyr::left_join(model$stations, by = "station_id") %>%
+        sf::st_as_sf(crs = sf::st_crs(model$stations))
 
     # Valores interpolados de ocurrencia
     prcp_occ_interpolation <-

@@ -56,17 +56,20 @@ glmwgen_simulation_control <- function(nsim = 1, seed = NULL, avbl_cores = 2,
 #' @export
 sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
                         control = glmwgen:::glmwgen_simulation_control(),
+                        output_filename = "sim_results.nc",
                         seasonal_climate = NULL, verbose = F) {
-
-    #OBS:
-    # si seasonal_climate != NULL se debió ajustar con seasonal covariables, sino stop
 
     # TODO:
     # 1- quitar rasters de ejecución día a día () --> opcional
-    # 2- paralizar prcp_occ y prcp_amt con tmax y tmin
-    # 3- agregar covariables
-    # 4- cambiar ruidos de monto de precipitacion para no tener montos de lluvia tan altos
-    # 5-
+    # 2- paralizar prcp_occ y prcp_amt con tmax y tmin (LISTO) --> no se puede porque la cantidad de
+    #    procesos crece muy rápido, cada proceso hijo del for each crear dos hijos más, no es factible
+    #    porque no hay control sobre la cantidad de procesos a ser creados y por ende sobre la cantidad
+    #    de procesadores requeridos (además, crear procesos hijos solo haría todo más lento).
+    # 3- agregar covariables (LISTO)
+    # 4- cambiar ruidos de monto de precipitacion para no tener montos de lluvia tan altos (LISTO)
+    # 5- Controles sobre archivo recibido con covariables, copiar de fit (LISTO).
+    # 6- verificar que con el mismo seed se generen los mismos resultados para corridas diferentes!!!
+    # *- Tratar de cerrar esto lo más pronto posible
 
     ## Objeto a ser retornado
     gen_climate <- list()
@@ -79,16 +82,22 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     ###############################################################
 
     if(class(model) != 'glmwgen')
-        stop(paste('Received a model of class', class(model), 'and a model of class "glmwgen" was expected.'))
+        stop(glue::glue('Received a model of class {class(model)} and a model of class "glmwgen" was expected.'))
 
-    glmwgen:::check.simulation.input.data(simulation_locations)
+    # If
+    if (is.null(simulation_locations))
+        simulation_locations <- model$stations
+
+    # Se controlan que los datos recibidos tengan el formato correcto
+    glmwgen:::check.simulation.input.data(simulation_locations, seasonal_climate)
 
     ###############################################################
 
     if(sf::st_crs(simulation_locations) != sf::st_crs(model$crs_used_to_fit)) {
         simulation_locations %>% simulation_locations %>%
             sf::st_transform(sf::st_crs(model$crs_used_to_fit))
-        warning('The crs used to fit and the crs of simulation_locations are not equals. Se transformar simulation_locations al crs {del ajuste}')
+        warning('The crs used to fit and the crs of simulation_locations are not equals. ',
+                'Se transforma simulation_locations al crs {del ajuste}')
     }
 
     ## Crear bounding_box con un buffer de 10km y verificar que los puntos ajustados estén dentro!!
@@ -104,7 +113,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     polygon_offset <- sf::st_as_sfc(sl_bbox_offset)
     sf::st_crs(polygon_offset) <- sf::st_crs(model$crs_used_to_fit)
 
-    # los puntos a simular tienen que estar dentro del boundign box del ajuste
+    ## los puntos a simular tienen que estar dentro del boundign box del ajuste
     if(!all(sf::st_contains(polygon_offset, simulation_locations, sparse = F)))
         stop('Alguno de los puntos ajustados se encuentra fuera del bounding box ',
              'creado a partir de los puntos a simular y con un offset de 10 km.')
@@ -120,19 +129,12 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     ###############################################################
 
     if(!all(sf::st_is_valid(simulation_locations)))
-        stop('simulation_locations is not a  valid sf object.')
+        stop('simulation_locations is not a valid sf object.')
 
     ###############################################################
 
     if(end_date <= start_date)
         stop('End date should be greater than start date')
-
-    ###############################################################
-
-    years_in_sim_dates <- base::seq.int(lubridate::year(start_date), lubridate::year(end_date))
-    years_in_senal_cov <- dplyr::distinct(model$seasonal_data, year) %>% dplyr::pull()
-    if (!all(is.element(years_in_sim_dates, years_in_senal_cov)))
-        stop("Simulation years aren't in model$seasonal_data!")
 
     ###############################################################
 
@@ -152,6 +154,50 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
     ###############################################################
 
+    ## Control de uso correcto de covariables
+
+    # Esquema de uso de covariables!!
+    # cov ajuste    |     cov simulación
+    #  interna      |      interna  -->  me va a pasar Alessio el cod, hay un pequeño cambio
+    #  interna      |      externo
+    #  externa      |      externa  ->  iguales
+    #  externa      |      externa  ->  diferentes (considerar siempre diferentes y listo)
+    #  externa      |      interna  (no corresponde)
+    # generalmente el ajuste es con covariables internas
+
+    ## Si seasonal_climate != NULL se debió hacer el ajuste usando covariables
+    if (!is.null(seasonal_climate) & !model$control$use_covariates)
+        stop('El ajuste fue hecho sin covariables, por lo tanto, la simulación ',
+             'también debe hacerse sin covariables y no es valido utilizar el ',
+             'parámetro seasonal_climate!!')
+
+    ## Si el ajuste se hizo utilizando un archivo de covariables externo,
+    ## entonces la simulación también debe hacerse con un archivo externo
+    if (model$control$use_external_seasonal_climate & is.null(seasonal_climate))
+        stop('El ajuste se hizo utilizando un archivo de covariables externo (parametro ',
+             'seasonal_climate), por lo tanto, la simulación también debe hacerse con un ',
+             'archivo de covariables externo (parametro seasonal_climate).')
+
+    ## OBS:
+    # A pesar de que cuando el ajuste se hace sin covariables, la simulación también debe
+    # hacerse sin covariables, y de que cuando el ajuste se hace con covariables, la simulación
+    # también debe hacerse con convariables; esto no verifica explícitamente porque se toma
+    # directamente el parametro de control use_covariates del ajuste para determinar si la
+    # simulación se hace con covariables o se hace sin covariables!!
+
+    ###############################################################
+
+    ## Se verifica que hayan covariables suficientes para cubrir todas las fechas a simular,
+    ## pero el control solo se hace si se van a utilizar covariables en la simulación!!
+    sim_dates_control <- tidyr::crossing(model$seasonal_data %>% dplyr::distinct(station_id),
+                                         year = base::seq.int(lubridate::year(start_date), lubridate::year(end_date)),
+                                         season = as.integer(c(1, 2, 3, 4)))
+    seasonal_cov_ctrl <- model$seasonal_data %>% dplyr::select(station_id, year, season) %>% dplyr::distinct()
+    if (!all(do.call(paste0, sim_dates_control) %in% do.call(paste0, seasonal_cov_ctrl)) & model$control$use_covariates)
+        stop("Simulation years aren't in model$seasonal_data!")
+
+    ###############################################################
+
 
 
     ############################
@@ -168,7 +214,11 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     # Para ...
     realizations_seeds <- NULL
     if(!is.null(control$seed))
-        realizations_seeds <- ceiling(runif(min = 1, max = 10000000, n = control$nsim))
+        realizations_seeds <- list(general = ceiling(runif(min = 1, max = 10000000, n = control$nsim)),
+                                   prcp_occ = ceiling(runif(min = 1, max = 10000000, n = control$nsim)),
+                                   prcp_amt = ceiling(runif(min = 1, max = 10000000, n = control$nsim)),
+                                   temp_dry = ceiling(runif(min = 1, max = 10000000, n = control$nsim)),
+                                   temp_wet = ceiling(runif(min = 1, max = 10000000, n = control$nsim)))
 
 
 
@@ -207,9 +257,15 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     ##################################
 
 
+    ###################################################################################
+    ## Si no se recibe un seasonal_climate externo, se utiliza el generado en el ajuste
+    if(is.null(seasonal_climate))
+        seasonal_climate <- model$seasonal_data
+
+
     ############################################################
     ## Define name of the output netcdf4 file (as absolute path)
-    netcdf_filename <- paste0(getwd(), "/prueba.nc")
+    netcdf_filename <- glue::glue("{getwd()}/{output_filename}")
 
 
     ####################################
@@ -218,7 +274,9 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
         tibble::tibble(date = seq.Date(from = as.Date(start_date),
                                        to = as.Date(end_date),
                                        by = "days")) %>%
-        dplyr::mutate(month = lubridate::month(date))
+        dplyr::mutate(year = lubridate::year(date),
+                      month = lubridate::month(date),
+                      season = lubridate::quarter(date, fiscal_start = 12))
     ## Numbers of days to be simulated
     ndates <- nrow(simulation_dates)
 
@@ -226,7 +284,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     ##################################
     ## Matriz con los puntos a simular
     simulation_points <- simulation_locations %>%
-        sf::st_transform(model$crs_used_to_fit) %>%
+        sf::st_transform(sf::st_crs(model$crs_used_to_fit)) %>%
         dplyr::mutate(point_id = dplyr::row_number(),
                       longitude = sf::st_coordinates(geometry)[,'X'],
                       latitude  = sf::st_coordinates(geometry)[,'Y'])
@@ -257,19 +315,17 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     }
 
 
-    #####################################
-    ## Interpolación de valores iniciales
-    if(control$use_spatially_correlated_noise)
-        start_date_prev_day_climatology <-
-            glmwgen:::interpolate_month_day(model, simulation_points,
-                                            seed = control$seed,
-                                            month = lubridate::month(start_date-1),
-                                            day = lubridate::day(start_date-1))
-    if(!control$use_spatially_correlated_noise)
-        start_date_prev_day_climatology <-
-            glmwgen:::start_climatology_month_day(model, simulation_points,
-                                                  month = lubridate::month(start_date-1),
-                                                  day = lubridate::day(start_date-1))
+    ############################################################################
+    ## Obtención de valores para el día previo al día de inicio de la simulación
+    start_date_prev_day_climatology <-
+        glmwgen:::get_start_climatology(model, simulation_points, start_date, control)
+
+
+    #############################################################
+    ## Obtención de covariables, si van a ser utilizadas, sino no
+    if (model$control$use_covariates)
+        covariates <- glmwgen:::get_covariates(model, simulation_points, seasonal_climate,
+                                               simulation_dates, control)
 
 
     #########################################
@@ -289,6 +345,17 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     clasification_matrix <- matrix(c(-Inf, 0, 0, 0, Inf, 1),
                                    ncol = 3,
                                    byrow = TRUE)
+
+
+    #######################################################################################
+    ## Se crea una matriz de simulación, esta va a contener todos los datos necesarios para
+    ## la simulación de cada día a simular, si se utilizan covariables, se las incluye aquí
+    if (model$control$use_covariates) {
+        simulation_matrix <- simulation_points
+    } else {
+        simulation_matrix <- simulation_points %>%
+            sf::st_join(covariates %>% dplyr::select(-station_id))
+    }
 
 
     ##########################################
@@ -341,11 +408,15 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
         ##################################################
         ## Para cuando necesitamos repetir resultados ----
-        set.seed(realizations_seeds[r])
+        set.seed(realizations_seeds$general[r])
 
         #################################################################################
         ## Creacion de los puntos de simulacion para el dia i (eq. daily covariates) ----
-        simulation_points.d <- simulation_points %>%
+        #microbenchmark::microbenchmark({
+        simulation_matrix.d <- simulation_matrix %>%
+            {if (!model$control$use_covariates) dplyr::filter(.)
+             else dplyr::filter(., year == simulation_dates$year[1],
+                                   season == simulation_dates$season[1])} %>%
             sf::st_join(start_date_prev_day_climatology) %>%
             dplyr::rename(prcp_occ_prev = prcp_occ,
                           tmax_prev = tmax,
@@ -364,8 +435,11 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             dplyr::mutate(tmax = NA_real_) %>%
             # 4- colnames(model$fitted_models$tmin_fit$model)
             dplyr::mutate(tmin = NA_real_) %>%
+            # 5- tipo día actual, no previo
+            dplyr::mutate(tipo_dia = NA_character_) %>%
             # para control de paralelización
             dplyr::mutate(nsim = r)
+        #}, times = 100) # 17 milisegundos
 
 
         #######################################
@@ -382,7 +456,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
         #####################################################################################
         ## Antes se usaba un foreach para paralelizar esto, pero no se puede ser paralelizado
-        ## porque simulation_points.d no toma los valores correctos al paralelizar!!
+        ## porque simulation_matrix.d no toma los valores correctos al paralelizar!!
         ## Ver version anterior para más detalles (commit: 1898e5a)
         #microbenchmark::microbenchmark({
         rasters <- purrr::map_dfr(1:ndates, function(d) {
@@ -401,7 +475,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             # Simulacion de ocurrencia de lluvia
             #microbenchmark::microbenchmark({
             SIMocc <- mgcv::predict.bam(model$fitted_models$prcp_occ_fit,
-                                        newdata = simulation_points.d,
+                                        newdata = simulation_matrix.d,
                                         #cluster = cluster,  # empeora el tiempo para grillas grandes
                                         newdata.guaranteed = TRUE) # una optimizacion
             #}, times = 10) # 480 milisegundos
@@ -420,7 +494,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
                 gen_noise_params = gen_noise_params,
                 month_number = current_month,
                 selector = 'prcp',
-                seed = realizations_seeds[d]) %>%
+                seed = realizations_seeds$prcp_occ[d]) %>%
                 glmwgen:::sf2raster('prcp_residuals', simulation_raster)
             #}, times = 10) # 45 milisegundos
 
@@ -436,7 +510,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
             # Agregar valores de ocurrencia a la grilla de simulacion
             #microbenchmark::microbenchmark({
-            simulation_points.d <- simulation_points.d %>%
+            simulation_matrix.d <- simulation_matrix.d %>%
                 dplyr::mutate(prcp_occ = raster::extract(SIMocc_points.d, simulation_points),
                               tipo_dia = factor(prcp_occ, levels = c(1, 0),
                                                 labels = c('Lluvioso', 'Seco')))
@@ -455,7 +529,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
                     gen_noise_params = gen_noise_params,
                     month_number = current_month,
                     selector = c('tmax_dry', 'tmin_dry'),
-                    seed = realizations_seeds[d])
+                    seed = realizations_seeds$temp_dry[d])
             #}, times = 10) # 180 milisegundos
 
             # Procesamiento de residuos para dias secos
@@ -479,7 +553,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
                     gen_noise_params = gen_noise_params,
                     month_number = current_month,
                     selector = c('tmax_wet', 'tmin_wet'),
-                    seed = realizations_seeds[d])
+                    seed = realizations_seeds$temp_wet[d])
             #}, times = 10) # 180 milisegundos
 
             # Procesamiento de residuos para dias humedos
@@ -515,7 +589,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             # Simulacion de temperatura máxima
             #microbenchmark::microbenchmark({
             SIMmax <- mgcv::predict.bam(model$fitted_models$tmax_fit,
-                                        newdata = simulation_points.d,
+                                        newdata = simulation_matrix.d,
                                         #cluster = cluster,  # no mejora mucho el tiempo
                                         newdata.guaranteed = TRUE) # una optimizacion
             #}, times = 100) # 540 milisegundos
@@ -534,7 +608,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
             # Agregar valores de temperatura mínima a los puntos de simulación
             #microbenchmark::microbenchmark({
-            simulation_points.d <- simulation_points.d %>%
+            simulation_matrix.d <- simulation_matrix.d %>%
                 dplyr::mutate(tmax = raster::extract(SIMmax_points.d, simulation_points))
             #}, times = 10) # 15 milisegundos
 
@@ -546,7 +620,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             # Simulacion de temperatura mínima
             #microbenchmark::microbenchmark({
             SIMmin <- mgcv::predict.bam(model$fitted_models$tmin_fit,
-                                        newdata = simulation_points.d,
+                                        newdata = simulation_matrix.d,
                                         #cluster = cluster,  # no mejora mucho el tiempo
                                         newdata.guaranteed = TRUE) # una optimizacion
             #}, times = 100) # 580 milisegundos
@@ -565,7 +639,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
             # Agregar valores de temperatura mínima a los puntos de simulación
             #microbenchmark::microbenchmark({
-            simulation_points.d <- simulation_points.d %>%
+            simulation_matrix.d <- simulation_matrix.d %>%
                 dplyr::mutate(tmin = raster::extract(SIMmin_points.d, simulation_points))
             #}, times = 10) # 15 milisegundos
 
@@ -586,14 +660,25 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             # Estimación de los parametros de escala
             #microbenchmark::microbenchmark({
             betaamt <- base::exp(mgcv::predict.bam(prcp_amt_fit,
-                                   newdata = simulation_points.d,
+                                   newdata = simulation_matrix.d,
                                    #cluster = cluster,  # no mejora mucho el tiempo
                                    newdata.guaranteed = TRUE))/alphaamt
             #}, times = 100) # 360 milisegundos
 
+            # Raster con los valores de "ruido"
+            #microbenchmark::microbenchmark({
+            SIMamt_points_noise.d <- control$prcp_noise_generating_function(
+                simulation_points = simulation_points,
+                gen_noise_params = gen_noise_params,
+                month_number = current_month,
+                selector = 'prcp',
+                seed = realizations_seeds$prcp_amt[d]) %>%
+                glmwgen:::sf2raster('prcp_residuals', simulation_raster)
+            #}, times = 10) # 45 milisegundos
+
             # Simulacion de montos
             #microbenchmark::microbenchmark({
-            SIMamt <- stats::qgamma(stats::pnorm(raster::extract(SIMocc_points_noise.d, simulation_points)),
+            SIMamt <- stats::qgamma(stats::pnorm(raster::extract(SIMamt_points_noise.d, simulation_points)),
                              shape = rep(alphaamt, length(betaamt)), scale = betaamt)
             #}, times = 10) # 15 milisegundos
 
@@ -611,17 +696,20 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
             # Agregar valores de los montos de prcp a los puntos de simulación
             #microbenchmark::microbenchmark({
-            simulation_points.d <- simulation_points.d %>%
+            simulation_matrix.d <- simulation_matrix.d %>%
                 dplyr::mutate(prcp_amt = raster::extract(SIMamt_points.d, simulation_points))
             #}, times = 10) # 15 milisegundos
 
 
 
             #########################################################################
-            ## Preparar simulation_points.d para la simulación del siguiente día ----
-            current_sim_points  <- simulation_points.d
+            ## Preparar simulation_matrix.d para la simulación del siguiente día ----
+            current_sim_points  <- simulation_matrix.d
             # OJO: se usa el operador <<- para utilizar los resultados el siguiente día
-            simulation_points.d <<- simulation_points.d %>%
+            simulation_matrix.d <<- simulation_matrix %>%
+                {if (!model$control$use_covariates) dplyr::filter(.)
+                 else dplyr::filter(., year == simulation_dates$year[1],
+                                       season == simulation_dates$season[1])} %>%
                 dplyr::mutate(date = simulation_dates$date[d+1],
                               doy = lubridate::yday(date),
                               time = as.numeric(date)/1000,
@@ -803,7 +891,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     ## Remove temporary files
     if(control$use_temporary_files_to_save_ram && control$remove_temp_files_used_to_save_ram)
         purrr::walk( ctrl_sim %>% dplyr::pull(rasters),
-                     function(filename) { file.remove(filename) })
+                     function(filename) { file.remove(filename) } )
 
 
     ## Return result

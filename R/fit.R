@@ -37,6 +37,7 @@ calibrate.glmwgen <- function(climate, stations, seasonal_climate = NULL,
         seasonal_climate <- NULL
     }
 
+    # Se controlan que los datos recibidos tengan el formato correcto
     glmwgen:::check.fit.input.data(climate, stations, seasonal_climate)
 
     ###############################################################
@@ -72,22 +73,26 @@ calibrate.glmwgen <- function(climate, stations, seasonal_climate = NULL,
 
     ###############################################################
 
-    if (control$use_external_seasonal_climate) {
+    if (control$use_external_seasonal_climate)
+        seasonal_climate <- seasonal_climate %>% dplyr::arrange(station_id, year, season)
 
-        seasonal_climate <- seasonal_climate %>%
-            dplyr::arrange(station_id, year, season)
-
-        years_in_climate <- dplyr::distinct(climate, lubridate::year(date)) %>% dplyr::pull()
-        years_in_seasonal_climate <- dplyr::distinct(seasonal_climate, year) %>% dplyr::pull()
-        if (!dplyr::all_equal(years_in_climate, years_in_seasonal_climate))
-            stop("Years in climate and years in seasonal_climate don't match!")
-    }
+    # summarisea_climate es lo que se recibio como seasonal_climate,
+    # es decir, seasonal_climate y seasonal_climate son la misma cosa!!
+    summarised_climate <- seasonal_climate
 
     t <- proc.time()
-    summarised_climate <- seasonal_climate
+    # Si no se recibió seasonal_climate como parámetro, entonces se la calcula internamente!!
     if (is.null(summarised_climate) | !control$use_external_seasonal_climate)
         summarised_climate <- glmwgen:::summarise_seasonal_climate(climate, control$climate_missing_threshold)
     tiempo.summarised_climate <- proc.time() - t
+
+    # Se verifica que hayan covariables suficientes para cubrir todas las fechas en climate,
+    # pero el control solo se hace si se van a utilizar covariables en el ajuste!!
+    climate_control <- climate %>% dplyr::distinct(station_id, year = lubridate::year(date),
+                                                   season = lubridate::quarter(date, fiscal_start = 12))
+    seasnl_cli_ctrl <- summarised_climate %>% dplyr::distinct(station_id, year, season)
+    if (!dplyr::all_equal(climate_control, seasnl_cli_ctrl) & control$use_covariates)
+        stop("Years in climate and years in seasonal_climate don't match!")
 
     ###############################################################
 
@@ -125,13 +130,6 @@ calibrate.glmwgen <- function(climate, stations, seasonal_climate = NULL,
     model[["seasonal_data"]] <- summarised_climate
 
     model[["crs_used_to_fit"]] <- sf::st_crs(control$planar_crs_in_metric_coords)
-
-    model[["start_climatology"]] <- climate %>%
-        dplyr::group_by(station_id, month = lubridate::month(date), day = lubridate::day(date)) %>%
-        dplyr::summarise(tmax = mean(tmax, na.rm = T),
-                         tmin = mean(tmin, na.rm = T),
-                         prcp = mean(prcp, na.rm = T)) %>%
-        dplyr::ungroup()
 
 
     #################################
@@ -261,15 +259,14 @@ calibrate.glmwgen <- function(climate, stations, seasonal_climate = NULL,
 
     if (control$use_covariates) {
         prcp_occ_cov <- models_data %>% dplyr::select(dplyr::matches('ST\\d')) %>% names
-        prcp_occ_cov_fm_str <- paste("s(", prcp_occ_cov, ") + ",
-                                     "ti(", prcp_occ_cov, ", latitude, longitude, d = c(1, 2), bs='cs')",
-                                     collapse = " + ")
-        prcp_occ_cov_fm <- stats::as.formula(paste('~ . +', prcp_occ_cov_fm_str))
+        prcp_occ_cov_fm_str <- paste("te(", prcp_occ_cov, ", latitude, longitude, d = c(2, 2), ",
+                                     "bs = c('tp' , 'tp'), k = length(unique_stations))", collapse = " + ")
+        prcp_occ_cov_fm     <- stats::as.formula(paste('~ . +', prcp_occ_cov_fm_str))
         # prcp_occ_cov_fm <- ~ . +
-        #     s(ST1) + ti(ST1, latitude, longitude, d = c(1, 2), bs="cs") +
-        #     s(ST2) + ti(ST2, latitude, longitude, d = c(1, 2), bs="cs") +
-        #     s(ST3) + ti(ST3, latitude, longitude, d = c(1, 2), bs="cs") +
-        #     s(ST4) + ti(ST4, latitude, longitude, d = c(1, 2), bs="cs")
+        #     te(ST1, longitude, latitude, d =c(1, 2), bs = c(“tp” , “tp”), k = length(unique_stations))
+        #     te(ST2, longitude, latitude, d =c(1, 2), bs = c(“tp” , “tp”), k = length(unique_stations))
+        #     te(ST3, longitude, latitude, d =c(1, 2), bs = c(“tp” , “tp”), k = length(unique_stations))
+        #     te(ST4, longitude, latitude, d =c(1, 2), bs = c(“tp” , “tp”), k = length(unique_stations))
         prcp_occ_fm     <- stats::update( prcp_occ_fm, prcp_occ_cov_fm )
     }
 
@@ -374,8 +371,7 @@ calibrate.glmwgen <- function(climate, stations, seasonal_climate = NULL,
     # Create formula
     tmax_fm <- tmax ~ te(tmax_prev, tmin_prev, latitude, longitude, d = c(2, 2), k = length(unique_stations)) +
         prcp_occ + prcp_occ_prev + s(time, bs = 'gp', k = 10) +
-        s(latitude, longitude, k = length(unique_stations)) + s(doy, bs = c("cc"), k = 30) +
-        ti(latitude, longitude, doy, bs = c('tp', 'cc'), d = c(2, 1), k = length(unique_stations))
+        te(latitude, longitude, doy, bs = c('tp', 'cc'), d = c(2, 1), k = length(unique_stations))
 
     if (control$use_covariates) {
         tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
@@ -436,8 +432,7 @@ calibrate.glmwgen <- function(climate, stations, seasonal_climate = NULL,
     # Create formula
     tmin_fm <- tmin ~ te(tmin_prev, tmax_prev, latitude, longitude, d = c(2, 2), k = length(unique_stations)) +
         prcp_occ + prcp_occ_prev + s(time, bs = 'gp', k = 100) +
-        s(latitude, longitude, k = length(unique_stations)) + s(doy, bs = c("cc"), k = 30) +
-        ti(latitude, longitude, doy, bs = c('tp', 'cc'), d = c(2, 1), k = length(unique_stations))
+        te(latitude, longitude, doy, bs = c('tp', 'cc'), d = c(2, 1), k = length(unique_stations))
 
     if (control$use_covariates) {
         tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
@@ -490,6 +485,15 @@ calibrate.glmwgen <- function(climate, stations, seasonal_climate = NULL,
 
     ###########################
     ## Preparar datos de salida
+
+    # Save start_climatology to returned model
+    model[["start_climatology"]] <- models_data %>%
+        dplyr::select(station_id, date, tmax, tmin, prcp_occ) %>%
+        dplyr::group_by(station_id, month = lubridate::month(date), day = lubridate::day(date)) %>%
+        dplyr::summarise(tmax = mean(tmax, na.rm = T),
+                         tmin = mean(tmin, na.rm = T),
+                         prcp_occ = mean(prcp_occ, na.rm = T)) %>%
+        dplyr::ungroup()
 
     # Save gam results to returned model
     model[['fitted_models']][["prcp_occ_fit"]] <- prcp_occ_fit

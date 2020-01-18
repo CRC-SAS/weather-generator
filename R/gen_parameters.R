@@ -1,15 +1,55 @@
 
-start_climatology_month_day <- function(model, simulation_points, month, day) {
+start_climatology_month_day <- function(start_climatology, simulation_points, month, day) {
 
-    start_climatology <- model$start_climatology %>%
+    start_climatology <- start_climatology %>%
         dplyr::filter(month == !!month, day == !!day) %>%
-        dplyr::mutate(prcp_occ = as.integer(prcp > 0))
+        dplyr::mutate(prcp_occ = as.integer(prcp_occ > 0)) # esto está bien, cuando se interpola hay ruidos que pueden hacer que prcp_occ tenga valores negativos, pero es este caso no, siempre va a ser mayor a cero!!
 
     start_climatology_sf <- simulation_points %>%
         dplyr::left_join(start_climatology, by = "station_id") %>%
         dplyr::select(prcp_occ, tmax, tmin)
 
     return (start_climatology_sf)
+
+}
+
+get_start_climatology <- function(model, simulation_points, start_date, control) {
+
+    # Si simulation points no es una grilla y todos los puntos a simular fueron usados en el ajuste
+    # entonces, como start_climatology, se usan los datos generados en el ajuste sin interpolar nada
+    if (!control$sim_loc_as_grid &
+        all(lapply(sf::st_equals(simulation_locations, model$stations), length) == 1))
+        return (glmwgen:::start_climatology_month_day(model$start_climatology, simulation_points,
+                                                      month = lubridate::month(start_date - 1),
+                                                      day = lubridate::day(start_date - 1)))
+
+    # Si continua la ejecución de la función es porque simulation points es una grilla o NO todos
+    # los puntos a simular fueron usados en el ajuste, y es necesario interpolar start_climatology
+    return (glmwgen:::interpolate_start_climatology(model, simulation_points, seed,
+                                                    month = lubridate::month(start_date - 1),
+                                                    day = lubridate::day(start_date -1)))
+
+}
+
+seasonal_climate_as_sf <- function(seasonal_climate, model_stations, coord_ref_system) {
+    cov_sf <- seasonal_climate %>% dplyr::inner_join(model_stations, by = "station_id") %>%
+        dplyr::select(station_id, year, season, sum_prcp, mean_tmax, mean_tmin, geometry) %>%
+        sf::st_as_sf() %>% sf::st_transform(sf::st_crs(coord_ref_system))
+    return (cov_sf)
+}
+
+get_covariates <- function(model, simulation_points, seasonal_climate, simulation_dates, control) {
+
+    # Si simulation points no es una grilla y hay covariables para todos los puntos a simular,
+    # entonces no es necesario interpolar nada y se retorna seasonal_climate directamente
+    if (!control$sim_loc_as_grid &
+        all(unique(simulation_points$station_id) %in% unique(seasonal_climate$station_id)))
+        return (glmwgen:::seasonal_climate_as_sf(seasonal_climate, model$stations,
+                                                 sf::st_crs(simulation_points)))
+
+    # Si continua la ejecución de la función es porque simulation points es una grilla o NO hay
+    # covariables para todos los puntos a simular, y es necesario interpolar seasonal_climate
+    return (glmwgen:::interpolate_covariates(simulation_points, seasonal_climate, simulation_dates))
 
 }
 

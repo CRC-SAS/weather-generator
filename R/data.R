@@ -175,10 +175,71 @@ check.fit.input.data <- function(climate, stations, seasonal.climate) {
 
 }
 
-check.simulation.input.data <- function(simulation_locations) {
+check.simulation.input.data <- function(simulation.locations, seasonal.climate) {
 
-    sim_loc.columns <- c(geometry = "sfc_POINT")
+    sim.loc.columns <- c(geometry = "sfc_POINT")
+    seasonal.invariant.columns <- c(station_id = "integer", year = "numeric", season = "numeric")
+    seasonal.ends.with.columns <- c(tmax = "numeric", tmin = "numeric", prcp = "numeric")
 
-    check.object(simulation_locations, "stations", c("sf", "tbl_df", "tbl", "data.frame"), sim_loc.columns)
+    check.object(simulation.locations, "simulation_locations", c("sf", "tbl_df", "tbl", "data.frame"), sim.loc.columns)
+
+    if (!is.null(seasonal.climate)) {
+        check.object(seasonal.climate, "seasonal_climate", c("tbl_df", "tbl", "data.frame"), seasonal.invariant.columns)
+        check.ends.with.columns(seasonal.climate, "seasonal.climate", seasonal.ends.with.columns)
+    }
+
+}
+
+check.points.to.extract <- function(points_to_extract) {
+
+    points.columns <- c(point_id = "integer", geometry = "sfc_POINT")
+    check.object(points_to_extract, "points_to_extract", c("sf", "tbl_df", "tbl", "data.frame"), points.columns)
+
+}
+
+#' @title Transform netcdf4 file to tibble
+#' @description Transform netcdf4 file to tibble.
+#' @export
+netcdf.as.tibble <- function(netcdf_filename, points_to_extract, points_id_column = "point_id") {
+
+    # Determinar variables y cantidad de realizaciones
+    netcdf_file          <- ncdf4::nc_open(filename = netcdf_filename)
+    variables            <- names(netcdf_file$var)
+    numero_realizaciones <- netcdf_file$dim$realization$len
+    coord_ref_system     <- ncdf4::ncatt_get(netcdf_file,0,"CRS")$value
+    ncdf4::nc_close(netcdf_file)
+    rm(netcdf_file)
+
+    # Transform points to the correct crs
+    points <- points_to_extract %>%
+        sf::st_transform(crs = coord_ref_system) %>%
+        dplyr::select(point_id = !!points_id_column)
+
+    # Verificar columnas del objeto points_to_extract
+    glmwgen:::check.points.to.extract(points)
+
+    # Determinar posiciones de cada estacion (fila/columna)
+    first_brick <- raster::brick(netcdf_filename, varname = variables[1], lvar = 4, level = 1,
+                                 stopIfNotEqualSpaced=FALSE) %>% dplyr::first()
+    cell_of_pnt <- raster::extract(x = first_brick, y = points, cellnumbers = TRUE, df = TRUE) %>%
+        dplyr::select(cells) %>% dplyr::rename(cell = cells) %>%
+        dplyr::bind_cols(points) %>% tidyr::drop_na(cell)
+
+    # Obtener los datos de todas las variables y realizaciones en un data frame
+    datos_simulaciones <- purrr::pmap_dfr(
+        .l = purrr::cross2(variables, seq_len(numero_realizaciones)) %>% purrr::transpose(),
+        .f = function(variable, numero_realizacion) {
+            brick_variable <- raster::brick(netcdf_filename, varname = variable, lvar = 4, level = numero_realizacion)
+            points_data  <- raster::extract(x = brick_variable, y = dplyr::pull(cell_of_pnt, cell), df = TRUE) %>%
+                dplyr::mutate(variable = variable, realizacion = numero_realizacion, point_id = dplyr::pull(cell_of_pnt, point_id))
+        }
+    ) %>% tidyr::pivot_longer(cols = starts_with("X"), names_to = "fecha_string", values_to = "valor") %>%
+        dplyr::mutate(fecha = as.Date(fecha_string, format ="X%Y.%m.%d")) %>%
+        dplyr::select(point_id, realizacion, fecha, variable, valor) %>%
+        tidyr::pivot_wider(names_from = "variable", values_from = "valor") %>%
+        dplyr::arrange(point_id, realizacion, fecha) %>%
+        dplyr::mutate(tipo_dia = factor(ifelse(as.logical(prcp), 'Lluvioso', 'Seco'), levels = c('Lluvioso', 'Seco')))
+
+    return (datos_simulaciones)
 
 }
