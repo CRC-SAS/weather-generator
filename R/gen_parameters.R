@@ -18,7 +18,7 @@ get_start_climatology <- function(model, simulation_points, start_date, control)
     # Si simulation points no es una grilla y todos los puntos a simular fueron usados en el ajuste
     # entonces, como start_climatology, se usan los datos generados en el ajuste sin interpolar nada
     if (!control$sim_loc_as_grid &
-        all(lapply(sf::st_equals(simulation_locations, model$stations), length) == 1))
+        all(lapply(sf::st_equals(simulation_points, model$stations), length) == 1))
         return (glmwgen:::start_climatology_month_day(model$start_climatology, simulation_points,
                                                       month = lubridate::month(start_date - 1),
                                                       day = lubridate::day(start_date - 1)))

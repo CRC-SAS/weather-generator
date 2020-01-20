@@ -68,7 +68,9 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     # 3- agregar covariables (LISTO)
     # 4- cambiar ruidos de monto de precipitacion para no tener montos de lluvia tan altos (LISTO)
     # 5- Controles sobre archivo recibido con covariables, copiar de fit (LISTO).
-    # 6- verificar que con el mismo seed se generen los mismos resultados para corridas diferentes!!!
+    # 6- verificar que con el mismo seed se generen los mismos resultados para corridas diferentes (LISTO)
+    # 7- Agregar capa raster con los station_id en la celdas que corresponden a las estaciones simuladas!!
+    # 8- Preg a Alessio si los ruidos (ahora calculados con un sed por realización), no deben usar seed por día?
     # *- Tratar de cerrar esto lo más pronto posible
 
     ## Objeto a ser retornado
@@ -86,7 +88,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
     # If
     if (is.null(simulation_locations))
-        simulation_locations <- model$stations
+        stop("The parameter simulation_locations can't be null!")
 
     # Se controlan que los datos recibidos tengan el formato correcto
     glmwgen:::check.simulation.input.data(simulation_locations, seasonal_climate)
@@ -299,7 +301,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
         simulation_raster <- raster::rasterFromXYZ(
             xyz = sf::st_coordinates(simulation_points),
             res = raster_resolution,
-            crs = model$crs_used_to_fit)
+            crs = sf::st_crs(simulation_points))
     }
     if(!control$sim_loc_as_grid) {
         stns_dist_matrix  <- glmwgen:::make_distance_matrix(model$stations)
@@ -311,7 +313,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
             ymn = sl_bbox_offset[['ymin']],
             ymx = sl_bbox_offset[['ymax']],
             resolution = raster_resolution,
-            crs = model$crs_used_to_fit)
+            crs = sf::st_crs(simulation_points))
     }
 
 
@@ -350,11 +352,23 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     #######################################################################################
     ## Se crea una matriz de simulación, esta va a contener todos los datos necesarios para
     ## la simulación de cada día a simular, si se utilizan covariables, se las incluye aquí
-    if (model$control$use_covariates) {
+    if (!model$control$use_covariates) {
         simulation_matrix <- simulation_points
     } else {
         simulation_matrix <- simulation_points %>%
-            sf::st_join(covariates %>% dplyr::select(-station_id))
+            sf::st_join(covariates %>% dplyr::select(-station_id)) %>%
+            dplyr::mutate(ST1 = if_else(season == 1, sum_prcp, 0),
+                          ST2 = if_else(season == 2, sum_prcp, 0),
+                          ST3 = if_else(season == 3, sum_prcp, 0),
+                          ST4 = if_else(season == 4, sum_prcp, 0),
+                          SN1 = if_else(season == 1, mean_tmin, 0),
+                          SN2 = if_else(season == 2, mean_tmin, 0),
+                          SN3 = if_else(season == 3, mean_tmin, 0),
+                          SN4 = if_else(season == 4, mean_tmin, 0),
+                          SX1 = if_else(season == 1, mean_tmax, 0),
+                          SX2 = if_else(season == 2, mean_tmax, 0),
+                          SX3 = if_else(season == 3, mean_tmax, 0),
+                          SX4 = if_else(season == 4, mean_tmax, 0))
     }
 
 
@@ -410,6 +424,12 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
         ## Para cuando necesitamos repetir resultados ----
         set.seed(realizations_seeds$general[r])
 
+        ################################################################################
+        ## Cuando se ejecuta el código en paralelo, simulation_matrix no es un sf válido
+        if(nworkers > 1)
+            simulation_matrix <- simulation_matrix %>%
+                sf::st_as_sf(coords = c('longitude', 'latitude'), crs = sf::st_crs(simulation_points))
+
         #################################################################################
         ## Creacion de los puntos de simulacion para el dia i (eq. daily covariates) ----
         #microbenchmark::microbenchmark({
@@ -461,7 +481,6 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
         #microbenchmark::microbenchmark({
         rasters <- purrr::map_dfr(1:ndates, function(d) {
 
-
             #######################
             ## Indice de meses ----
             #microbenchmark::microbenchmark({
@@ -494,7 +513,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
                 gen_noise_params = gen_noise_params,
                 month_number = current_month,
                 selector = 'prcp',
-                seed = realizations_seeds$prcp_occ[d]) %>%
+                seed = realizations_seeds$prcp_occ[r]) %>%
                 glmwgen:::sf2raster('prcp_residuals', simulation_raster)
             #}, times = 10) # 45 milisegundos
 
@@ -529,7 +548,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
                     gen_noise_params = gen_noise_params,
                     month_number = current_month,
                     selector = c('tmax_dry', 'tmin_dry'),
-                    seed = realizations_seeds$temp_dry[d])
+                    seed = realizations_seeds$temp_dry[r])
             #}, times = 10) # 180 milisegundos
 
             # Procesamiento de residuos para dias secos
@@ -553,7 +572,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
                     gen_noise_params = gen_noise_params,
                     month_number = current_month,
                     selector = c('tmax_wet', 'tmin_wet'),
-                    seed = realizations_seeds$temp_wet[d])
+                    seed = realizations_seeds$temp_wet[r])
             #}, times = 10) # 180 milisegundos
 
             # Procesamiento de residuos para dias humedos
@@ -672,7 +691,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
                 gen_noise_params = gen_noise_params,
                 month_number = current_month,
                 selector = 'prcp',
-                seed = realizations_seeds$prcp_amt[d]) %>%
+                seed = realizations_seeds$prcp_amt[r]) %>%
                 glmwgen:::sf2raster('prcp_residuals', simulation_raster)
             #}, times = 10) # 45 milisegundos
 
@@ -704,7 +723,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
             #########################################################################
             ## Preparar simulation_matrix.d para la simulación del siguiente día ----
-            current_sim_points  <- simulation_matrix.d
+            current_sim_points  <- simulation_matrix.d %>% sf::st_drop_geometry()
             # OJO: se usa el operador <<- para utilizar los resultados el siguiente día
             simulation_matrix.d <<- simulation_matrix %>%
                 {if (!model$control$use_covariates) dplyr::filter(.)

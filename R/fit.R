@@ -259,7 +259,7 @@ calibrate.glmwgen <- function(climate, stations, seasonal_climate = NULL,
 
     if (control$use_covariates) {
         prcp_occ_cov <- models_data %>% dplyr::select(dplyr::matches('ST\\d')) %>% names
-        prcp_occ_cov_fm_str <- paste("te(", prcp_occ_cov, ", latitude, longitude, d = c(2, 2), ",
+        prcp_occ_cov_fm_str <- paste("te(", prcp_occ_cov, ", latitude, longitude, d = c(1, 2), ",
                                      "bs = c('tp' , 'tp'), k = length(unique_stations))", collapse = " + ")
         prcp_occ_cov_fm     <- stats::as.formula(paste('~ . +', prcp_occ_cov_fm_str))
         # prcp_occ_cov_fm <- ~ . +
@@ -376,18 +376,15 @@ calibrate.glmwgen <- function(climate, stations, seasonal_climate = NULL,
     if (control$use_covariates) {
         tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
         tmin_cov <- models_data %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
-        tmax_cov_fm_str <- paste("te(", tmax_cov, ", ", tmin_cov, ", latitude, longitude, d = c(2, 2))",
-                                 collapse = " + ")
-        tmax_cov_fm_1   <- stats::as.formula(paste('~ . +', tmax_cov_fm_str))
-        tmax_cov_fm_2   <- ~ . + te(doy, latitude, longitude, d = c(1, 2), bs = c('cc', 'tp'))
+        tmax_cov_fm_str <- paste("te(", tmax_cov, ", ", tmin_cov, ", latitude, longitude, d = c(2, 2), ",
+                                 "k = length(unique_stations))", collapse = " + ")
+        tmax_cov_fm     <- stats::as.formula(paste('~ . +', tmax_cov_fm_str))
         # tmax_cov_fm <- ~ . +
-        #     te(SX1, SN1, latitude, longitude, d = c(2, 2)) +
-        #     te(SX2, SN2, latitude, longitude, d = c(2, 2)) +
-        #     te(SX3, SN3, latitude, longitude, d = c(2, 2)) +
-        #     te(SX4, SN4, latitude, longitude, d = c(2, 2)) +
-        #     te(doy, latitude, longitude, d = c(1, 2), bs = c('cc', 'tp'))
-        tmax_fm         <- stats::update( tmax_fm, tmax_cov_fm_1 )
-        tmax_fm         <- stats::update( tmax_fm, tmax_cov_fm_2 )
+        #     te(SX1, SN1, latitude, longitude, d = c(2, 2), k = length(unique_stations)) +
+        #     te(SX2, SN2, latitude, longitude, d = c(2, 2), k = length(unique_stations)) +
+        #     te(SX3, SN3, latitude, longitude, d = c(2, 2), k = length(unique_stations)) +
+        #     te(SX4, SN4, latitude, longitude, d = c(2, 2), k = length(unique_stations))
+        tmax_fm         <- stats::update( tmax_fm, tmax_cov_fm )
     }
 
     t <- proc.time()
@@ -437,18 +434,15 @@ calibrate.glmwgen <- function(climate, stations, seasonal_climate = NULL,
     if (control$use_covariates) {
         tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
         tmin_cov <- models_data %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
-        tmin_cov_fm_str <- paste("te(", tmax_cov, ", ", tmin_cov, ", latitude, longitude, d = c(2, 2))",
-                                 collapse = " + ")
-        tmin_cov_fm_1   <- stats::as.formula(paste('~ . +', tmin_cov_fm_str))
-        tmin_cov_fm_2   <- ~ . + te(doy, latitude, longitude, d = c(1, 2), bs = c('cc', 'tp'))
+        tmin_cov_fm_str <- paste("te(", tmax_cov, ", ", tmin_cov, ", latitude, longitude, d = c(2, 2), ",
+                                 "k = length(unique_stations))", collapse = " + ")
+        tmin_cov_fm     <- stats::as.formula(paste('~ . +', tmin_cov_fm_str))
         # tmin_cov_fm <- ~ . +
-        #     te(SX1, SN1, latitude, longitude, d = c(2, 2)) +
-        #     te(SX2, SN2, latitude, longitude, d = c(2, 2)) +
-        #     te(SX3, SN3, latitude, longitude, d = c(2, 2)) +
-        #     te(SX4, SN4, latitude, longitude, d = c(2, 2)) +
-        #     te(doy, latitude, longitude, d = c(1, 2), bs = c('cc', 'tp'))
-        tmin_fm         <- stats::update( tmin_fm, tmin_cov_fm_1 )
-        tmin_fm         <- stats::update( tmin_fm, tmin_cov_fm_2 )
+        #     te(SX1, SN1, latitude, longitude, d = c(2, 2), k = length(unique_stations)) +
+        #     te(SX2, SN2, latitude, longitude, d = c(2, 2), k = length(unique_stations)) +
+        #     te(SX3, SN3, latitude, longitude, d = c(2, 2), k = length(unique_stations)) +
+        #     te(SX4, SN4, latitude, longitude, d = c(2, 2), k = length(unique_stations)) +
+        tmin_fm         <- stats::update( tmin_fm, tmin_cov_fm )
     }
 
     t <- proc.time()
