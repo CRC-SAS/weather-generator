@@ -2,7 +2,7 @@
 #' @title Weather model fit configuration
 #' @description Provides fine control of different parameters that will be used to fit a weather model.
 #' @export
-glmwgen_fit_control <- function(prcp_occurrence_threshold = 0.1,
+spatial_fit_control <- function(prcp_occurrence_threshold = 0.1,
                                 use_external_seasonal_climate = T,
                                 climate_missing_threshold = 0.2,
                                 use_covariates = F, avbl_cores = 2,
@@ -20,7 +20,7 @@ glmwgen_fit_control <- function(prcp_occurrence_threshold = 0.1,
 #' @description Fits a weather model from historical data.
 #' @import dplyr
 #' @export
-calibrate.glmwgen <- function(climate, stations, seasonal_climate = NULL,
+calibrate_spatial <- function(climate, stations, seasonal_climate = NULL,
                               control = glmwgen:::glmwgen_fit_control(),
                               verbose = F) {
 
@@ -126,6 +126,8 @@ calibrate.glmwgen <- function(climate, stations, seasonal_climate = NULL,
     model[["control"]] <- control
 
     model[["stations"]] <- stations
+
+    model[["climate"]] <- climate
 
     model[["seasonal_data"]] <- summarised_climate
 

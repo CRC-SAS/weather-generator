@@ -16,7 +16,7 @@
 #' @param coord_ref_system ...
 #' @param avbl_cores ...
 #' @export
-glmwgen_simulation_control <- function(nsim = 1, seed = NULL, avbl_cores = 2,
+spatial_simulation_control <- function(nsim = 1, seed = NULL, avbl_cores = 2,
                                        bbox_offset = 100000, sim_loc_as_grid = T,
                                        use_spatially_correlated_noise = T,
                                        use_temporary_files_to_save_ram = T,
@@ -54,7 +54,7 @@ glmwgen_simulation_control <- function(nsim = 1, seed = NULL, avbl_cores = 2,
 #' @import dplyr
 #' @import foreach
 #' @export
-sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
+sim_spatial_glmwgen <- function(model, simulation_locations, start_date, end_date,
                         control = glmwgen:::glmwgen_simulation_control(),
                         output_filename = "sim_results.nc",
                         seasonal_climate = NULL, verbose = F) {
@@ -215,14 +215,17 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
     # Para ...
     realizations_seeds <- NULL
-    if(!is.null(control$seed))
-        realizations_seeds <- list(general = ceiling(runif(min = 1, max = 10000000, n = control$nsim)),
-                                   prcp_occ = ceiling(runif(min = 1, max = 10000000, n = control$nsim)),
-                                   prcp_amt = ceiling(runif(min = 1, max = 10000000, n = control$nsim)),
-                                   temp_dry = ceiling(runif(min = 1, max = 10000000, n = control$nsim)),
-                                   temp_wet = ceiling(runif(min = 1, max = 10000000, n = control$nsim)))
-
-
+    if(!is.null(control$seed)) {
+        realizations_seeds <- list()
+        cant_dias_sim <- as.numeric(end_date - start_date) + 1
+        for (r in seq(1, control$nsim, 1)) {
+            realizations_seeds[[r]] <- list(general = ceiling(runif(min = 1, max = 10000000, n = control$nsim)), # uno por realizacion
+                                            prcp_occ = ceiling(runif(min = 1, max = 10000000, n = cant_dias_sim)), # uno por día por realizacion
+                                            prcp_amt = ceiling(runif(min = 1, max = 10000000, n = cant_dias_sim)), # uno por día por realizacion
+                                            temp_dry = ceiling(runif(min = 1, max = 10000000, n = cant_dias_sim)), # uno por día por realizacion
+                                            temp_wet = ceiling(runif(min = 1, max = 10000000, n = cant_dias_sim))) # uno por día por realizacion
+        }
+    }
 
     ####################################
     ## Parallelization initialization ##
@@ -422,7 +425,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
 
         ##################################################
         ## Para cuando necesitamos repetir resultados ----
-        set.seed(realizations_seeds$general[r])
+        set.seed(realizations_seeds[[r]]$general[[r]])
 
         ################################################################################
         ## Cuando se ejecuta el código en paralelo, simulation_matrix no es un sf válido
@@ -513,7 +516,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
                 gen_noise_params = gen_noise_params,
                 month_number = current_month,
                 selector = 'prcp',
-                seed = realizations_seeds$prcp_occ[r]) %>%
+                seed = realizations_seeds[[r]]$prcp_occ[[d]]) %>%
                 glmwgen:::sf2raster('prcp_residuals', simulation_raster)
             #}, times = 10) # 45 milisegundos
 
@@ -548,7 +551,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
                     gen_noise_params = gen_noise_params,
                     month_number = current_month,
                     selector = c('tmax_dry', 'tmin_dry'),
-                    seed = realizations_seeds$temp_dry[r])
+                    seed = realizations_seeds[[r]]$temp_dry[[d]])
             #}, times = 10) # 180 milisegundos
 
             # Procesamiento de residuos para dias secos
@@ -572,7 +575,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
                     gen_noise_params = gen_noise_params,
                     month_number = current_month,
                     selector = c('tmax_wet', 'tmin_wet'),
-                    seed = realizations_seeds$temp_wet[r])
+                    seed = realizations_seeds[[r]]$temp_wet[[d]])
             #}, times = 10) # 180 milisegundos
 
             # Procesamiento de residuos para dias humedos
@@ -691,7 +694,7 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
                 gen_noise_params = gen_noise_params,
                 month_number = current_month,
                 selector = 'prcp',
-                seed = realizations_seeds$prcp_amt[r]) %>%
+                seed = realizations_seeds[[r]]$prcp_amt[[d]]) %>%
                 glmwgen:::sf2raster('prcp_residuals', simulation_raster)
             #}, times = 10) # 45 milisegundos
 
@@ -869,7 +872,11 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     gen_climate[['seed']] <- control$seed
     gen_climate[['realizations_seeds']] <- realizations_seeds
     gen_climate[['simulation_coordinates']] <- simulation_points
-    gen_climate[['netcf4_file_with_results']] <- netcdf_filename
+    gen_climate[['netcdf4_file_with_results']] <- netcdf_filename
+
+    stations <- model$stations;  climate <- model$climate
+    save(station, climate, file = "station_climate.RData")
+    gen_climate[['rdata_file_with_station_climate']] <- "station_climate.RData"
 
     names(ctrl_sim$tiempo.gen_rast) <- paste0("sim_", ctrl_sim$nsim)
     gen_climate[['exec_times']][["gen_rast_time"]] <- ctrl_sim$tiempo.gen_rast
@@ -888,7 +895,6 @@ sim.glmwgen <- function(model, simulation_locations, start_date, end_date,
     gen_climate[['exec_times']][["exec_tot_time"]] <- tiempo.sim
 
     class(gen_climate) <- c(class(gen_climate), 'glmwgen.climate')
-
 
 
     #########################

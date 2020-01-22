@@ -131,7 +131,7 @@ calc.krige.sp <- function(model, simulation_locations, control) {
 #' @import dplyr
 #' @import foreach
 #' @export
-sim.locs.glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end_date = NA, simulation_locations = NULL,
+sim_local_glmwgen <- function(object, nsim = 1, seed = NULL, start_date = NA, end_date = NA, simulation_locations = NULL,
                              control = glmwgen:::glmwgen_simulation_control(), verbose = T) {
     model <- object
 
