@@ -1,6 +1,6 @@
 
 
-fit_control <- function(prcp_occurrence_threshold = 0.1,
+local_fit_control <- function(prcp_occurrence_threshold = 0.1,
                                 use_seasonal_covariates_precipitation = F, # el modelo más simple es sin covariables
                                 use_seasonal_covariates_temperature = F,
                                 use_linear_term = F,
@@ -38,7 +38,7 @@ fit_control <- function(prcp_occurrence_threshold = 0.1,
 }
 
 
-old_fit <- function(climate, stations, seasonal.climate = NULL,
+calibrate_local <- function(climate, stations, seasonal.climate = NULL,
                               control = fit_control(),
                               verbose = T) {
 
