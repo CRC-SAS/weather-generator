@@ -20,8 +20,8 @@ spatial_fit_control <- function(prcp_occurrence_threshold = 0.1,
 #' @description Fits a weather model from historical data.
 #' @import dplyr
 #' @export
-calibrate_spatial <- function(climate, stations, seasonal_climate = NULL,
-                              control = glmwgen:::glmwgen_fit_control(),
+spatial_calibrate <- function(climate, stations, seasonal_climate = NULL,
+                              control = glmwgen:::spatial_fit_control(),
                               verbose = F) {
 
     ## Se crea el objeto a ser retornado al culminar el ajuste!
@@ -43,7 +43,11 @@ calibrate_spatial <- function(climate, stations, seasonal_climate = NULL,
     ###############################################################
 
     climate <- climate %>%
-        dplyr::arrange(station_id, date)
+        dplyr::arrange(station_id, date) %>%
+        dplyr::mutate(prcp_occ_threshold = control$prcp_occurrence_threshold) %>%
+        dplyr::mutate(prcp_occ = as.integer(prcp >= control$prcp_occurrence_threshold),  # prcp occurrence
+                      tipo_dia = factor(ifelse(as.logical(prcp_occ), 'Lluvioso', 'Seco'), levels = c('Lluvioso', 'Seco')),
+                      prcp_amt = ifelse(as.logical(prcp_occ), prcp, NA_real_))  # prcp amount/intensity
 
     invalid_records <- c(which(climate$tmax < climate$tmin), which(climate$prcp < 0))
 
@@ -76,8 +80,8 @@ calibrate_spatial <- function(climate, stations, seasonal_climate = NULL,
     if (control$use_external_seasonal_climate)
         seasonal_climate <- seasonal_climate %>% dplyr::arrange(station_id, year, season)
 
-    # summarisea_climate es lo que se recibio como seasonal_climate,
-    # es decir, seasonal_climate y seasonal_climate son la misma cosa!!
+    # summarised_climate es lo que se recibio como seasonal_climate,
+    # es decir, summarised_climate y seasonal_climate son la misma cosa!!
     summarised_climate <- seasonal_climate
 
     t <- proc.time()
@@ -103,21 +107,9 @@ calibrate_spatial <- function(climate, stations, seasonal_climate = NULL,
     ######################################
 
 
-    ###########################################
-    ## Parallelization initialization
-
-    ## OBS:
-    ## No se usa foreach con %dopar% ni furrr para calcular
-    ## los 12 gam en prcp_amt_fit porque el gam ya utiliza
-    ## todos los procesadores disponibles. Usando foreach
-    ## y %dopar% con la opción cluster del bam, se ebtienen,
-    ## al calcular el resultado para prcp_amt_fit, tiempos
-    ## 10 veces peores al acutal (30 vs 350)!!
-    ## Además, se usa purrr::map en lugar de foreach %do%
-    ## porque purrr:map es más rápido!!
-
-    ## Make Cluster
-    cluster <- parallel::makeCluster(control$avbl_cores)
+    #################################
+    ## Control de tiempo de ejecución
+    t.m <- proc.time()
 
 
     ###########################################
@@ -134,15 +126,37 @@ calibrate_spatial <- function(climate, stations, seasonal_climate = NULL,
     model[["crs_used_to_fit"]] <- sf::st_crs(control$planar_crs_in_metric_coords)
 
 
-    #################################
-    ## Control de tiempo de ejecución
-    t.m <- proc.time()
+
+    ####################################
+    ## Parallelization initialization ##
+    ####################################
+
+    ## OBS:
+    ## No se usa foreach con %dopar% ni furrr para calcular
+    ## los 12 gam en prcp_amt_fit porque el gam ya utiliza
+    ## todos los procesadores disponibles. Usando foreach
+    ## y %dopar% con la opción cluster del bam, se ebtienen,
+    ## al calcular el resultado para prcp_amt_fit, tiempos
+    ## 10 veces peores al acutal (30 vs 350)!!
+    ## Además, se usa purrr::map en lugar de foreach %do%
+    ## porque purrr:map es más rápido!!
+
+    ## Make Cluster
+    cluster <- parallel::makeCluster(control$avbl_cores)
+
+
+
+    ###################################
+    ## PREPARACIÓN BARRA DE PROGRESO ##
+    ###################################
+
 
     #######################################################
     ## Set the progress bar to know how long this will take
     pb <- progress::progress_bar$new(
         format = " fitting: :what | previous progress: [:bar] :percent (in :elapsed)",
-        total = 100, clear = FALSE, width= 80, show_after = 0)
+        total = 101, clear = FALSE, width= 80, show_after = 0)
+
 
 
     ############################
@@ -162,7 +176,6 @@ calibrate_spatial <- function(climate, stations, seasonal_climate = NULL,
 
     # Group by stations and conf cluster
     models_data <- climate %>%
-        dplyr::mutate(prcp_occ_threshold = control$prcp_occurrence_threshold) %>%
         dplyr::group_by(station_id)
 
     # Crear matriz con todas las estaciones
@@ -177,14 +190,12 @@ calibrate_spatial <- function(climate, stations, seasonal_climate = NULL,
                       doy           = lubridate::yday(date),
                       time          = as.numeric(date)/1000,
                       season        = lubridate::quarter(date, fiscal_start = 12),
-                      prcp_occ      = as.integer(prcp >= prcp_occ_threshold),  # prcp occurrence
-                      tipo_dia      = factor(ifelse(as.logical(prcp_occ), 'Lluvioso', 'Seco'), levels = c('Lluvioso', 'Seco')),
-                      prcp_amt      = ifelse(as.logical(prcp_occ), prcp, NA_real_),  # prcp amount/intensity
                       prcp_occ_prev = lag(prcp_occ),
                       tipo_dia_prev = lag(tipo_dia),
                       prcp_amt_prev = lag(prcp_amt),
                       tmax_prev     = lag(tmax),
-                      tmin_prev     = lag(tmin)) %>%
+                      tmin_prev     = lag(tmin),
+                      row_num = row_number()) %>%
         # Add seasonal covariates to station_climate
         dplyr::left_join(summarised_climate,
                          by = c("station_id", "year", "season")) %>%
@@ -254,14 +265,13 @@ calibrate_spatial <- function(climate, stations, seasonal_climate = NULL,
     prcp_occ_indexes <- models_data %>% tidyr::drop_na(prcp_occ_fit_noNA_cols) %>% dplyr::pull(row_num)
 
     # Create formula
-    prcp_occ_fm <- prcp_occ ~ s(tipo_dia_prev, bs = 're') +
-        s(latitude, longitude, bs = 'tp', k = length(unique_stations)) +
-        s(time, bs = 'gp', k = 20) + s(doy, bs = 'cc', k = 20) +
-        te(latitude, longitude, doy, d = c(2, 1), bs = c('tp', 'cc'), k = length(unique_stations))
+    prcp_occ_fm <- prcp_occ ~ s(time, bs = "gp", k = 1000) +
+        te(tipo_dia_prev, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations)) +
+        te(longitude, latitude, doy, d = c(2, 1), bs = c("tp", "cc"), k = length(unique_stations))
 
     if (control$use_covariates) {
         prcp_occ_cov <- models_data %>% dplyr::select(dplyr::matches('ST\\d')) %>% names
-        prcp_occ_cov_fm_str <- paste("te(", prcp_occ_cov, ", latitude, longitude, d = c(1, 2), ",
+        prcp_occ_cov_fm_str <- paste("te(", prcp_occ_cov, ", longitude, latitude, d = c(1, 2), ",
                                      "bs = c('tp' , 'tp'), k = length(unique_stations))", collapse = " + ")
         prcp_occ_cov_fm     <- stats::as.formula(paste('~ . +', prcp_occ_cov_fm_str))
         # prcp_occ_cov_fm <- ~ . +
@@ -313,13 +323,10 @@ calibrate_spatial <- function(climate, stations, seasonal_climate = NULL,
     gamma_indexes <- models_data %>% tidyr::drop_na(prcp_amt_fit_noNA_cols) %>% dplyr::pull(row_num)
 
     # Create formula
-    prcp_amt_fm <- prcp_amt ~ prcp_occ_prev + s(latitude, longitude, k = length(unique_stations))
+    prcp_amt_fm <- prcp_amt ~ te(tipo_dia_prev, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations))
 
     if (control$use_covariates) {
-        prcp_amt_cov <- models_data %>% dplyr::select(dplyr::matches('ST\\d')) %>% names
-        prcp_amt_cov_fm_str <- paste(prcp_amt_cov, collapse = " + ")
-        prcp_amt_cov_fm     <- stats::as.formula(paste('~ . +', prcp_amt_cov_fm_str))
-        # prcp_amt_cov_fm <- ~ . + ST1 + ST2 + ST3 + ST4
+        prcp_amt_cov_fm     <- ~ . + te(sum_prcp, longitude, latitude, d = c(1, 2), bs = c('tp', 'tp'), k = length(unique_stations))
         prcp_amt_fm         <- stats::update( prcp_amt_fm, prcp_amt_cov_fm )
     }
 
@@ -371,21 +378,23 @@ calibrate_spatial <- function(climate, stations, seasonal_climate = NULL,
     tmax_indexes <- models_data %>% tidyr::drop_na(tx_fit_noNA_cols) %>% dplyr::pull(row_num)
 
     # Create formula
-    tmax_fm <- tmax ~ te(tmax_prev, tmin_prev, latitude, longitude, d = c(2, 2), k = length(unique_stations)) +
-        prcp_occ + prcp_occ_prev + s(time, bs = 'gp', k = 10) +
-        te(latitude, longitude, doy, bs = c('tp', 'cc'), d = c(2, 1), k = length(unique_stations))
+    tmax_fm <- tmax ~ s(time, bs = 'gp', k = 1000) +
+        te(tmax_prev, tmin_prev, longitude, latitude, d = c(2, 2), k = length(unique_stations)) +
+        te(tipo_dia, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations)) +
+        te(tipo_dia_prev, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations)) +
+        te(doy, longitude, latitude, d = c(1, 2), bs = c('cc', 'tp'), k = length(unique_stations))
 
     if (control$use_covariates) {
         tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
         tmin_cov <- models_data %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
-        tmax_cov_fm_str <- paste("te(", tmax_cov, ", ", tmin_cov, ", latitude, longitude, d = c(2, 2), ",
+        tmax_cov_fm_str <- paste("te(", tmax_cov, ", ", tmin_cov, ", longitude, latitude, d = c(2, 2), ",
                                  "k = length(unique_stations))", collapse = " + ")
         tmax_cov_fm     <- stats::as.formula(paste('~ . +', tmax_cov_fm_str))
         # tmax_cov_fm <- ~ . +
-        #     te(SX1, SN1, latitude, longitude, d = c(2, 2), k = length(unique_stations)) +
-        #     te(SX2, SN2, latitude, longitude, d = c(2, 2), k = length(unique_stations)) +
-        #     te(SX3, SN3, latitude, longitude, d = c(2, 2), k = length(unique_stations)) +
-        #     te(SX4, SN4, latitude, longitude, d = c(2, 2), k = length(unique_stations))
+        #     te(SX1, SN1, longitude, latitude, d = c(2, 2), k = length(unique_stations)) +
+        #     te(SX2, SN2, longitude, latitude, d = c(2, 2), k = length(unique_stations)) +
+        #     te(SX3, SN3, longitude, latitude, d = c(2, 2), k = length(unique_stations)) +
+        #     te(SX4, SN4, longitude, latitude, d = c(2, 2), k = length(unique_stations))
         tmax_fm         <- stats::update( tmax_fm, tmax_cov_fm )
     }
 
@@ -429,21 +438,23 @@ calibrate_spatial <- function(climate, stations, seasonal_climate = NULL,
     tmin_indexes <- models_data %>% tidyr::drop_na(tn_fit_noNA_cols) %>% dplyr::pull(row_num)
 
     # Create formula
-    tmin_fm <- tmin ~ te(tmin_prev, tmax_prev, latitude, longitude, d = c(2, 2), k = length(unique_stations)) +
-        prcp_occ + prcp_occ_prev + s(time, bs = 'gp', k = 100) +
-        te(latitude, longitude, doy, bs = c('tp', 'cc'), d = c(2, 1), k = length(unique_stations))
+    tmin_fm <- tmin ~ s(time, bs = 'gp', k = 1000) +
+        te(tmax_prev, tmin_prev, longitude, latitude, d = c(2, 2), k = length(unique_stations)) +
+        te(tipo_dia, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations)) +
+        te(tipo_dia_prev, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations)) +
+        te(doy, longitude, latitude, d = c(1, 2), bs = c('cc', 'tp'), k = length(unique_stations))
 
     if (control$use_covariates) {
         tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
         tmin_cov <- models_data %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
-        tmin_cov_fm_str <- paste("te(", tmax_cov, ", ", tmin_cov, ", latitude, longitude, d = c(2, 2), ",
+        tmin_cov_fm_str <- paste("te(", tmax_cov, ", ", tmin_cov, ", longitude, latitude, d = c(2, 2), ",
                                  "k = length(unique_stations))", collapse = " + ")
         tmin_cov_fm     <- stats::as.formula(paste('~ . +', tmin_cov_fm_str))
         # tmin_cov_fm <- ~ . +
-        #     te(SX1, SN1, latitude, longitude, d = c(2, 2), k = length(unique_stations)) +
-        #     te(SX2, SN2, latitude, longitude, d = c(2, 2), k = length(unique_stations)) +
-        #     te(SX3, SN3, latitude, longitude, d = c(2, 2), k = length(unique_stations)) +
-        #     te(SX4, SN4, latitude, longitude, d = c(2, 2), k = length(unique_stations)) +
+        #     te(SX1, SN1, longitude, latitude, d = c(2, 2), k = length(unique_stations)) +
+        #     te(SX2, SN2, longitude, latitude, d = c(2, 2), k = length(unique_stations)) +
+        #     te(SX3, SN3, longitude, latitude, d = c(2, 2), k = length(unique_stations)) +
+        #     te(SX4, SN4, longitude, latitude, d = c(2, 2), k = length(unique_stations)) +
         tmin_fm         <- stats::update( tmin_fm, tmin_cov_fm )
     }
 
@@ -477,6 +488,11 @@ calibrate_spatial <- function(climate, stations, seasonal_climate = NULL,
     #################################
     ## Control de tiempo de ejecución
     tiempo.models <- proc.time() - t.m
+
+
+    ##############
+    # Progress Bar
+    pb$tick(1, tokens = list(what = "fit finished"))
 
 
     ###########################

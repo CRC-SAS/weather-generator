@@ -96,7 +96,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     ###############################################################
 
     if(sf::st_crs(simulation_locations) != sf::st_crs(model$crs_used_to_fit)) {
-        simulation_locations %>% simulation_locations %>%
+        simulation_locations <- simulation_locations %>%
             sf::st_transform(sf::st_crs(model$crs_used_to_fit))
         warning('The crs used to fit and the crs of simulation_locations are not equals. ',
                 'Se transforma simulation_locations al crs {del ajuste}')
@@ -875,9 +875,9 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     gen_climate[['simulation_coordinates']] <- simulation_points
     gen_climate[['netcdf4_file_with_results']] <- netcdf_filename
 
-    stations <- model$stations;  climate <- model$climate
-    save(stations, climate, file = "station_climate.RData")
-    gen_climate[['rdata_file_with_station_climate']] <- "station_climate.RData"
+    fitted_stations <- model$stations;  climate <- model$climate
+    save(fitted_stations, climate, file = "fitted_stations_and_climate.RData")
+    gen_climate[['rdata_file_with_fitted_stations_and_climate']] <- "fitted_stations_and_climate.RData"
 
     names(ctrl_sim$tiempo.gen_rast) <- paste0("sim_", ctrl_sim$nsim)
     gen_climate[['exec_times']][["gen_rast_time"]] <- ctrl_sim$tiempo.gen_rast
