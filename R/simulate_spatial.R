@@ -54,10 +54,10 @@ spatial_simulation_control <- function(nsim = 1, seed = NULL, avbl_cores = 2,
 #' @import dplyr
 #' @import foreach
 #' @export
-sim_spatial_glmwgen <- function(model, simulation_locations, start_date, end_date,
-                        control = glmwgen:::glmwgen_simulation_control(),
-                        output_filename = "sim_results.nc",
-                        seasonal_climate = NULL, verbose = F) {
+spatial_simulation <- function(model, simulation_locations, start_date, end_date,
+                               control = glmwgen:::glmwgen_simulation_control(),
+                               output_filename = "sim_results.nc",
+                               seasonal_climate = NULL, verbose = F) {
 
     # TODO:
     # 1- quitar rasters de ejecución día a día () --> opcional
@@ -359,7 +359,8 @@ sim_spatial_glmwgen <- function(model, simulation_locations, start_date, end_dat
         simulation_matrix <- simulation_points
     } else {
         simulation_matrix <- simulation_points %>%
-            sf::st_join(covariates %>% dplyr::select(-station_id)) %>%
+            sf::st_join(covariates %>% {if (control$sim_loc_as_grid) dplyr::select(., dplyr::everything())
+                                        else dplyr::select(. , -dplyr::one_of("station_id"))}) %>%
             dplyr::mutate(ST1 = if_else(season == 1, sum_prcp, 0),
                           ST2 = if_else(season == 2, sum_prcp, 0),
                           ST3 = if_else(season == 3, sum_prcp, 0),
@@ -875,7 +876,7 @@ sim_spatial_glmwgen <- function(model, simulation_locations, start_date, end_dat
     gen_climate[['netcdf4_file_with_results']] <- netcdf_filename
 
     stations <- model$stations;  climate <- model$climate
-    save(station, climate, file = "station_climate.RData")
+    save(stations, climate, file = "station_climate.RData")
     gen_climate[['rdata_file_with_station_climate']] <- "station_climate.RData"
 
     names(ctrl_sim$tiempo.gen_rast) <- paste0("sim_", ctrl_sim$nsim)

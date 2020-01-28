@@ -25,9 +25,9 @@ get_start_climatology <- function(model, simulation_points, start_date, control)
 
     # Si continua la ejecución de la función es porque simulation points es una grilla o NO todos
     # los puntos a simular fueron usados en el ajuste, y es necesario interpolar start_climatology
-    return (glmwgen:::interpolate_start_climatology(model, simulation_points, seed,
+    return (glmwgen:::interpolate_start_climatology(model, simulation_points, control$seed,
                                                     month = lubridate::month(start_date - 1),
-                                                    day = lubridate::day(start_date -1)))
+                                                    day = lubridate::day(start_date - 1)))
 
 }
 
@@ -49,7 +49,8 @@ get_covariates <- function(model, simulation_points, seasonal_climate, simulatio
 
     # Si continua la ejecución de la función es porque simulation points es una grilla o NO hay
     # covariables para todos los puntos a simular, y es necesario interpolar seasonal_climate
-    return (glmwgen:::interpolate_covariates(simulation_points, seasonal_climate, simulation_dates))
+    return (glmwgen:::interpolate_covariates(simulation_points, seasonal_climate, model$stations,
+                                             simulation_dates))
 
 }
 

@@ -1,6 +1,6 @@
 
 # Interpolación de covariables
-interpolate_covariates <- function(simulation_points, seasonal_climate, simulation_dates) {
+interpolate_covariates <- function(simulation_points, seasonal_climate, model_stations, simulation_dates) {
 
     # OBS:
     # Al interpolar las covariables, no se tiene en cuenta si el usario optó por usar ruidos
@@ -11,7 +11,7 @@ interpolate_covariates <- function(simulation_points, seasonal_climate, simulati
 
     # Datos estacionales para todas las localidades
     datos.estacionales <- seasonal_climate %>%
-        dplyr::left_join(stations %>% dplyr::select(station_id, longitude, latitude), by = 'station_id') %>%
+        dplyr::left_join(model_stations %>% dplyr::select(station_id, longitude, latitude), by = 'station_id') %>%
         sf::st_as_sf() %>% sf::st_transform(sf::st_crs(simulation_points))
 
     # Transformación a objeto sp para la interpolación
@@ -20,7 +20,7 @@ interpolate_covariates <- function(simulation_points, seasonal_climate, simulati
     # Combinaciones posibles de años y trimestres para la interpolación
     combinaciones <- purrr::transpose(
         purrr::cross2(.x = unique(simulation_dates$year),
-                      .y =unique(simulation_dates$season)))
+                      .y = unique(simulation_dates$season)))
 
     # Interpolación de acumulados de lluvia
     datos_interpolados <- purrr::pmap_dfr(
@@ -65,17 +65,22 @@ interpolate_covariates <- function(simulation_points, seasonal_climate, simulati
             # Crear data frame con los valores interpolados
             # Este df hay que unirlo a la grilla de simulación para cada día de la simulacion
             # para la union tenemos las coordenadas, anos y estaciones.
-            datos_interpolados_prcp_tmax_tmin <- datos_interpolados_prcp %>%
+            datos_interpolados_prcp_tmax_tmin <- simulation_points %>%
+                dplyr::select(longitude, latitude) %>%
+                sf::st_join(datos_interpolados_prcp) %>%
                 sf::st_join(datos_interpolados_tmax) %>%
                 sf::st_join(datos_interpolados_tmin) %>%
                 dplyr::mutate(year = !!year, season = !!season) %>%
-                dplyr::select(year, season, sum_prcp, mean_tmax, mean_tmin)
+                dplyr::select(year, season, sum_prcp, mean_tmax, mean_tmin, longitude, latitude) %>%
+                sf::st_drop_geometry()
 
             return(datos_interpolados_prcp_tmax_tmin)
         }
     )
 
-    return (datos_interpolados)
+    return (datos_interpolados %>%
+                sf::st_as_sf(coords = c("longitude", "latitude")) %>%
+                sf::st_set_crs(sf::st_crs(simulation_points)))
 
 }
 
@@ -128,6 +133,7 @@ interpolate_start_climatology <- function(model, simulation_points, seed, month,
 
     # Matriz de valores a interpolar
     data_to_be_interpolated <- model$start_climatology %>%
+        dplyr::filter(month == !!month, day == !!day) %>%
         dplyr::left_join(model$stations, by = "station_id") %>%
         sf::st_as_sf(crs = sf::st_crs(model$stations))
 
