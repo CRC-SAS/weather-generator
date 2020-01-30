@@ -21,7 +21,7 @@ spatial_fit_control <- function(prcp_occurrence_threshold = 0.1,
 #' @import dplyr
 #' @export
 spatial_calibrate <- function(climate, stations, seasonal_climate = NULL,
-                              control = glmwgen:::spatial_fit_control(),
+                              control = gamwgen:::spatial_fit_control(),
                               verbose = F) {
 
     ## Se crea el objeto a ser retornado al culminar el ajuste!
@@ -38,7 +38,7 @@ spatial_calibrate <- function(climate, stations, seasonal_climate = NULL,
     }
 
     # Se controlan que los datos recibidos tengan el formato correcto
-    glmwgen:::check.fit.input.data(climate, stations, seasonal_climate)
+    gamwgen:::check.fit.input.data(climate, stations, seasonal_climate)
 
     ###############################################################
 
@@ -83,7 +83,7 @@ spatial_calibrate <- function(climate, stations, seasonal_climate = NULL,
     t <- proc.time()
     # Si no se recibió seasonal_climate como parámetro, entonces se la calcula internamente!!
     if (is.null(seasonal_climate) | !control$use_external_seasonal_climate)
-        seasonal_climate <- glmwgen:::summarise_seasonal_climate(climate, control$climate_missing_threshold)
+        seasonal_climate <- gamwgen:::summarise_seasonal_climate(climate, control$climate_missing_threshold)
     tiempo.seasonal_climate <- proc.time() - t
 
     # Se verifica que hayan covariables suficientes para cubrir todas las fechas en climate,
@@ -532,7 +532,7 @@ spatial_calibrate <- function(climate, stations, seasonal_climate = NULL,
     model[['exec_times']][["exec_tot_time"]] <- tiempo.models
 
     # Set model's class
-    class(model) <- "glmwgen"
+    class(model) <- "gamwgen"
 
 
     #########################

@@ -1,7 +1,7 @@
 library(testthat)
-library(glmwgen)
+library(gamwgen)
 
-test_check("glmwgen")
+test_check("gamwgen")
 
 load(file='data/test/stations.RData')
 load(file='data/test/climate.RData')

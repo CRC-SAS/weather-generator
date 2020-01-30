@@ -14,12 +14,12 @@ local_simulation_control <- function(nsim = 1, seed = NULL, avbl_cores = 2,
                                      remove_temp_files_used_to_save_ram = T,
                                      manage_parallelization_externally = F) {
 
-    prcp_noise_generating_function = glmwgen:::random_field_noise_prcp
-    temperature_noise_generating_function = glmwgen:::random_field_noise_temperature
+    prcp_noise_generating_function = gamwgen:::random_field_noise_prcp
+    temperature_noise_generating_function = gamwgen:::random_field_noise_temperature
 
     if(!use_spatially_correlated_noise) {
-        prcp_noise_generating_function = glmwgen:::not_spatially_correlated_random_field_noise_prcp
-        temperature_noise_generating_function = glmwgen:::not_spatially_correlated_random_field_noise_temperature
+        prcp_noise_generating_function = gamwgen:::not_spatially_correlated_random_field_noise_prcp
+        temperature_noise_generating_function = gamwgen:::not_spatially_correlated_random_field_noise_temperature
     }
 
     return(list(nsim = nsim, seed = seed, avbl_cores = avbl_cores,
@@ -36,17 +36,17 @@ local_simulation_control <- function(nsim = 1, seed = NULL, avbl_cores = 2,
 
 #' @title Simulates new weather trajectories in stations
 #' @description Simulates new weather trajectories.
-#' @param model A glmwgen model.
+#' @param model A gamwgen model.
 #' @param simulation_locations a sf object with the points at which weather should be simulated.
 #'          If not set, the locations used to fit the model will be used.
 #' @param start_date a start date in text format (will be converted using as.Date) or a date object.
 #' @param end_date an end date in text format (will be converted using as.Date) or a date object.
-#' @param control a glmwgen simulation control list.
+#' @param control a gamwgen simulation control list.
 #' @import dplyr
 #' @import foreach
 #' @export
 local_simulation <- function(model, simulation_locations, start_date, end_date,
-                             control = glmwgen:::glmwgen_simulation_control(),
+                             control = gamwgen:::local_simulation_control(),
                              output_filename = "sim_results.rds",
                              seasonal_climate = NULL, verbose = F) {
 
@@ -60,15 +60,15 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
 
     ###############################################################
 
-    if(class(model) != 'glmwgen')
-        stop(glue::glue('Received a model of class {class(model)} and a model of class "glmwgen" was expected.'))
+    if(class(model) != 'gamwgen')
+        stop(glue::glue('Received a model of class {class(model)} and a model of class "gamwgen" was expected.'))
 
     # If
     if (is.null(simulation_locations))
         stop("The parameter simulation_locations can't be null!")
 
     # Se controlan que los datos recibidos tengan el formato correcto
-    glmwgen:::check.simulation.input.data(simulation_locations, seasonal_climate)
+    gamwgen:::check.simulation.input.data(simulation_locations, seasonal_climate)
 
     ###############################################################
 
@@ -249,7 +249,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
     ############################################################################
     ## Obtención de valores para el día previo al día de inicio de la simulación
     start_date_prev_day_climatology <-
-        glmwgen:::get_start_climatology(model, simulation_points, start_date, control)
+        gamwgen:::get_start_climatology(model, simulation_points, start_date, control)
 
 
     ###################################################################################
@@ -267,19 +267,19 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
     #############################################################
     ## Obtención de covariables, si van a ser utilizadas, sino no
     if (model$control$use_covariates)
-        seasonal_covariates <- glmwgen:::get_covariates(model, simulation_points, seasonal_climate,
+        seasonal_covariates <- gamwgen:::get_covariates(model, simulation_points, seasonal_climate,
                                                         simulation_dates, control)
 
 
     #########################################
     ## Global paramteres for noise generators
     if(control$use_spatially_correlated_noise)
-        gen_noise_params <- glmwgen:::generate_month_params(
+        gen_noise_params <- gamwgen:::generate_month_params(
             residuals = do.call('rbind', model$models_residuals),
             observed_climate = model$models_data,
             stations = model$stations)
     if(!control$use_spatially_correlated_noise)
-        gen_noise_params <- glmwgen:::generate_residuals_statistics(
+        gen_noise_params <- gamwgen:::generate_residuals_statistics(
             models_residuals = do.call('rbind', model$models_residuals))
 
 
@@ -843,7 +843,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
     gen_climate[['exec_times']][["gen_output_time"]] <- ctrl_output_file$tiempo.gen_file[1]
     gen_climate[['exec_times']][["exec_total_time"]] <- tiempo.sim
 
-    class(gen_climate) <- c(class(gen_climate), 'glmwgen.climate')
+    class(gen_climate) <- c(class(gen_climate), 'gamwgen.climate')
 
 
 

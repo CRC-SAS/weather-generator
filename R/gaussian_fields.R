@@ -46,18 +46,18 @@ setting_variograms_for_initial_values <- function(simulation_matrix, distance_ma
     tmin_vario <- stats::cov(tmin_intial_values_interpolation, use = "pairwise.complete.obs")
 
     prcp_params <- stats::optim(par = c(0.01, 1, max(distance_matrix)),
-                                f = glmwgen:::partially_apply_LS(prcp_vario, distance_matrix))$par
+                                f = gamwgen:::partially_apply_LS(prcp_vario, distance_matrix))$par
     prcp_params[prcp_params < 0] <- 0
     prcp_params <- c(0, prcp_params[2], prcp_params[3])
 
     sill_initial_value_tmax <- mean(var(tmax_intial_values_interpolation, na.rm = T))
     tmax_params <- stats::optim(par = c(sill_initial_value_tmax, max(distance_matrix)),
-                                fn = glmwgen:::partially_apply_LS(tmax_vario, distance_matrix, base_p = c(0)))$par
+                                fn = gamwgen:::partially_apply_LS(tmax_vario, distance_matrix, base_p = c(0)))$par
     tmax_params <- c(0, tmax_params)
 
     sill_initial_value_tmin <- mean(var(tmin_intial_values_interpolation, na.rm = T))
     tmin_params <- stats::optim(par = c(sill_initial_value_tmin, max(distance_matrix)),
-                                fn = glmwgen:::partially_apply_LS(tmin_vario, distance_matrix, base_p = c(0)))$par
+                                fn = gamwgen:::partially_apply_LS(tmin_vario, distance_matrix, base_p = c(0)))$par
     tmin_params <- c(0, tmin_params)
 
     variogram_parameters <- list(prcp = prcp_params,

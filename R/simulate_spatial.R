@@ -22,12 +22,12 @@ spatial_simulation_control <- function(nsim = 1, seed = NULL, avbl_cores = 2,
                                        remove_temp_files_used_to_save_ram = T,
                                        manage_parallelization_externally = F) {
 
-    prcp_noise_generating_function = glmwgen:::random_field_noise_prcp
-    temperature_noise_generating_function = glmwgen:::random_field_noise_temperature
+    prcp_noise_generating_function = gamwgen:::random_field_noise_prcp
+    temperature_noise_generating_function = gamwgen:::random_field_noise_temperature
 
     if(!use_spatially_correlated_noise) {
-        prcp_noise_generating_function = glmwgen:::not_spatially_correlated_random_field_noise_prcp
-        temperature_noise_generating_function = glmwgen:::not_spatially_correlated_random_field_noise_temperature
+        prcp_noise_generating_function = gamwgen:::not_spatially_correlated_random_field_noise_prcp
+        temperature_noise_generating_function = gamwgen:::not_spatially_correlated_random_field_noise_temperature
     }
 
     return(list(nsim = nsim, seed = seed, avbl_cores = avbl_cores,
@@ -44,17 +44,17 @@ spatial_simulation_control <- function(nsim = 1, seed = NULL, avbl_cores = 2,
 
 #' @title Simulates new weather trajectories in stations
 #' @description Simulates new weather trajectories.
-#' @param model A glmwgen model.
+#' @param model A gamwgen model.
 #' @param simulation_locations a sf object with the points at which weather should be simulated.
 #'          If not set, the locations used to fit the model will be used.
 #' @param start_date a start date in text format (will be converted using as.Date) or a date object.
 #' @param end_date an end date in text format (will be converted using as.Date) or a date object.
-#' @param control a glmwgen simulation control list.
+#' @param control a gamwgen simulation control list.
 #' @import dplyr
 #' @import foreach
 #' @export
 spatial_simulation <- function(model, simulation_locations, start_date, end_date,
-                               control = glmwgen:::glmwgen_simulation_control(),
+                               control = gamwgen:::spatial_simulation_control(),
                                output_filename = "sim_results.nc",
                                seasonal_climate = NULL, verbose = F) {
 
@@ -68,15 +68,15 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
     ###############################################################
 
-    if(class(model) != 'glmwgen')
-        stop(glue::glue('Received a model of class {class(model)} and a model of class "glmwgen" was expected.'))
+    if(class(model) != 'gamwgen')
+        stop(glue::glue('Received a model of class {class(model)} and a model of class "gamwgen" was expected.'))
 
     # If
     if (is.null(simulation_locations))
         stop("The parameter simulation_locations can't be null!")
 
     # Se controlan que los datos recibidos tengan el formato correcto
-    glmwgen:::check.simulation.input.data(simulation_locations, seasonal_climate)
+    gamwgen:::check.simulation.input.data(simulation_locations, seasonal_climate)
 
     ###############################################################
 
@@ -277,7 +277,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     ##################################
     ## Raster con los puntos a simular
     if (control$sim_loc_as_grid) {
-        pnts_dist_matrix  <- glmwgen:::make_distance_matrix(simulation_locations)
+        pnts_dist_matrix  <- gamwgen:::make_distance_matrix(simulation_locations)
         min_dist_btw_pnts <- floor(min(pnts_dist_matrix[upper.tri(pnts_dist_matrix)]))
         raster_resolution <- c(min_dist_btw_pnts, min_dist_btw_pnts)
         simulation_raster <- raster::rasterFromXYZ(
@@ -286,7 +286,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             crs = sf::st_crs(simulation_points))
     }
     if(!control$sim_loc_as_grid) {
-        stns_dist_matrix  <- glmwgen:::make_distance_matrix(model$stations)
+        stns_dist_matrix  <- gamwgen:::make_distance_matrix(model$stations)
         min_dist_btw_stns <- floor(min(stns_dist_matrix[upper.tri(stns_dist_matrix)]))
         raster_resolution <- c(min_dist_btw_stns, min_dist_btw_stns)
         simulation_raster <- raster::raster(
@@ -302,7 +302,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     ############################################################################
     ## Obtención de valores para el día previo al día de inicio de la simulación
     start_date_prev_day_climatology <-
-        glmwgen:::get_start_climatology(model, simulation_points, start_date, control)
+        gamwgen:::get_start_climatology(model, simulation_points, start_date, control)
 
 
     ###################################################################################
@@ -321,19 +321,19 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     ## Obtención de covariables, si van a ser utilizadas, sino no
     if (model$control$use_covariates)
         seasonal_covariates <-
-            glmwgen:::get_covariates(model, simulation_points, seasonal_climate, simulation_dates, control)
+            gamwgen:::get_covariates(model, simulation_points, seasonal_climate, simulation_dates, control)
 
 
 
     #########################################
     ## Global paramteres for noise generators
     if(control$use_spatially_correlated_noise)
-        gen_noise_params <- glmwgen:::generate_month_params(
+        gen_noise_params <- gamwgen:::generate_month_params(
             residuals = model$models_residuals,
             observed_climate = model$models_data,
             stations = model$stations)
     if(!control$use_spatially_correlated_noise)
-        gen_noise_params <- glmwgen:::generate_residuals_statistics(
+        gen_noise_params <- gamwgen:::generate_residuals_statistics(
             models_residuals = model$models_residuals)
 
 
@@ -400,7 +400,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
     ###########################################
     ## Crear objeto para guardar los resultados
-    glmwgen:::CrearNetCDF(output_filename,
+    gamwgen:::CrearNetCDF(output_filename,
                 num_realizations = control$nsim,
                 sim_dates = simulation_dates$date,
                 simulation_raster = simulation_raster,
@@ -501,7 +501,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             #microbenchmark::microbenchmark({
             SIMocc_points_climate.d <- simulation_points %>%
                 dplyr::mutate(SIMocc = !!SIMocc) %>%
-                glmwgen:::sf2raster('SIMocc', simulation_raster)
+                gamwgen:::sf2raster('SIMocc', simulation_raster)
             #}, times = 10) # 8 milisegundos
 
             # Raster con los valores de "ruido"
@@ -512,7 +512,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                 month_number = current_month,
                 selector = 'prcp',
                 seed = realizations_seeds[[r]]$prcp_occ[[d]]) %>%
-                glmwgen:::sf2raster('prcp_residuals', simulation_raster)
+                gamwgen:::sf2raster('prcp_residuals', simulation_raster)
             #}, times = 10) # 45 milisegundos
 
             # Raster con los valores simulados
@@ -555,7 +555,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             rasters_secos.d <- purrr::map(
                 .x = c("tmin", "tmax"),
                 .f = function(variable, objeto_sf) {
-                    return (glmwgen:::sf2raster(objeto_sf, paste0(variable, '_residuals'), simulation_raster))
+                    return (gamwgen:::sf2raster(objeto_sf, paste0(variable, '_residuals'), simulation_raster))
                 }, objeto_sf = temperature_random_fields_dry
             )
             #}, times = 10) # 14 milisegundos
@@ -579,7 +579,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             rasters_humedos.d <- purrr::map(
                 .x = c("tmin", "tmax"),
                 .f = function(variable, objeto_sf) {
-                    return (glmwgen:::sf2raster(objeto_sf, paste0(variable, '_residuals'), simulation_raster))
+                    return (gamwgen:::sf2raster(objeto_sf, paste0(variable, '_residuals'), simulation_raster))
                 }, objeto_sf = temperature_random_fields_wet
             )
             #}, times = 10) # 14 milisegundos
@@ -592,11 +592,11 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             #considerando la ocurrencia de dia seco o humedo
             #microbenchmark::microbenchmark({
             SIMmax_points_noise.d <-
-                glmwgen:::ensamblar_raster_residuos(rasters_humedos.d$tmax, rasters_secos.d$tmax, SIMocc_points.d)
+                gamwgen:::ensamblar_raster_residuos(rasters_humedos.d$tmax, rasters_secos.d$tmax, SIMocc_points.d)
             #}, times = 10) # 15 milisegundos
             #microbenchmark::microbenchmark({
             SIMmin_points_noise.d <-
-                glmwgen:::ensamblar_raster_residuos(rasters_humedos.d$tmin, rasters_secos.d$tmin, SIMocc_points.d)
+                gamwgen:::ensamblar_raster_residuos(rasters_humedos.d$tmin, rasters_secos.d$tmin, SIMocc_points.d)
             #}, times = 10) # 15 milisegundos
 
 
@@ -617,7 +617,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             #microbenchmark::microbenchmark({
             SIMmax_points_climate.d <- simulation_points %>%
                 dplyr::mutate(SIMmax = !!SIMmax) %>%
-                glmwgen:::sf2raster('SIMmax', simulation_raster)
+                gamwgen:::sf2raster('SIMmax', simulation_raster)
             #}, times = 10) # 8 milisegundos
 
             # Raster con los valores simulados
@@ -649,7 +649,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             #microbenchmark::microbenchmark({
             SIMmin_points_climate.d <- simulation_points %>%
                 dplyr::mutate(SIMmin = !!SIMmin) %>%
-                glmwgen:::sf2raster('SIMmin', simulation_raster)
+                gamwgen:::sf2raster('SIMmin', simulation_raster)
             #}, times = 10) # 8 milisegundos
 
             # Raster con los valores simulados
@@ -694,7 +694,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                 month_number = current_month,
                 selector = 'prcp',
                 seed = realizations_seeds[[r]]$prcp_amt[[d]]) %>%
-                glmwgen:::sf2raster('prcp_residuals', simulation_raster)
+                gamwgen:::sf2raster('prcp_residuals', simulation_raster)
             #}, times = 10) # 45 milisegundos
 
             # Simulacion de montos
@@ -707,7 +707,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             #microbenchmark::microbenchmark({
             SIMamt_points_climate.d <- simulation_points %>%
                 dplyr::mutate(SIMamt = !!SIMamt) %>%
-                glmwgen:::sf2raster('SIMamt', simulation_raster)
+                gamwgen:::sf2raster('SIMamt', simulation_raster)
             #}, times = 10) # 8 milisegundos
 
             # Enmascarar pixeles sin ocurrencia de lluvia
@@ -844,7 +844,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             #############################
             ## Generar archivos de salida
             t.gen_file <- proc.time()
-            glmwgen:::GuardarRealizacionNetCDF(output_filename,
+            gamwgen:::GuardarRealizacionNetCDF(output_filename,
                                                numero_realizacion = r,
                                                sim_dates = simulation_dates$date,
                                                raster_tmax = daily_gen_clim$raster_tmax,
@@ -902,7 +902,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     gen_climate[['exec_times']][["gen_output_time"]] <- ctrl_output_file$tiempo.gen_file
     gen_climate[['exec_times']][["exec_total_time"]] <- tiempo.sim
 
-    class(gen_climate) <- c(class(gen_climate), 'glmwgen.climate')
+    class(gen_climate) <- c(class(gen_climate), 'gamwgen.climate')
 
 
 

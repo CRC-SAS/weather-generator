@@ -101,11 +101,11 @@ generate_variograms_for_initial_values <- function(model, simulation_points, see
         sf::st_as_sf(crs = sf::st_crs(model$stations))
 
     # Creación de la matriz de distancias
-    distance_matrix <- glmwgen:::make_distance_matrix(model$stations)
+    distance_matrix <- gamwgen:::make_distance_matrix(model$stations)
 
     # Generación de variogramas
     variograms_for_initial_values <-
-        glmwgen:::setting_variograms_for_initial_values(
+        gamwgen:::setting_variograms_for_initial_values(
             simulation_matrix = simulation_matrix,
             distance_matrix = distance_matrix,
             grid = simulation_points %>%
@@ -130,7 +130,7 @@ interpolate_start_climatology <- function(model, simulation_points, seed, month,
 
     # Generación de valores inciales para el variograma
     variograms_for_initial_values <-
-        glmwgen:::generate_variograms_for_initial_values(model, simulation_points, seed, month, day)
+        gamwgen:::generate_variograms_for_initial_values(model, simulation_points, seed, month, day)
 
     # Matriz de valores a interpolar
     data_to_be_interpolated <- model$start_climatology %>%

@@ -10,7 +10,6 @@ local_fit_control(
   climate_missing_threshold = 0.2,
   use_covariates = F,
   avbl_cores = 2,
-  trim_gam_fit_models = F,
   planar_crs_in_metric_coords = 22185
 )
 }

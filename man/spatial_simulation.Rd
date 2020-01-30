@@ -9,14 +9,14 @@ spatial_simulation(
   simulation_locations,
   start_date,
   end_date,
-  control = glmwgen:::glmwgen_simulation_control(),
+  control = gamwgen:::spatial_simulation_control(),
   output_filename = "sim_results.nc",
   seasonal_climate = NULL,
   verbose = F
 )
 }
 \arguments{
-\item{model}{A glmwgen model.}
+\item{model}{A gamwgen model.}
 
 \item{simulation_locations}{a sf object with the points at which weather should be simulated.
 If not set, the locations used to fit the model will be used.}
@@ -25,7 +25,7 @@ If not set, the locations used to fit the model will be used.}
 
 \item{end_date}{an end date in text format (will be converted using as.Date) or a date object.}
 
-\item{control}{a glmwgen simulation control list.}
+\item{control}{a gamwgen simulation control list.}
 }
 \description{
 Simulates new weather trajectories.

@@ -6,14 +6,12 @@ local_fit_control <- function(prcp_occurrence_threshold = 0.1,
                               use_external_seasonal_climate = T,
                               climate_missing_threshold = 0.2,
                               use_covariates = F, avbl_cores = 2,
-                              trim_gam_fit_models = F,
                               planar_crs_in_metric_coords = 22185) {
 
     return(list(prcp_occurrence_threshold = prcp_occurrence_threshold,
                 use_external_seasonal_climate = use_external_seasonal_climate,
                 climate_missing_threshold = climate_missing_threshold,
                 use_covariates = use_covariates, avbl_cores = avbl_cores,
-                trim_gam_fit_models = trim_gam_fit_models,
                 planar_crs_in_metric_coords = planar_crs_in_metric_coords))
 }
 
@@ -24,7 +22,7 @@ local_fit_control <- function(prcp_occurrence_threshold = 0.1,
 #' @import dplyr
 #' @export
 local_calibrate <- function(climate, stations, seasonal_climate = NULL,
-                            control = glmwgen:::local_fit_control(),
+                            control = gamwgen:::local_fit_control(),
                             verbose = F) {
 
     ## Se crea el objeto a ser retornado al culminar el ajuste!
@@ -41,7 +39,7 @@ local_calibrate <- function(climate, stations, seasonal_climate = NULL,
     }
 
     # Se controlan que los datos recibidos tengan el formato correcto
-    glmwgen:::check.fit.input.data(climate, stations, seasonal_climate)
+    gamwgen:::check.fit.input.data(climate, stations, seasonal_climate)
 
     ###############################################################
 
@@ -86,7 +84,7 @@ local_calibrate <- function(climate, stations, seasonal_climate = NULL,
     t <- proc.time()
     # Si no se recibió seasonal_climate como parámetro, entonces se la calcula internamente!!
     if (is.null(seasonal_climate) | !control$use_external_seasonal_climate)
-        seasonal_climate <- glmwgen:::summarise_seasonal_climate(climate, control$climate_missing_threshold)
+        seasonal_climate <- gamwgen:::summarise_seasonal_climate(climate, control$climate_missing_threshold)
     tiempo.seasonal_climate <- proc.time() - t
 
     # Se verifica que hayan covariables suficientes para cubrir todas las fechas en climate,
@@ -311,8 +309,6 @@ local_calibrate <- function(climate, stations, seasonal_climate = NULL,
                                   control = list(nthreads = control$avbl_cores))
         tiempo.prcp_occ_fit <- proc.time() - t
 
-        if (control$trim_gam_fit_models) prcp_occ_fit <- glmwgen:::stripGlmLR(prcp_occ_fit)
-
         # Se agregan las fechas para poder hacer las validaciones posteriormente
         station_climate$prcp_occ_residuals <- NA
         station_climate$prcp_occ_residuals[prcp_occ_indexes] <- residuals(prcp_occ_fit, type = 'response')
@@ -372,8 +368,6 @@ local_calibrate <- function(climate, stations, seasonal_climate = NULL,
                                       #cluster = cluster,
                                       control = list(nthreads = control$avbl_cores))
             tiempo.prcp_amt_fit <- proc.time() - t
-
-            if (control$trim_gam_fit_models) prcp_amt_fit <- glmwgen:::stripGlmLR(prcp_amt_fit)
 
             # Se agregan las fechas para poder hacer las validaciones posteriormente
             prcp_amt_fit[["fitted_station"]] <- station
@@ -438,8 +432,6 @@ local_calibrate <- function(climate, stations, seasonal_climate = NULL,
         station_climate$tmax_residuals <- NA
         station_climate$tmax_residuals[tmax_indexes] <- residuals(tmax_fit, type = 'response')
 
-        if (control$trim_gam_fit_models) tmax_fit <- glmwgen:::stripGlmLR(tmax_fit)
-
         # Se agregan datos de control
         tmax_fit[["fitted_station"]] <- station
         tmax_fit[["dates_used_fitting"]] <- station_climate[tmax_indexes, ] %>%
@@ -498,8 +490,6 @@ local_calibrate <- function(climate, stations, seasonal_climate = NULL,
 
         station_climate$tmin_residuals <- NA
         station_climate$tmin_residuals[tmin_indexes] <- residuals(tmin_fit, type = 'response')
-
-        if (control$trim_gam_fit_models) tmin_fit <- glmwgen:::stripGlmLR(tmin_fit)
 
 
         # Se agregan datos de control
@@ -600,7 +590,7 @@ local_calibrate <- function(climate, stations, seasonal_climate = NULL,
     model[["execution_time"]] <- tiempo.models
 
     # Set model's class
-    class(model) <- "glmwgen"
+    class(model) <- "gamwgen"
 
 
     #########################

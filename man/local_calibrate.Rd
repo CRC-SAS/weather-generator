@@ -8,7 +8,7 @@ local_calibrate(
   climate,
   stations,
   seasonal_climate = NULL,
-  control = glmwgen:::local_fit_control(),
+  control = gamwgen:::local_fit_control(),
   verbose = F
 )
 }

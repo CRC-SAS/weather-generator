@@ -217,7 +217,7 @@ netcdf.as.tibble <- function(netcdf_filename, points_to_extract, points_id_colum
         dplyr::select(point_id = !!points_id_column)
 
     # Verificar columnas del objeto points_to_extract
-    glmwgen:::check.points.to.extract(points)
+    gamwgen:::check.points.to.extract(points)
 
     # Determinar posiciones de cada estacion (fila/columna)
     first_brick <- raster::brick(netcdf_filename, varname = variables[1], lvar = 4, level = 1,

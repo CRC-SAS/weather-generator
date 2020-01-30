@@ -8,7 +8,7 @@ spatial_calibrate(
   climate,
   stations,
   seasonal_climate = NULL,
-  control = glmwgen:::spatial_fit_control(),
+  control = gamwgen:::spatial_fit_control(),
   verbose = F
 )
 }

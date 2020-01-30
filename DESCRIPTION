@@ -1,4 +1,4 @@
-Package: glmwgen
+Package: gamwgen
 Title: What the Package Does (one line, title case)
 Version: 0.0.0.9000
 Authors@R: person("First", "Last", email = "first.last@example.com", role = c("aut", "cre"))
@@ -13,13 +13,10 @@ Imports:
     sp,
     foreach,
     MASS,
-    abind,
     proto,
-    reshape2,
     RandomFields
 Suggests:
     testthat,
-    automap,
-    ROCR
+    automap
 RoxygenNote: 7.0.1
 Encoding: UTF-8
