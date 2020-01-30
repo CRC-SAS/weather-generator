@@ -15,8 +15,11 @@
 #'          If set, the value is saved as the "seed" attribute of the returned value. The default, NULL will not change the random generator state.
 #' @param avbl_cores ...
 #' @export
-spatial_simulation_control <- function(nsim = 1, seed = NULL, avbl_cores = 2,
-                                       bbox_offset = 100000, sim_loc_as_grid = T,
+spatial_simulation_control <- function(nsim = 1,
+                                       seed = NULL,
+                                       avbl_cores = 2,
+                                       bbox_offset = 100000,
+                                       sim_loc_as_grid = T,
                                        use_spatially_correlated_noise = T,
                                        use_temporary_files_to_save_ram = T,
                                        remove_temp_files_used_to_save_ram = T,

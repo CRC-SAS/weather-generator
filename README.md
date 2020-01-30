@@ -1,2 +1,2 @@
-# glmgen-workshop
-# glmgen-workshop
+# gamwgen-workshop
+# gamwgen-workshop
