@@ -19,22 +19,22 @@ summarise_seasonal_climate <- function(datos_climaticos, umbral_faltantes = 0.2)
                                  cantidad_tmax = sum(ifelse(is.na(tmax), 0, 1)),
                                  cantidad_tmin = sum(ifelse(is.na(tmin), 0, 1)),
                                  cantidad_prcp = sum(ifelse(is.na(prcp), 0, 1)),
-                                 mean_tmax = mean(tmax, na.rm = TRUE),
-                                 mean_tmin = mean(tmin, na.rm = TRUE),
-                                 sum_prcp  = sum(prcp, na.rm = TRUE)) %>%
+                                 seasonal_tmax = mean(tmax, na.rm = TRUE),
+                                 seasonal_tmin = mean(tmin, na.rm = TRUE),
+                                 seasonal_prcp = sum(prcp, na.rm = TRUE)) %>%
                 dplyr::mutate(proporcion_faltantes_tmax = 1 - cantidad_tmax/cantidad_datos,
                               proporcion_faltantes_tmin = 1 - cantidad_tmin/cantidad_datos,
                               proporcion_faltantes_prcp = 1 - cantidad_prcp/cantidad_datos) %>%
-                dplyr::mutate(mean_tmax = dplyr::if_else(proporcion_faltantes_tmax > umbral_faltantes, as.double(NA), mean_tmax),
-                              mean_tmin = dplyr::if_else(proporcion_faltantes_tmin > umbral_faltantes, as.double(NA), mean_tmin),
-                              sum_prcp  = dplyr::if_else(proporcion_faltantes_prcp > umbral_faltantes, as.double(NA), sum_prcp)) %>%
+                dplyr::mutate(seasonal_tmax = dplyr::if_else(proporcion_faltantes_tmax > umbral_faltantes, as.double(NA), seasonal_tmax),
+                              seasonal_tmin = dplyr::if_else(proporcion_faltantes_tmin > umbral_faltantes, as.double(NA), seasonal_tmin),
+                              seasonal_prcp = dplyr::if_else(proporcion_faltantes_prcp > umbral_faltantes, as.double(NA), seasonal_prcp)) %>%
                 dplyr::ungroup() %>%
-                dplyr::select(station_id, year, season, sum_prcp, mean_tmax, mean_tmin)
+                dplyr::select(station_id, year, season, seasonal_prcp, seasonal_tmax, seasonal_tmin)
 
             # Imputar datos faltantes (solo si es necesario)
-            if (anyNA(estadisticas$sum_prcp) || anyNA(estadisticas$mean_tmax) || anyNA(estadisticas$mean_tmin)) {
+            if (anyNA(estadisticas$seasonal_prcp) || anyNA(estadisticas$seasonal_tmax) || anyNA(estadisticas$seasonal_tmin)) {
                 estadisticas_as_df     <- estadisticas %>% base::as.data.frame()
-                estadisticas_missmda   <- missMDA::imputePCA(X = dplyr::select(estadisticas_as_df, sum_prcp, mean_tmax, mean_tmin))
+                estadisticas_missmda   <- missMDA::imputePCA(X = dplyr::select(estadisticas_as_df, seasonal_prcp, seasonal_tmax, seasonal_tmin))
                 estadisticas_imputadas <- cbind(dplyr::select(estadisticas, station_id, year, season), estadisticas_missmda$completeObs)
                 return (estadisticas_imputadas %>% tibble::as_tibble())
             }

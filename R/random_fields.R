@@ -15,7 +15,7 @@ random_field_noise_temperature <- function(simulation_points, gen_noise_params, 
     # pasamos grid a kilometros, dividiendo cada columna por 1000!!
     grid <- simulation_points %>%
         dplyr::select(longitude, latitude) %>%
-        sf::st_drop_geometry() %>%
+        sf::st_drop_geometry() %>% tibble::as_tibble() %>%
         dplyr::mutate(longitude = longitude / 1000,
                       latitude = latitude / 1000)
 
@@ -60,7 +60,7 @@ random_field_noise_prcp <- function(simulation_points, gen_noise_params, month_n
     # pasamos grid a kilometros, dividiendo cada columna por 1000!!
     grid <- simulation_points %>%
         dplyr::select(longitude, latitude) %>%
-        sf::st_drop_geometry() %>%
+        sf::st_drop_geometry() %>% tibble::as_tibble() %>%
         dplyr::mutate(longitude = longitude / 1000,
                       latitude = latitude / 1000)
 

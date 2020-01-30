@@ -80,21 +80,17 @@ spatial_calibrate <- function(climate, stations, seasonal_climate = NULL,
     if (control$use_external_seasonal_climate)
         seasonal_climate <- seasonal_climate %>% dplyr::arrange(station_id, year, season)
 
-    # summarised_climate es lo que se recibio como seasonal_climate,
-    # es decir, summarised_climate y seasonal_climate son la misma cosa!!
-    summarised_climate <- seasonal_climate
-
     t <- proc.time()
     # Si no se recibió seasonal_climate como parámetro, entonces se la calcula internamente!!
-    if (is.null(summarised_climate) | !control$use_external_seasonal_climate)
-        summarised_climate <- glmwgen:::summarise_seasonal_climate(climate, control$climate_missing_threshold)
-    tiempo.summarised_climate <- proc.time() - t
+    if (is.null(seasonal_climate) | !control$use_external_seasonal_climate)
+        seasonal_climate <- glmwgen:::summarise_seasonal_climate(climate, control$climate_missing_threshold)
+    tiempo.seasonal_climate <- proc.time() - t
 
     # Se verifica que hayan covariables suficientes para cubrir todas las fechas en climate,
     # pero el control solo se hace si se van a utilizar covariables en el ajuste!!
     climate_control <- climate %>% dplyr::distinct(station_id, year = lubridate::year(date),
                                                    season = lubridate::quarter(date, fiscal_start = 12))
-    seasnl_cli_ctrl <- summarised_climate %>% dplyr::distinct(station_id, year, season)
+    seasnl_cli_ctrl <- seasonal_climate %>% dplyr::distinct(station_id, year, season)
     if (!dplyr::all_equal(climate_control, seasnl_cli_ctrl) & control$use_covariates)
         stop("Years in climate and years in seasonal_climate don't match!")
 
@@ -121,7 +117,7 @@ spatial_calibrate <- function(climate, stations, seasonal_climate = NULL,
 
     model[["climate"]] <- climate
 
-    model[["seasonal_data"]] <- summarised_climate
+    model[["seasonal_data"]] <- seasonal_climate
 
     model[["crs_used_to_fit"]] <- sf::st_crs(control$planar_crs_in_metric_coords)
 
@@ -196,21 +192,22 @@ spatial_calibrate <- function(climate, stations, seasonal_climate = NULL,
                       tmax_prev     = lag(tmax),
                       tmin_prev     = lag(tmin),
                       row_num = row_number()) %>%
-        # Add seasonal covariates to station_climate
-        dplyr::left_join(summarised_climate,
+        # Add seasonal climate to station_climate
+        dplyr::left_join(seasonal_climate,
                          by = c("station_id", "year", "season")) %>%
-        dplyr::mutate(ST1 = if_else(season == 1, sum_prcp, 0),
-                      ST2 = if_else(season == 2, sum_prcp, 0),
-                      ST3 = if_else(season == 3, sum_prcp, 0),
-                      ST4 = if_else(season == 4, sum_prcp, 0),
-                      SN1 = if_else(season == 1, mean_tmin, 0),
-                      SN2 = if_else(season == 2, mean_tmin, 0),
-                      SN3 = if_else(season == 3, mean_tmin, 0),
-                      SN4 = if_else(season == 4, mean_tmin, 0),
-                      SX1 = if_else(season == 1, mean_tmax, 0),
-                      SX2 = if_else(season == 2, mean_tmax, 0),
-                      SX3 = if_else(season == 3, mean_tmax, 0),
-                      SX4 = if_else(season == 4, mean_tmax, 0))
+        # Add seasonal covariates to station_climate
+        dplyr::mutate(ST1 = if_else(season == 1, seasonal_prcp, 0),
+                      ST2 = if_else(season == 2, seasonal_prcp, 0),
+                      ST3 = if_else(season == 3, seasonal_prcp, 0),
+                      ST4 = if_else(season == 4, seasonal_prcp, 0),
+                      SN1 = if_else(season == 1, seasonal_tmin, 0),
+                      SN2 = if_else(season == 2, seasonal_tmin, 0),
+                      SN3 = if_else(season == 3, seasonal_tmin, 0),
+                      SN4 = if_else(season == 4, seasonal_tmin, 0),
+                      SX1 = if_else(season == 1, seasonal_tmax, 0),
+                      SX2 = if_else(season == 2, seasonal_tmax, 0),
+                      SX3 = if_else(season == 3, seasonal_tmax, 0),
+                      SX4 = if_else(season == 4, seasonal_tmax, 0))
     tiempo.add_covariates <- proc.time() - t
 
     # Ungroup and collect data from cluster
@@ -326,7 +323,7 @@ spatial_calibrate <- function(climate, stations, seasonal_climate = NULL,
     prcp_amt_fm <- prcp_amt ~ te(tipo_dia_prev, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations))
 
     if (control$use_covariates) {
-        prcp_amt_cov_fm     <- ~ . + te(sum_prcp, longitude, latitude, d = c(1, 2), bs = c('tp', 'tp'), k = length(unique_stations))
+        prcp_amt_cov_fm     <- ~ . + te(seasonal_prcp, longitude, latitude, d = c(1, 2), bs = c('tp', 'tp'), k = length(unique_stations))
         prcp_amt_fm         <- stats::update( prcp_amt_fm, prcp_amt_cov_fm )
     }
 
@@ -374,7 +371,7 @@ spatial_calibrate <- function(climate, stations, seasonal_climate = NULL,
 
     # Remove NAs
     tx_fit_noNA_cols <- c('tmax', 'tmax_prev', 'tmin_prev', 'prcp_occ', 'prcp_occ_prev',
-                          'mean_tmax', 'mean_tmin', 'row_num')
+                          'seasonal_tmax', 'seasonal_tmin', 'row_num')
     tmax_indexes <- models_data %>% tidyr::drop_na(tx_fit_noNA_cols) %>% dplyr::pull(row_num)
 
     # Create formula
@@ -434,7 +431,7 @@ spatial_calibrate <- function(climate, stations, seasonal_climate = NULL,
 
     # Remove NAs
     tn_fit_noNA_cols <- c('tmin', 'tmax_prev', 'tmin_prev', 'prcp_occ', 'prcp_occ_prev',
-                          'mean_tmax', 'mean_tmin', 'row_num')
+                          'seasonal_tmax', 'seasonal_tmin', 'row_num')
     tmin_indexes <- models_data %>% tidyr::drop_na(tn_fit_noNA_cols) %>% dplyr::pull(row_num)
 
     # Create formula
@@ -523,7 +520,7 @@ spatial_calibrate <- function(climate, stations, seasonal_climate = NULL,
         dplyr::select(station_id, date, dplyr::ends_with("residuals"), tipo_dia)
 
     # Save execution time to returned model
-    model[['exec_times']][["summ_cli_time"]] <- tiempo.summarised_climate
+    model[['exec_times']][["summ_cli_time"]] <- tiempo.seasonal_climate
     model[['exec_times']][["covs_add_time"]] <- tiempo.add_covariates
     model[['exec_times']][["rown_add_time"]] <- tiempo.add_row_numbers
     model[['exec_times']][["join_stn_time"]] <- tiempo.join_stations

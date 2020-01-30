@@ -13,7 +13,6 @@
 #' @param seed an object specifying if and how the random number generator should be initialized (‘seeded’).#'
 #'          Either NULL or an integer that will be used in a call to set.seed before simulating the response vectors.
 #'          If set, the value is saved as the "seed" attribute of the returned value. The default, NULL will not change the random generator state.
-#' @param coord_ref_system ...
 #' @param avbl_cores ...
 #' @export
 spatial_simulation_control <- function(nsim = 1, seed = NULL, avbl_cores = 2,
@@ -58,20 +57,6 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                                control = glmwgen:::glmwgen_simulation_control(),
                                output_filename = "sim_results.nc",
                                seasonal_climate = NULL, verbose = F) {
-
-    # TODO:
-    # 1- quitar rasters de ejecución día a día () --> opcional
-    # 2- paralizar prcp_occ y prcp_amt con tmax y tmin (LISTO) --> no se puede porque la cantidad de
-    #    procesos crece muy rápido, cada proceso hijo del for each crear dos hijos más, no es factible
-    #    porque no hay control sobre la cantidad de procesos a ser creados y por ende sobre la cantidad
-    #    de procesadores requeridos (además, crear procesos hijos solo haría todo más lento).
-    # 3- agregar covariables (LISTO)
-    # 4- cambiar ruidos de monto de precipitacion para no tener montos de lluvia tan altos (LISTO)
-    # 5- Controles sobre archivo recibido con covariables, copiar de fit (LISTO).
-    # 6- verificar que con el mismo seed se generen los mismos resultados para corridas diferentes (LISTO)
-    # 7- Agregar capa raster con los station_id en la celdas que corresponden a las estaciones simuladas!!
-    # 8- Preg a Alessio si los ruidos (ahora calculados con un sed por realización), no deben usar seed por día?
-    # *- Tratar de cerrar esto lo más pronto posible
 
     ## Objeto a ser retornado
     gen_climate <- list()
@@ -262,15 +247,9 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     ##################################
 
 
-    ###################################################################################
-    ## Si no se recibe un seasonal_climate externo, se utiliza el generado en el ajuste
-    if(is.null(seasonal_climate))
-        seasonal_climate <- model$seasonal_data
-
-
-    ############################################################
-    ## Define name of the output netcdf4 file (as absolute path)
-    netcdf_filename <- glue::glue("{getwd()}/{output_filename}")
+    ####################################################
+    ## Define name of the output file (as absolute path)
+    output_filename <- glue::glue("{getwd()}/{output_filename}")
 
 
     ####################################
@@ -279,8 +258,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
         tibble::tibble(date = seq.Date(from = as.Date(start_date),
                                        to = as.Date(end_date),
                                        by = "days")) %>%
-        dplyr::mutate(year = lubridate::year(date),
-                      month = lubridate::month(date),
+        dplyr::mutate(year   = lubridate::year(date),
+                      month  = lubridate::month(date),
                       season = lubridate::quarter(date, fiscal_start = 12))
     ## Numbers of days to be simulated
     ndates <- nrow(simulation_dates)
@@ -326,11 +305,24 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
         glmwgen:::get_start_climatology(model, simulation_points, start_date, control)
 
 
+    ###################################################################################
+    ## Si no se recibe un seasonal_climate externo, se utiliza el generado en el ajuste
+    if(is.null(seasonal_climate))
+        seasonal_climate <- model$seasonal_data
+
+
+    #################################################################
+    ## Se pueden excluir los registros de años que no serán simulados
+    seasonal_climate <- seasonal_climate %>%
+        dplyr::filter(year %in% unique(simulation_dates$year))
+
+
     #############################################################
     ## Obtención de covariables, si van a ser utilizadas, sino no
     if (model$control$use_covariates)
-        covariates <- glmwgen:::get_covariates(model, simulation_points, seasonal_climate,
-                                               simulation_dates, control)
+        seasonal_covariates <-
+            glmwgen:::get_covariates(model, simulation_points, seasonal_climate, simulation_dates, control)
+
 
 
     #########################################
@@ -355,25 +347,26 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     #######################################################################################
     ## Se crea una matriz de simulación, esta va a contener todos los datos necesarios para
     ## la simulación de cada día a simular, si se utilizan covariables, se las incluye aquí
-    if (!model$control$use_covariates) {
-        simulation_matrix <- simulation_points
-    } else {
-        simulation_matrix <- simulation_points %>%
-            sf::st_join(covariates %>% {if (control$sim_loc_as_grid) dplyr::select(., dplyr::everything())
-                                        else dplyr::select(. , -dplyr::one_of("station_id"))}) %>%
-            dplyr::mutate(ST1 = if_else(season == 1, sum_prcp, 0),
-                          ST2 = if_else(season == 2, sum_prcp, 0),
-                          ST3 = if_else(season == 3, sum_prcp, 0),
-                          ST4 = if_else(season == 4, sum_prcp, 0),
-                          SN1 = if_else(season == 1, mean_tmin, 0),
-                          SN2 = if_else(season == 2, mean_tmin, 0),
-                          SN3 = if_else(season == 3, mean_tmin, 0),
-                          SN4 = if_else(season == 4, mean_tmin, 0),
-                          SX1 = if_else(season == 1, mean_tmax, 0),
-                          SX2 = if_else(season == 2, mean_tmax, 0),
-                          SX3 = if_else(season == 3, mean_tmax, 0),
-                          SX4 = if_else(season == 4, mean_tmax, 0))
-    }
+    simulation_matrix <- simulation_points %>%
+        dplyr::select(point_id, longitude, latitude)
+
+
+    #########################################################################################
+    ## Incoporar covariables si corresponde, además solo las de los anhos en simulation_dates
+    if (model$control$use_covariates)
+        simulation_matrix <- simulation_matrix %>% sf::st_join(seasonal_covariates) %>%
+            dplyr::mutate(ST1 = dplyr::if_else(season == 1, seasonal_prcp, 0),
+                          ST2 = dplyr::if_else(season == 2, seasonal_prcp, 0),
+                          ST3 = dplyr::if_else(season == 3, seasonal_prcp, 0),
+                          ST4 = dplyr::if_else(season == 4, seasonal_prcp, 0),
+                          SN1 = dplyr::if_else(season == 1, seasonal_tmin, 0),
+                          SN2 = dplyr::if_else(season == 2, seasonal_tmin, 0),
+                          SN3 = dplyr::if_else(season == 3, seasonal_tmin, 0),
+                          SN4 = dplyr::if_else(season == 4, seasonal_tmin, 0),
+                          SX1 = dplyr::if_else(season == 1, seasonal_tmax, 0),
+                          SX2 = dplyr::if_else(season == 2, seasonal_tmax, 0),
+                          SX3 = dplyr::if_else(season == 3, seasonal_tmax, 0),
+                          SX4 = dplyr::if_else(season == 4, seasonal_tmax, 0))
 
 
     ##########################################
@@ -407,7 +400,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
     ###########################################
     ## Crear objeto para guardar los resultados
-    glmwgen:::CrearNetCDF(netcdf_filename,
+    glmwgen:::CrearNetCDF(output_filename,
                 num_realizations = control$nsim,
                 sim_dates = simulation_dates$date,
                 simulation_raster = simulation_raster,
@@ -416,17 +409,18 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
     ######
     ##
-    #microbenchmark::microbenchmark({
-    ctrl_sim <- foreach::foreach(r = 1:control$nsim, .combine = dplyr::bind_rows, .packages = c('dplyr'),
-                                 .options.snow = list(progress = progress_pb), .verbose=verbose) %dopar% {
+    nsim_gen_clim <- foreach::foreach(r = 1:control$nsim, .combine = dplyr::bind_rows, .packages = c('dplyr'),
+                                      .options.snow = list(progress = progress_pb), .verbose=verbose) %dopar% {
 
         ######################################################################
         ## Para que las funciones de RandomFields devuelvan lo esperado!! ----
         RandomFields::RFoptions(spConform=FALSE)
 
+
         ##################################################
         ## Para cuando necesitamos repetir resultados ----
         set.seed(realizations_seeds[[r]]$general[[r]])
+
 
         ################################################################################
         ## Cuando se ejecuta el código en paralelo, simulation_matrix no es un sf válido
@@ -434,66 +428,66 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             simulation_matrix <- simulation_matrix %>%
                 sf::st_as_sf(coords = c('longitude', 'latitude'), crs = sf::st_crs(simulation_points))
 
+
         #################################################################################
         ## Creacion de los puntos de simulacion para el dia i (eq. daily covariates) ----
-        #microbenchmark::microbenchmark({
+        #################################################################################
         simulation_matrix.d <- simulation_matrix %>%
+            # Si se usan covariables, simulation_matrix tiene las covariables
+            # para cada season de cada year en simulation_dates! Por lo tanto,
+            # se debe filtrar por season y year para acelerar el sf::st_join!
             {if (!model$control$use_covariates) dplyr::filter(.)
-             else dplyr::filter(., year == simulation_dates$year[1],
-                                   season == simulation_dates$season[1])} %>%
+             else dplyr::filter(., year == simulation_dates$year[1], season == simulation_dates$season[1])} %>%
+            # Luego se agrega la climatología inicial, es decir, la del día previo al primer día
+            # a simular. Las columnas incorporadas por esta acción son: prcp_occ, tmax y tmin,
+            # por lo tanto, deben ser renombradas a: prcp_occ_prev, tmax_prev y tmin_prev
             sf::st_join(start_date_prev_day_climatology) %>%
-            dplyr::rename(prcp_occ_prev = prcp_occ,
-                          tmax_prev = tmax,
-                          tmin_prev = tmin) %>%
-            # Columnas para poder ejecutar los predict
+            dplyr::rename(prcp_occ_prev = prcp_occ, tmax_prev = tmax, tmin_prev = tmin) %>%
+            # a esto se debe agregar tipo_dia_prev y prcp_amt_prev
+            dplyr::mutate(tipo_dia_prev = factor(prcp_occ_prev, levels = c(1, 0), labels = c('Lluvioso', 'Seco')),
+                          prcp_amt_prev = NA_real_) %>%  # no se tiene la amplitud de prcp para el día previo al 1er día a simular!
+            # Se agregan date, time y doy del primer día a simular
             dplyr::mutate(date = simulation_dates$date[1],
                           time = as.numeric(date)/1000,
-                          doy = 1) %>%
-            # 1- colnames(model$fitted_models$prcp_occ_fit$model)
-            dplyr::mutate(tipo_dia_prev = factor(prcp_occ_prev, levels = c(1, 0),
-                                                 labels = c('Lluvioso', 'Seco')),
-                          prcp_occ = NA_integer_) %>%
-            # 2- colnames(model$fitted_models$prcp_amt_fit$Jan$model)
-            dplyr::mutate(prcp_amt = NA_real_) %>%
-            # 3- colnames(model$fitted_models$tmax_fit$model)
-            dplyr::mutate(tmax = NA_real_) %>%
-            # 4- colnames(model$fitted_models$tmin_fit$model)
-            dplyr::mutate(tmin = NA_real_) %>%
-            # 5- tipo día actual, no previo
-            dplyr::mutate(tipo_dia = NA_character_) %>%
+                          doy = lubridate::yday(date),
+                          month = lubridate::month(date)) %>%
+            # Se crean columnas para almacenar los resultados de la simulación
+            dplyr::mutate(prcp_occ = NA_integer_,
+                          tmax = NA_real_,
+                          tmin = NA_real_,
+                          tipo_dia = NA_character_,
+                          prcp_amt = NA_real_) %>%
             # para control de paralelización
             dplyr::mutate(nsim = r)
-        #}, times = 100) # 17 milisegundos
 
 
         #######################################
         ## Tiempos a tomar por cada realización
-        tiempos <- tibble::tibble(tiempo.gen_rast = list(),
+        tiempos <- tibble::tibble(tiempo.gen_clim = list(),
                                   tiempo.save_rds = list())
         tiempos <- tiempos %>% dplyr::add_row()
 
 
         #################################
         ## Control de tiempo de ejecución
-        t.rasters <- proc.time()
+        t.daily_gen_clim <- proc.time()
 
 
         #####################################################################################
         ## Antes se usaba un foreach para paralelizar esto, pero no se puede ser paralelizado
         ## porque simulation_matrix.d no toma los valores correctos al paralelizar!!
         ## Ver version anterior para más detalles (commit: 1898e5a)
-        #microbenchmark::microbenchmark({
-        rasters <- purrr::map_dfr(1:ndates, function(d) {
+        daily_gen_clim <- purrr::map_dfr(1:ndates, function(d) {
 
             #######################
             ## Indice de meses ----
-            #microbenchmark::microbenchmark({
-            current_month <- lubridate::month(simulation_dates$date[d])
-            #}, times = 10) # 40 milisegundos
+            current_month <- simulation_dates$month[d]
+
 
 
             #######################################
             ## Ocurrencia de lluvia (prcp_occ) ----
+            #######################################
 
             # Simulacion de ocurrencia de lluvia
             #microbenchmark::microbenchmark({
@@ -543,6 +537,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
             ########################################
             ## Temperatura (ambas, tmax y tmin) ----
+            ########################################
 
             #  Raster con los valores de "ruido" para días secos
             #microbenchmark::microbenchmark({
@@ -608,6 +603,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
             #################################
             ## Temperatura Máxima (tmax) ----
+            #################################
 
             # Simulacion de temperatura máxima
             #microbenchmark::microbenchmark({
@@ -639,6 +635,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
             #################################
             ## Temperatura Mínima (tmin) ----
+            #################################
 
             # Simulacion de temperatura mínima
             #microbenchmark::microbenchmark({
@@ -668,8 +665,9 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
 
-            ########################################
+            ###################################
             ## Montos de lluvia (prcp_amt) ----
+            ###################################
 
             # Filtrar el modelo a usar por el mes en curso
             #microbenchmark::microbenchmark({
@@ -727,25 +725,38 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
             #########################################################################
             ## Preparar simulation_matrix.d para la simulación del siguiente día ----
-            current_sim_points  <- simulation_matrix.d %>% sf::st_drop_geometry()
+            #########################################################################
+
+            current_sim_matrix  <- simulation_matrix.d %>%
+                sf::st_drop_geometry() %>% tibble::as_tibble()
+            current_sim_results <- current_sim_matrix %>%
+                dplyr::select(dplyr::one_of("station_id", "point_id"), prcp_occ, tmax, tmin, prcp_amt, tipo_dia)
             # OJO: se usa el operador <<- para utilizar los resultados el siguiente día
             simulation_matrix.d <<- simulation_matrix %>%
+                # Si se usan covariables, simulation_matrix tiene las covariables
+                # para cada season de cada year en simulation_dates! Por lo tanto,
+                # se debe filtrar por season y year para acelerar el sf::st_join!
                 {if (!model$control$use_covariates) dplyr::filter(.)
-                 else dplyr::filter(., year == simulation_dates$year[1],
-                                       season == simulation_dates$season[1])} %>%
-                dplyr::mutate(date = simulation_dates$date[d+1],
-                              doy = lubridate::yday(date),
+                else dplyr::filter(., year == simulation_dates$year[d+1], season == simulation_dates$season[d+1])} %>%
+                # Ya no se agrega la climatología inicial (la del día previo al primer día a simular),
+                # sino que, como climatología previa se usan los resultados del día en curso
+                dplyr::inner_join(current_sim_results, by = c("point_id")) %>%
+                # Finalmente, se hacen las actualizaciones necesarias para que simulation_matrix.d
+                # pueda ser utilizada en la siguiente iteración, es decir para el siguiente día a simular
+                dplyr::mutate(prcp_occ_prev = prcp_occ,
+                              tmax_prev = tmax,
+                              tmin_prev = tmin,
+                              tipo_dia_prev = tipo_dia,
+                              prcp_amt_prev = prcp_amt,
+                              date = simulation_dates$date[d+1],
                               time = as.numeric(date)/1000,
+                              doy = lubridate::yday(date),
+                              month = lubridate::month(date),
                               prcp_occ = NA_integer_,
-                              tipo_dia = NA_character_,
-                              prcp_amt = NA_real_,
                               tmax = NA_real_,
                               tmin = NA_real_,
-                              prcp_occ_prev = raster::extract(SIMocc_points.d, simulation_points),
-                              tipo_dia_prev = factor(prcp_occ_prev, levels = c('0', '1'),
-                                                     labels = c("Seco", "Lluvioso")),
-                              tmax_prev = raster::extract(SIMmax_points.d, simulation_points),
-                              tmin_prev = raster::extract(SIMmin_points.d, simulation_points),
+                              tipo_dia = NA_character_,
+                              prcp_amt = NA_real_,
                               nsim = r)
 
 
@@ -764,38 +775,24 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                     date = simulation_dates$date[d],
                     raster_prcp = list(SIMamt_points.d),
                     raster_tmax = list(SIMmax_points.d),
-                    raster_tmin = list(SIMmin_points.d),
-                    csim_points = list(current_sim_points)
+                    raster_tmin = list(SIMmin_points.d)
                 ))
         })
-        #}, times = 1) # con ndates=365, 926 segundos
 
 
 
-        ############################################
-        ## Tomar tiempo de generación de los rasters
-        tiempos <- dplyr::mutate(tiempos, tiempo.gen_rast = list(proc.time() - t.rasters))
+        ##############################################
+        ## Tomar tiempo de generación del clima diario
+        tiempos <- dplyr::mutate(tiempos, tiempo.gen_clim = list(proc.time() - t.daily_gen_clim))
 
-
-
-        ########################################
-        ## Guardar realizacion en archivo NetCDF
-        ## Falla cuando un sub-proceso intenta abrir el archivo,
-        ## pero esté ya fue abierto por otro sub-proceso!!!
-        # glmwgen:::GuardarRealizacionNetCDF(netcdf_filename,
-        #                                    numero_realizacion = r,
-        #                                    sim_dates = simulation_dates$date,
-        #                                    raster_tmax = rasters$raster_tmax,
-        #                                    raster_tmin = rasters$raster_tmin,
-        #                                    raster_prcp = rasters$raster_prcp)
 
 
         ###################################################################
-        ## Se guarda en memoria el tibble con los rasters de la realización
-        rasters_path <- paste0(getwd(), "/realizacion_", r ,".rds")
+        ## Se guarda en disco el tibble con los rasters de la realización
+        rds_path <- paste0(getwd(), "/realizacion_", r ,".rds")
         if(control$use_temporary_files_to_save_ram) {
             t.saveRDS <- proc.time()
-            base::saveRDS(rasters, rasters_path)
+            base::saveRDS(daily_gen_clim, rds_path)
             tiempos <- dplyr::mutate(tiempos, tiempo.save_rds = list(proc.time() - t.saveRDS))
         }
 
@@ -804,56 +801,61 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
         ######################
         ## Liberar memoria RAM
         if(control$use_temporary_files_to_save_ram)
-            rm(rasters)
+            rm(daily_gen_clim)
 
 
 
         #################
         ## Retorno final
         return (tibble::tibble(nsim = r,
-                               rasters = ifelse(control$use_temporary_files_to_save_ram,
-                                                list(rasters_path), list(rasters))
+                               nsim_gen_climate = ifelse(control$use_temporary_files_to_save_ram, list(rds_path), list(daily_gen_clim))
                                ) %>% dplyr::bind_cols(tiempos))
-    }
-    #}, times = 2)
+                                         }
 
 
-    ########################################
-    ## Guardar realizacion en archivo NetCDF
-    ctrl_gen <- purrr::map2_dfr(
-        ctrl_sim %>% dplyr::pull(nsim),
-        ctrl_sim %>% dplyr::pull(rasters),
-        function(r, rasters) {
+
+    ##############################################
+    ## Guardar realizacion en archivo de salida ##
+    ##############################################
+
+
+    ####################################################
+    ## Tomar tiempos de generación del archivo de salida
+    ctrl_output_file <- purrr::map2_dfr(
+        nsim_gen_clim %>% dplyr::pull(nsim),
+        nsim_gen_clim %>% dplyr::pull(nsim_gen_climate),
+        function(r, daily_gen_clim) {
 
             #######################################
             ## Tiempos a tomar por cada realización
             tiempos <- tibble::tibble(tiempo.read_rds = list(),
-                                      tiempo.gen_ncdf = list())
+                                      tiempo.gen_file = list())
             tiempos <- tiempos %>% dplyr::add_row()
 
             ######################################
             ## Leer archivos con rasters generados
             if(control$use_temporary_files_to_save_ram) {
                 t.read_rds <- proc.time()
-                rasters <- base::readRDS(rasters)
+                rds_path <- daily_gen_clim
+                daily_gen_clim <- base::readRDS(rds_path)
                 tiempos <- dplyr::mutate(tiempos, tiempo.read_rds = list(proc.time() - t.read_rds))
             }
 
-            ###########################
-            ## Generar archivos netcdf4
-            t.gen_ncdf <- proc.time()
-            glmwgen:::GuardarRealizacionNetCDF(netcdf_filename,
+            #############################
+            ## Generar archivos de salida
+            t.gen_file <- proc.time()
+            glmwgen:::GuardarRealizacionNetCDF(output_filename,
                                                numero_realizacion = r,
                                                sim_dates = simulation_dates$date,
-                                               raster_tmax = rasters$raster_tmax,
-                                               raster_tmin = rasters$raster_tmin,
-                                               raster_prcp = rasters$raster_prcp)
-            tiempos <- dplyr::mutate(tiempos, tiempo.gen_ncdf = list(proc.time() - t.gen_ncdf))
+                                               raster_tmax = daily_gen_clim$raster_tmax,
+                                               raster_tmin = daily_gen_clim$raster_tmin,
+                                               raster_prcp = daily_gen_clim$raster_prcp)
+            tiempos <- dplyr::mutate(tiempos, tiempo.gen_file = list(proc.time() - t.gen_file))
 
             ######################
             ## Liberar memoria RAM
             if(control$use_temporary_files_to_save_ram)
-                rm(rasters)
+                rm(daily_gen_clim)
 
             #################
             ## Retorno final
@@ -861,41 +863,47 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
         })
 
 
+
     #################################
     ## Control de tiempo de ejecución
     tiempo.sim <- proc.time() - t.sim
 
 
-    ###########################
-    ## Preparar datos de salida
+
+    ##############################
+    ## Preparar datos de salida ##
+    ##############################
+
 
     gen_climate[['nsim']] <- control$nsim
     gen_climate[['seed']] <- control$seed
     gen_climate[['realizations_seeds']] <- realizations_seeds
-    gen_climate[['simulation_coordinates']] <- simulation_points
-    gen_climate[['netcdf4_file_with_results']] <- netcdf_filename
+    gen_climate[['simulation_points']] <- simulation_points
+    gen_climate[['output_file_with_results']] <- output_filename
+    gen_climate[['output_file_fomart']] <- "NetCDF4"
 
     fitted_stations <- model$stations;  climate <- model$climate
     save(fitted_stations, climate, file = "fitted_stations_and_climate.RData")
     gen_climate[['rdata_file_with_fitted_stations_and_climate']] <- "fitted_stations_and_climate.RData"
 
-    names(ctrl_sim$tiempo.gen_rast) <- paste0("sim_", ctrl_sim$nsim)
-    gen_climate[['exec_times']][["gen_rast_time"]] <- ctrl_sim$tiempo.gen_rast
+    names(nsim_gen_clim$tiempo.gen_clim) <- paste0("sim_", nsim_gen_clim$nsim)
+    gen_climate[['exec_times']][["gen_clim_time"]] <- nsim_gen_clim$tiempo.gen_clim
 
     if(control$use_temporary_files_to_save_ram) {
-        names(ctrl_sim$tiempo.save_rds) <- paste0("sim_", ctrl_sim$nsim)
-        gen_climate[['exec_times']][["rds_save_time"]] <- ctrl_sim$tiempo.save_rds
+        names(nsim_gen_clim$tiempo.save_rds) <- paste0("sim_", nsim_gen_clim$nsim)
+        gen_climate[['exec_times']][["rds_save_time"]] <- nsim_gen_clim$tiempo.save_rds
     }
     if(control$use_temporary_files_to_save_ram) {
-        names(ctrl_gen$tiempo.read_rds) <- paste0("sim_", ctrl_gen$nsim)
-        gen_climate[['exec_times']][["rds_read_time"]] <- ctrl_gen$tiempo.read_rds
+        names(ctrl_output_file$tiempo.read_rds) <- paste0("sim_", ctrl_output_file$nsim)
+        gen_climate[['exec_times']][["rds_read_time"]] <- ctrl_output_file$tiempo.read_rds
     }
 
-    names(ctrl_gen$tiempo.gen_ncdf) <- paste0("sim_", ctrl_gen$nsim)
-    gen_climate[['exec_times']][["gen_ncdf_time"]] <- ctrl_gen$tiempo.gen_ncdf
-    gen_climate[['exec_times']][["exec_tot_time"]] <- tiempo.sim
+    names(ctrl_output_file$tiempo.gen_file) <- paste0("sim_", ctrl_output_file$nsim)
+    gen_climate[['exec_times']][["gen_output_time"]] <- ctrl_output_file$tiempo.gen_file
+    gen_climate[['exec_times']][["exec_total_time"]] <- tiempo.sim
 
     class(gen_climate) <- c(class(gen_climate), 'glmwgen.climate')
+
 
 
     #########################
@@ -916,7 +924,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
     ## Remove temporary files
     if(control$use_temporary_files_to_save_ram && control$remove_temp_files_used_to_save_ram)
-        purrr::walk( ctrl_sim %>% dplyr::pull(rasters),
+        purrr::walk( nsim_gen_clim %>% dplyr::pull(nsim_gen_climate),
                      function(filename) { file.remove(filename) } )
 
 

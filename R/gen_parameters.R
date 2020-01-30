@@ -33,7 +33,7 @@ get_start_climatology <- function(model, simulation_points, start_date, control)
 
 seasonal_climate_as_sf <- function(seasonal_climate, model_stations, coord_ref_system) {
     cov_sf <- seasonal_climate %>% dplyr::inner_join(model_stations, by = "station_id") %>%
-        dplyr::select(station_id, year, season, sum_prcp, mean_tmax, mean_tmin, geometry) %>%
+        dplyr::select(year, season, seasonal_prcp, seasonal_tmax, seasonal_tmin, geometry) %>%
         sf::st_as_sf() %>% sf::st_transform(sf::st_crs(coord_ref_system))
     return (cov_sf)
 }

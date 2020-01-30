@@ -197,6 +197,7 @@ check.points.to.extract <- function(points_to_extract) {
 
 }
 
+
 #' @title Transform netcdf4 file to tibble
 #' @description Transform netcdf4 file to tibble.
 #' @export
@@ -243,3 +244,4 @@ netcdf.as.tibble <- function(netcdf_filename, points_to_extract, points_id_colum
     return (datos_simulaciones)
 
 }
+
