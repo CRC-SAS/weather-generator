@@ -29,6 +29,10 @@ spatial_calibrate <- function(climate, stations, seasonal_climate = NULL,
 
     ###############################################################
 
+    suppressPackageStartupMessages(library("dplyr"))
+
+    ###############################################################
+
     if (control$use_external_seasonal_climate & is.null(seasonal_climate))
         stop("If use_external_seasonal_climate is True, seasonal_climate can't be NULL!!")
 

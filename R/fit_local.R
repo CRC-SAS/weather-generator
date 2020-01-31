@@ -18,8 +18,8 @@ local_fit_control <- function(prcp_occurrence_threshold = 0.1,
 
 #' @title Weather model calibration
 #' @description Fits a weather model from historical data.
-#' @import foreach
 #' @import dplyr
+#' @import foreach
 #' @export
 local_calibrate <- function(climate, stations, seasonal_climate = NULL,
                             control = gamwgen:::local_fit_control(),
@@ -27,6 +27,11 @@ local_calibrate <- function(climate, stations, seasonal_climate = NULL,
 
     ## Se crea el objeto a ser retornado al culminar el ajuste!
     model <- list()
+
+    ###############################################################
+
+    suppressPackageStartupMessages(library("dplyr"))
+    suppressPackageStartupMessages(library("foreach"))
 
     ###############################################################
 
