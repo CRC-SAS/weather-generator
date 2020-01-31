@@ -272,7 +272,7 @@ local_calibrate <- function(climate, stations, seasonal_climate = NULL,
 
 
     t.m <- proc.time()
-    models <- foreach::foreach(station = unique_stations, .multicombine = T, .packages = c('dplyr'),
+    models <- foreach::foreach(station = unique_stations, .multicombine = T, .packages = c('dplyr', 'foreach'),
                                .options.snow = list(progress = progress_pb), .verbose = verbose) %dopar% {
 
         station_climate <- models_data %>%
