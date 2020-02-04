@@ -11,7 +11,7 @@ spatial_simulation(
   end_date,
   control = gamwgen:::spatial_simulation_control(),
   output_filename = "sim_results.nc",
-  seasonal_climate = NULL,
+  seasonal_covariates = NULL,
   verbose = F
 )
 }

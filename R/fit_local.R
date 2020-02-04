@@ -3,15 +3,11 @@
 #' @description Provides fine control of different parameters that will be used to fit a weather model.
 #' @export
 local_fit_control <- function(prcp_occurrence_threshold = 0.1,
-                              use_external_seasonal_climate = T,
-                              climate_missing_threshold = 0.2,
-                              use_covariates = F, avbl_cores = 2,
+                              avbl_cores = 2,
                               planar_crs_in_metric_coords = 22185) {
 
     return(list(prcp_occurrence_threshold = prcp_occurrence_threshold,
-                use_external_seasonal_climate = use_external_seasonal_climate,
-                climate_missing_threshold = climate_missing_threshold,
-                use_covariates = use_covariates, avbl_cores = avbl_cores,
+                avbl_cores = avbl_cores,
                 planar_crs_in_metric_coords = planar_crs_in_metric_coords))
 }
 
@@ -21,7 +17,7 @@ local_fit_control <- function(prcp_occurrence_threshold = 0.1,
 #' @import dplyr
 #' @import foreach
 #' @export
-local_calibrate <- function(climate, stations, seasonal_climate = NULL,
+local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
                             control = gamwgen:::local_fit_control(),
                             verbose = F) {
 
@@ -35,16 +31,8 @@ local_calibrate <- function(climate, stations, seasonal_climate = NULL,
 
     ###############################################################
 
-    if (control$use_external_seasonal_climate & is.null(seasonal_climate))
-        stop("If use_external_seasonal_climate is True, seasonal_climate can't be NULL!!")
-
-    if (!control$use_external_seasonal_climate & !is.null(seasonal_climate)) {
-        warning('Entered seasonal_climate will be descarted because use_external_seasonal_climate is set as False!')
-        seasonal_climate <- NULL
-    }
-
     # Se controlan que los datos recibidos tengan el formato correcto
-    gamwgen:::check.fit.input.data(climate, stations, seasonal_climate)
+    gamwgen:::check.fit.input.data(climate, stations, seasonal_covariates)
 
     ###############################################################
 
@@ -83,22 +71,18 @@ local_calibrate <- function(climate, stations, seasonal_climate = NULL,
 
     ###############################################################
 
-    if (control$use_external_seasonal_climate)
-        seasonal_climate <- seasonal_climate %>% dplyr::arrange(station_id, year, season)
-
-    t <- proc.time()
-    # Si no se recibió seasonal_climate como parámetro, entonces se la calcula internamente!!
-    if (is.null(seasonal_climate) | !control$use_external_seasonal_climate)
-        seasonal_climate <- gamwgen:::summarise_seasonal_climate(climate, control$climate_missing_threshold)
-    tiempo.seasonal_climate <- proc.time() - t
+    if (!is.null(seasonal_covariates))
+        seasonal_covariates <- seasonal_covariates %>% dplyr::arrange(station_id, year, season)
 
     # Se verifica que hayan covariables suficientes para cubrir todas las fechas en climate,
     # pero el control solo se hace si se van a utilizar covariables en el ajuste!!
-    climate_control <- climate %>% dplyr::distinct(station_id, year = lubridate::year(date),
-                                                   season = lubridate::quarter(date, fiscal_start = 12))
-    seasnl_cli_ctrl <- seasonal_climate %>% dplyr::distinct(station_id, year, season)
-    if (!dplyr::all_equal(climate_control, seasnl_cli_ctrl) & control$use_covariates)
-        stop("Years in climate and years in seasonal_climate don't match!")
+    if (!is.null(seasonal_covariates)) {
+        climate_control <- climate %>% dplyr::distinct(station_id, year = lubridate::year(date),
+                                                       season = lubridate::quarter(date, fiscal_start = 12))
+        seasnl_cov_ctrl <- seasonal_covariates %>% dplyr::distinct(station_id, year, season)
+        if (!dplyr::all_equal(climate_control, seasnl_cov_ctrl))
+            stop("Years in climate and years in seasonal_covariates don't match!")
+    }
 
     ###############################################################
 
@@ -123,7 +107,7 @@ local_calibrate <- function(climate, stations, seasonal_climate = NULL,
 
     model[["climate"]] <- climate
 
-    model[["seasonal_data"]] <- seasonal_climate
+    model[["seasonal_covariates"]] <- seasonal_covariates
 
     model[["crs_used_to_fit"]] <- sf::st_crs(control$planar_crs_in_metric_coords)
 
@@ -216,7 +200,7 @@ local_calibrate <- function(climate, stations, seasonal_climate = NULL,
                       tmin_prev     = lag(tmin),
                       row_num       = row_number()) %>%
         # Add seasonal climate to station_climate
-        dplyr::left_join(seasonal_climate,
+        dplyr::left_join(seasonal_covariates,
                          by = c("station_id", "year", "season")) %>%
         # Add seasonal covariates to station_climate
         dplyr::mutate(ST1 = if_else(season == 1, seasonal_prcp, 0),

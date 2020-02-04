@@ -1,6 +1,6 @@
 
 # Interpolación de covariables
-interpolate_covariates <- function(simulation_points, seasonal_climate, model_stations, simulation_dates) {
+interpolate_covariates <- function(simulation_points, seasonal_covariates, model_stations, simulation_dates) {
 
     # OBS:
     # Al interpolar las covariables, no se tiene en cuenta si el usario optó por usar ruidos
@@ -10,7 +10,7 @@ interpolate_covariates <- function(simulation_points, seasonal_climate, model_st
     # y utilizando en su lugar las covariables interpoladas!! Esto el funcionamiento previsto!
 
     # Datos estacionales para todas las localidades
-    datos.estacionales <- seasonal_climate %>%
+    datos.estacionales <- seasonal_covariates %>%
         dplyr::left_join(model_stations %>% dplyr::select(station_id, longitude, latitude), by = 'station_id') %>%
         sf::st_as_sf() %>% sf::st_transform(sf::st_crs(simulation_points))
 

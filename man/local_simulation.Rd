@@ -11,7 +11,7 @@ local_simulation(
   end_date,
   control = gamwgen:::local_simulation_control(),
   output_filename = "sim_results.rds",
-  seasonal_climate = NULL,
+  seasonal_covariates = NULL,
   verbose = F
 )
 }

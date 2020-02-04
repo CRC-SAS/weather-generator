@@ -31,25 +31,25 @@ get_start_climatology <- function(model, simulation_points, start_date, control)
 
 }
 
-seasonal_climate_as_sf <- function(seasonal_climate, model_stations, coord_ref_system) {
-    cov_sf <- seasonal_climate %>% dplyr::inner_join(model_stations, by = "station_id") %>%
+seasonal_covariates_as_sf <- function(seasonal_covariates, model_stations, coord_ref_system) {
+    cov_sf <- seasonal_covariates %>% dplyr::inner_join(model_stations, by = "station_id") %>%
         dplyr::select(year, season, seasonal_prcp, seasonal_tmax, seasonal_tmin, geometry) %>%
         sf::st_as_sf() %>% sf::st_transform(sf::st_crs(coord_ref_system))
     return (cov_sf)
 }
 
-get_covariates <- function(model, simulation_points, seasonal_climate, simulation_dates, control) {
+get_covariates <- function(model, simulation_points, seasonal_covariates, simulation_dates, control) {
 
     # Si simulation points no es una grilla y hay covariables para todos los puntos a simular,
-    # entonces no es necesario interpolar nada y se retorna seasonal_climate directamente
+    # entonces no es necesario interpolar nada y se retorna seasonal_covariates directamente
     if (!control$sim_loc_as_grid &
-        all(unique(simulation_points$station_id) %in% unique(seasonal_climate$station_id)))
-        return (gamwgen:::seasonal_climate_as_sf(seasonal_climate, model$stations,
-                                                 sf::st_crs(simulation_points)))
+        all(unique(simulation_points$station_id) %in% unique(seasonal_covariates$station_id)))
+        return (gamwgen:::seasonal_covariates_as_sf(seasonal_covariates, model$stations,
+                                                    sf::st_crs(simulation_points)))
 
     # Si continua la ejecución de la función es porque simulation points es una grilla o NO hay
-    # covariables para todos los puntos a simular, y es necesario interpolar seasonal_climate
-    return (gamwgen:::interpolate_covariates(simulation_points, seasonal_climate, model$stations,
+    # covariables para todos los puntos a simular, y es necesario interpolar seasonal_covariates
+    return (gamwgen:::interpolate_covariates(simulation_points, seasonal_covariates, model$stations,
                                              simulation_dates))
 
 }

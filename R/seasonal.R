@@ -1,4 +1,7 @@
 
+#' @title Generate seasonal covariates
+#' @description Generate seasonal covariates.
+#' @export
 summarise_seasonal_climate <- function(datos_climaticos, umbral_faltantes = 0.2) {
     ## compute seasonal averages for tmax and tmin, and sum for prcp, with quality control and missing values imputation
     purrr::map_dfr(

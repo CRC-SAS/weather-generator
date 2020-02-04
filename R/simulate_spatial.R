@@ -59,7 +59,7 @@ spatial_simulation_control <- function(nsim = 1,
 spatial_simulation <- function(model, simulation_locations, start_date, end_date,
                                control = gamwgen:::spatial_simulation_control(),
                                output_filename = "sim_results.nc",
-                               seasonal_climate = NULL, verbose = F) {
+                               seasonal_covariates = NULL, verbose = F) {
 
     ## Objeto a ser retornado
     gen_climate <- list()
@@ -79,7 +79,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
         stop("The parameter simulation_locations can't be null!")
 
     # Se controlan que los datos recibidos tengan el formato correcto
-    gamwgen:::check.simulation.input.data(simulation_locations, seasonal_climate)
+    gamwgen:::check.simulation.input.data(simulation_locations, seasonal_covariates)
 
     ###############################################################
 
@@ -155,18 +155,18 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     #  externa      |      interna  (no corresponde)
     # generalmente el ajuste es con covariables internas
 
-    ## Si seasonal_climate != NULL se debió hacer el ajuste usando covariables
-    if (!is.null(seasonal_climate) & !model$control$use_covariates)
+    ## Si seasonal_covariates != NULL se debió hacer el ajuste usando covariables
+    if (!is.null(seasonal_covariates) & is.null(model$seasonal_covariates))
         stop('El ajuste fue hecho sin covariables, por lo tanto, la simulación ',
              'también debe hacerse sin covariables y no es valido utilizar el ',
-             'parámetro seasonal_climate!!')
+             'parámetro seasonal_covariates!!')
 
     ## Si el ajuste se hizo utilizando un archivo de covariables externo,
     ## entonces la simulación también debe hacerse con un archivo externo
-    if (model$control$use_external_seasonal_climate & is.null(seasonal_climate))
-        stop('El ajuste se hizo utilizando un archivo de covariables externo (parametro ',
-             'seasonal_climate), por lo tanto, la simulación también debe hacerse con un ',
-             'archivo de covariables externo (parametro seasonal_climate).')
+    if (is.null(seasonal_covariates) & !is.null(model$seasonal_covariates))
+        stop('El ajuste se hizo utilizando un archivo de covariables (parametro ',
+             'seasonal_covariates), por lo tanto, la simulación también debe hacerse ',
+             'con un archivo de covariables (parametro seasonal_covariates).')
 
     ## OBS:
     # A pesar de que cuando el ajuste se hace sin covariables, la simulación también debe
@@ -309,14 +309,14 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
     ###################################################################################
-    ## Si no se recibe un seasonal_climate externo, se utiliza el generado en el ajuste
-    if(is.null(seasonal_climate))
-        seasonal_climate <- model$seasonal_data
+    ## Si no se recibe un seasonal_covariates externo, se utiliza el generado en el ajuste
+    if(is.null(seasonal_covariates))
+        seasonal_covariates <- model$seasonal_covariates
 
 
     #################################################################
     ## Se pueden excluir los registros de años que no serán simulados
-    seasonal_climate <- seasonal_climate %>%
+    seasonal_covariates <- seasonal_covariates %>%
         dplyr::filter(year %in% unique(simulation_dates$year))
 
 
@@ -324,7 +324,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     ## Obtención de covariables, si van a ser utilizadas, sino no
     if (model$control$use_covariates)
         seasonal_covariates <-
-            gamwgen:::get_covariates(model, simulation_points, seasonal_climate, simulation_dates, control)
+            gamwgen:::get_covariates(model, simulation_points, seasonal_covariates, simulation_dates, control)
 
 
 

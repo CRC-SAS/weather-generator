@@ -158,7 +158,7 @@ check.ends.with.columns <- function(object, obj.name, obj.cols) {
 
 }
 
-check.fit.input.data <- function(climate, stations, seasonal.climate) {
+check.fit.input.data <- function(climate, stations, seasonal.covariates) {
 
     climate.columns <- c(date = "Date", station_id = "integer", tmax = "numeric", tmin = "numeric", prcp = "numeric")
     stations.columns <- c(station_id = "integer", geometry = "sfc_POINT")
@@ -168,14 +168,14 @@ check.fit.input.data <- function(climate, stations, seasonal.climate) {
     check.object(climate, "climate", c("tbl_df", "tbl", "data.frame"), climate.columns)
     check.object(stations, "stations", c("sf", "tbl_df", "tbl", "data.frame"), stations.columns)
 
-    if (!is.null(seasonal.climate)) {
-        check.object(seasonal.climate, "seasonal.climate", c("tbl_df", "tbl", "data.frame"), seasonal.invariant.columns)
-        check.ends.with.columns(seasonal.climate, "seasonal.climate", seasonal.ends.with.columns)
+    if (!is.null(seasonal.covariates)) {
+        check.object(seasonal.covariates, "seasonal_covariates", c("tbl_df", "tbl", "data.frame"), seasonal.invariant.columns)
+        check.ends.with.columns(seasonal.covariates, "seasonal_covariates", seasonal.ends.with.columns)
     }
 
 }
 
-check.simulation.input.data <- function(simulation.locations, seasonal.climate) {
+check.simulation.input.data <- function(simulation.locations, seasonal.covariates) {
 
     sim.loc.columns <- c(geometry = "sfc_POINT")
     seasonal.invariant.columns <- c(station_id = "integer", year = "numeric", season = "numeric")
@@ -183,9 +183,9 @@ check.simulation.input.data <- function(simulation.locations, seasonal.climate) 
 
     check.object(simulation.locations, "simulation_locations", c("sf", "tbl_df", "tbl", "data.frame"), sim.loc.columns)
 
-    if (!is.null(seasonal.climate)) {
-        check.object(seasonal.climate, "seasonal_climate", c("tbl_df", "tbl", "data.frame"), seasonal.invariant.columns)
-        check.ends.with.columns(seasonal.climate, "seasonal.climate", seasonal.ends.with.columns)
+    if (!is.null(seasonal.covariates)) {
+        check.object(seasonal.covariates, "seasonal_covariates", c("tbl_df", "tbl", "data.frame"), seasonal.invariant.columns)
+        check.ends.with.columns(seasonal.covariates, "seasonal_covariates", seasonal.ends.with.columns)
     }
 
 }
