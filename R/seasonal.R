@@ -14,7 +14,8 @@ summarise_seasonal_climate <- function(datos_climaticos, umbral_faltantes = 0.2)
                                                       to   = lubridate::ceiling_date(max(date), "year") - lubridate::days(1),
                                                       by   = "days"),
                                 fill = list(station_id = stn_id)) %>%
-                dplyr::mutate(season = lubridate::quarter(date, fiscal_start = 12), year = lubridate::year(date))
+                dplyr::mutate(season = lubridate::quarter(date, fiscal_start = 12),
+                              year = as.integer(lubridate::year(date)), station_id = as.integer(station_id))
 
             estadisticas <- datos_stn_id %>%
                 dplyr::group_by(station_id, year, season) %>%

@@ -75,7 +75,7 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
     # Se verifica que hayan covariables suficientes para cubrir todas las fechas en climate,
     # pero el control solo se hace si se van a utilizar covariables en el ajuste!!
     if (!is.null(seasonal_covariates)) {
-        climate_control <- climate %>% dplyr::distinct(station_id, year = lubridate::year(date),
+        climate_control <- climate %>% dplyr::distinct(station_id, year = as.integer(lubridate::year(date)),
                                                        season = lubridate::quarter(date, fiscal_start = 12))
         seasnl_cov_ctrl <- seasonal_covariates %>% dplyr::distinct(station_id, year, season)
         if (!dplyr::all_equal(climate_control, seasnl_cov_ctrl))
@@ -253,7 +253,7 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
         te(tipo_dia_prev, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations)) +
         te(longitude, latitude, doy, d = c(2, 1), bs = c("tp", "cc"), k = length(unique_stations))
 
-    if (control$use_covariates) {
+    if (!is.null(seasonal_covariates)) {
         prcp_occ_cov <- models_data %>% dplyr::select(dplyr::matches('ST\\d')) %>% names
         prcp_occ_cov_fm_str <- paste("te(", prcp_occ_cov, ", longitude, latitude, d = c(1, 2), ",
                                      "bs = c('tp' , 'tp'), k = length(unique_stations))", collapse = " + ")
@@ -309,7 +309,7 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
     # Create formula
     prcp_amt_fm <- prcp_amt ~ te(tipo_dia_prev, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations))
 
-    if (control$use_covariates) {
+    if (!is.null(seasonal_covariates)) {
         prcp_amt_cov_fm     <- ~ . + te(seasonal_prcp, longitude, latitude, d = c(1, 2), bs = c('tp', 'tp'), k = length(unique_stations))
         prcp_amt_fm         <- stats::update( prcp_amt_fm, prcp_amt_cov_fm )
     }
@@ -368,7 +368,7 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
         te(tipo_dia_prev, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations)) +
         te(doy, longitude, latitude, d = c(1, 2), bs = c('cc', 'tp'), k = length(unique_stations))
 
-    if (control$use_covariates) {
+    if (!is.null(seasonal_covariates)) {
         tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
         tmin_cov <- models_data %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
         tmax_cov_fm_str <- paste("te(", tmax_cov, ", ", tmin_cov, ", longitude, latitude, d = c(2, 2), ",
@@ -428,7 +428,7 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
         te(tipo_dia_prev, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations)) +
         te(doy, longitude, latitude, d = c(1, 2), bs = c('cc', 'tp'), k = length(unique_stations))
 
-    if (control$use_covariates) {
+    if (!is.null(seasonal_covariates)) {
         tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
         tmin_cov <- models_data %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
         tmin_cov_fm_str <- paste("te(", tmax_cov, ", ", tmin_cov, ", longitude, latitude, d = c(2, 2), ",

@@ -10,6 +10,7 @@ spatial_simulation(
   start_date,
   end_date,
   control = gamwgen:::spatial_simulation_control(),
+  output_folder = getwd(),
   output_filename = "sim_results.nc",
   seasonal_covariates = NULL,
   verbose = F

@@ -77,7 +77,7 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
     # Se verifica que hayan covariables suficientes para cubrir todas las fechas en climate,
     # pero el control solo se hace si se van a utilizar covariables en el ajuste!!
     if (!is.null(seasonal_covariates)) {
-        climate_control <- climate %>% dplyr::distinct(station_id, year = lubridate::year(date),
+        climate_control <- climate %>% dplyr::distinct(station_id, year = as.integer(lubridate::year(date)),
                                                        season = lubridate::quarter(date, fiscal_start = 12))
         seasnl_cov_ctrl <- seasonal_covariates %>% dplyr::distinct(station_id, year, season)
         if (!dplyr::all_equal(climate_control, seasnl_cov_ctrl))
@@ -280,7 +280,7 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
         prcp_occ_fm <- prcp_occ ~ s(tipo_dia_prev, bs = 're') +
             s(time, bs = 'gp', k = 100) + s(doy, bs = 'cc', k = 20)
 
-        if (control$use_covariates) {
+        if (!is.null(seasonal_covariates)) {
             prcp_occ_cov <- models_data %>% dplyr::select(dplyr::matches('ST\\d')) %>% names
             prcp_occ_cov_fm_str <- paste("s(", prcp_occ_cov, ",",
                                          "bs = c('tp' ), k = 20)", collapse = " + ")
@@ -337,7 +337,7 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
         # Create formula
         prcp_amt_fm <- prcp_amt ~ s(prcp_occ_prev, bs = 're')
 
-        if (control$use_covariates) {
+        if (!is.null(seasonal_covariates)) {
             prcp_amt_cov <- models_data %>% dplyr::select(dplyr::matches('seasonal_prcp')) %>% names
             prcp_amt_cov_str     <- paste("s(", prcp_amt_cov, ",",
                                           "bs = c('tp' ), k = 20)")
@@ -401,7 +401,7 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
             s(time, bs = 'gp', k = 100) +
             s(doy, bs = "cc", k = 30)
 
-        if (control$use_covariates) {
+        if (!is.null(seasonal_covariates)) {
             tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
             tmin_cov <- models_data %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
             tmax_cov_fm_str <- paste("s(", tmax_cov, ", ", tmin_cov, ",",
@@ -460,7 +460,7 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
             s(time, bs = 'gp', k = 100) +
             s(doy, bs = "cc", k = 30)
 
-        if (control$use_covariates) {
+        if (!is.null(seasonal_covariates)) {
             tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
             tmin_cov <- models_data %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
             tmin_cov_fm_str <- paste("s(", tmax_cov, ", ", tmin_cov, ",",
@@ -525,10 +525,10 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
         # Retornar resultados como lista
         return_list <- list(station_id = station,
                             models_data = station_climate,
-                            gam_fits  = list(prcp_occ_fit = prcp_occ_fit,
-                                             prcp_amt_fit = prcp_amt_fit,
-                                             tmax_fit = tmax_fit,
-                                             tmin_fit = tmin_fit),
+                            fitted_models  = list(prcp_occ_fit = prcp_occ_fit,
+                                                  prcp_amt_fit = prcp_amt_fit,
+                                                  tmax_fit = tmax_fit,
+                                                  tmin_fit = tmin_fit),
                             residuals = residuos,
                             estadisticos.umbrales = estadisticas.umbrales)
 
@@ -556,9 +556,14 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
         dplyr::ungroup()
 
     # Save gam results to returned model
-    gam_fits <- lapply(models, '[[', 'gam_fits')
-    names(gam_fits) <- lapply(models, '[[', 'station_id')
-    model[["gam_fits"]] <- gam_fits
+    fitted_models <- lapply(models, '[[', 'fitted_models')
+    names(fitted_models) <- lapply(models, '[[', 'station_id')
+    model[["fitted_models"]] <- fitted_models
+
+    # Save models data to returned model
+    model[["models_data"]] <- models_data %>%
+        dplyr::select(station_id, date, season, prcp, tmax, tmin, prcp_occ, tipo_dia, prcp_amt,
+                      prcp_occ_prev, tipo_dia_prev, prcp_amt_prev, tmax_prev, tmin_prev)
 
     # Save residuals to returned model
     residuals <- lapply(models, '[[', 'residuals')
@@ -576,7 +581,7 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
     model[["estadisticos.umbrales"]] <- estadisticos.umbrales
 
     # Save execution time to returned model
-    model[["execution_time"]] <- tiempo.models
+    model[['exec_times']][["exec_tot_time"]] <- tiempo.models
 
     # Set model's class
     class(model) <- "gamwgen"

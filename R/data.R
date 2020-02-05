@@ -119,7 +119,7 @@ as.sim_loc.sf <- function(object, crs, map_cols = list(station_id = "station_id"
 check.object <- function(object, obj.name, obj.class, obj.cols) {
 
     if (!all(class(object) %in% obj.class)) {
-        warning (glue::glue("{obj.name} must be a {if ('sf' %in% obj.class) 'sf'} tibble"), call. = FALSE, immediate. = TRUE)
+        warning (glue::glue("{obj.name} must be a {if ('sf' %in% obj.class) 'sf tibble' else 'tibble'}"), call. = FALSE, immediate. = TRUE)
         stop ("Entry data aren't in the correct format!", call. = FALSE)
     }
 
@@ -162,7 +162,7 @@ check.fit.input.data <- function(climate, stations, seasonal.covariates) {
 
     climate.columns <- c(date = "Date", station_id = "integer", tmax = "numeric", tmin = "numeric", prcp = "numeric")
     stations.columns <- c(station_id = "integer", geometry = "sfc_POINT")
-    seasonal.invariant.columns <- c(station_id = "integer", year = "numeric", season = "numeric")
+    seasonal.invariant.columns <- c(station_id = "integer", year = "integer", season = "integer")
     seasonal.ends.with.columns <- c(tmax = "numeric", tmin = "numeric", prcp = "numeric")
 
     check.object(climate, "climate", c("tbl_df", "tbl", "data.frame"), climate.columns)
@@ -178,7 +178,7 @@ check.fit.input.data <- function(climate, stations, seasonal.covariates) {
 check.simulation.input.data <- function(simulation.locations, seasonal.covariates) {
 
     sim.loc.columns <- c(geometry = "sfc_POINT")
-    seasonal.invariant.columns <- c(station_id = "integer", year = "numeric", season = "numeric")
+    seasonal.invariant.columns <- c(station_id = "integer", year = "integer", season = "integer")
     seasonal.ends.with.columns <- c(tmax = "numeric", tmin = "numeric", prcp = "numeric")
 
     check.object(simulation.locations, "simulation_locations", c("sf", "tbl_df", "tbl", "data.frame"), sim.loc.columns)
@@ -198,10 +198,10 @@ check.points.to.extract <- function(points_to_extract) {
 }
 
 
-#' @title Transform netcdf4 file to tibble
-#' @description Transform netcdf4 file to tibble.
+#' @title Extract specific points from netcdf4, as tibble
+#' @description Extract specific points from a netcdf4 file, as a tibble object.
 #' @export
-netcdf.as.tibble <- function(netcdf_filename, points_to_extract, points_id_column = "point_id") {
+netcdf.extract.points.as.tibble <- function(netcdf_filename, points_to_extract, points_id_column = "point_id") {
 
     # Determinar variables y cantidad de realizaciones
     netcdf_file          <- ncdf4::nc_open(filename = netcdf_filename)
@@ -242,6 +242,20 @@ netcdf.as.tibble <- function(netcdf_filename, points_to_extract, points_id_colum
         dplyr::mutate(tipo_dia = factor(ifelse(as.logical(prcp), 'Lluvioso', 'Seco'), levels = c('Lluvioso', 'Seco')))
 
     return (datos_simulaciones)
+
+}
+
+
+#' @title Transform netcdf4 file to tibble object
+#' @description Transform netcdf4 file to tibble object.
+#' @export
+netcdf.as.tibble <- function(netcdf_filename, na.rm = T) {
+
+    result <- tidync::tidync(netcdf_filename) %>%
+        tidync::hyper_tibble(na.rm = na.rm) %>%
+        dplyr::mutate(time = lubridate::as_date(time))
+
+    return (result)
 
 }
 

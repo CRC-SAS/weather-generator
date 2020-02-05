@@ -1,10 +1,9 @@
 
 # Definición de función para la creación de archivos NetCDF
-CrearNetCDF <- function(nc_file, num_realizations, sim_dates, simulation_raster, coord_ref_system) {
+CrearNetCDF <- function(nc_file, num_realizations, sim_dates, coordinates, coord_ref_system) {
   # Obtener valores para dimensiones X a Y
-  coordenadas <- raster::rasterToPoints(simulation_raster)
-  x_vals      <- sort(unique(coordenadas[, 1]))
-  y_vals      <- sort(unique(coordenadas[, 2]))
+  x_vals      <- sort(unique(coordinates[, 1]))
+  y_vals      <- sort(unique(coordinates[, 2]))
   t_vals      <- julian(sim_dates)
   r_vals      <- seq(from = 1, to = num_realizations, by = 1)
 
@@ -77,8 +76,8 @@ CrearNetCDF <- function(nc_file, num_realizations, sim_dates, simulation_raster,
   return (nc_file)
 }
 
-# Definición de función para la inserción de datos de una realización en un NetCDF
-GuardarRealizacionNetCDF <- function(nc_file, numero_realizacion, sim_dates, raster_tmax, raster_tmin, raster_prcp) {
+# Definición de función para la inserción de datos de una realización (con resultados en un raster) en un NetCDF
+GuardarRealizacionNetCDFfromRasters <- function(nc_file, numero_realizacion, sim_dates, raster_tmax, raster_tmin, raster_prcp) {
   # Abrir NetCDF para escritura
   nc <- ncdf4::nc_open(filename = nc_file, write = TRUE)
 
@@ -93,6 +92,39 @@ GuardarRealizacionNetCDF <- function(nc_file, numero_realizacion, sim_dates, ras
     if (length(raster_variable) > 0) {
       stack_variable  <- raster::flip(raster::stack(raster_variable), direction = "y")
       array_variable  <- base::aperm(raster::as.array(stack_variable), perm = c(2, 1, 3))
+      ncdf4::ncvar_put(nc = nc,
+                       varid = variable,
+                       vals  = array_variable,
+                       start = c(1, 1, 1, numero_realizacion),
+                       count = c(-1, -1, -1, 1))
+    }
+  }
+
+  # Cierre de archivo
+  ncdf4::nc_close(nc)
+}
+
+# Definición de función para la inserción de datos de una realización (con resultados en un tibble) en un NetCDF
+GuardarRealizacionNetCDFfromTibble <- function(nc_file, numero_realizacion, sim_dates, tibble_with_data) {
+  # Abrir NetCDF para escritura
+  nc <- ncdf4::nc_open(filename = nc_file, write = TRUE)
+
+  # Agregado de variables
+  variables <- list(
+    "tmax" = "tmax",
+    "tmin" = "tmin",
+    "prcp" = "prcp_amt"
+  )
+  for (variable in names(variables)) {
+    tibble_variable <- tibble_with_data %>%
+      dplyr::select(longitude, latitude, date, !!variables[[variable]]) %>%
+      tidyr::complete(tidyr::crossing(longitude, latitude, date)) %>% # WARNING: el netcdf tiene combinaciones de coord que no coinciden con las estaciones!!
+      dplyr::arrange(date, latitude, longitude) # WARNING: mantener este orden!! Sino los datos se guardan en celdas erróneas!!
+    if (nrow(tibble_variable) > 0) {
+      array_variable  <- array(tibble_variable %>% dplyr::pull(!!variables[[variable]]),
+                               dim = c(length(unique(tibble_variable$longitude)),
+                                       length(unique(tibble_variable$latitude)),
+                                       length(unique(tibble_variable$date))))
       ncdf4::ncvar_put(nc = nc,
                        varid = variable,
                        vals  = array_variable,
