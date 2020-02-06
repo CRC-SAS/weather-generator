@@ -325,21 +325,9 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
     #########################################
     ## Thresholds for performing retries. i.e.: if timulated values are above/below the
     ## max/min range, the simulation for that day will be repeated.
-    estadisticos_umbrales <- tibble::tibble(station_id = integer(), date = lubridate::ymd(), prcp_occ = integer(),
-                                            max.range = integer(), min.range = integer())
-    for (station in names(model$estadisticos.umbrales) ) {
-        for ( mes in unique(simulation_dates$month) ) {
-            for ( prcp in c("con.prcp", "sin.prcp") ) {
-                estadisticos_umbrales <- estadisticos_umbrales %>%
-                    dplyr::bind_rows(tibble::tibble(
-                        station_id   = as.integer(station),
-                        date      = simulation_dates %>% dplyr::filter(month == mes) %>% dplyr::pull(date),
-                        prcp_occ  = ifelse(prcp == "con.prcp", as.integer(T), as.integer(F)),
-                        max.range = model$estadisticos.umbrales[[station]][[mes]][[prcp]][["max.range"]],
-                        min.range = model$estadisticos.umbrales[[station]][[mes]][[prcp]][["min.range"]]))
-            }
-        }
-    }
+    temperature_range_thresholds <-
+        gamwgen:::get_temperature_thresholds(model$stations, simulation_points,
+                                             model$estadisticos_umbrales, control)
 
 
     ###############################################################################
@@ -466,7 +454,6 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
         ## Antes se usaba un foreach para paralelizar esto, pero no se puede ser paralelizado
         ## porque simulation_matrix.d no toma los valores correctos al paralelizar!!
         ## Ver version anterior para más detalles (commit: 1898e5a)
-        temps_retries <- 0
         daily_gen_clim <- purrr::map_dfr(1:ndates, function(d) {
 
             ##############################################################
@@ -605,7 +592,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
                 dplyr::inner_join(prcp_occ_sim, by = c("station_id", "date")) %>%
                 dplyr::inner_join(tmax_sim,     by = c("station_id", "date")) %>%
                 dplyr::inner_join(tmin_sim,     by = c("station_id", "date")) %>%
-                dplyr::left_join(estadisticos_umbrales, by = c("station_id", "date", "prcp_occ")) %>%
+                dplyr::left_join(temperature_range_thresholds, by = c("station_id", "date", "prcp_occ")) %>%
                 dplyr::mutate(te = tmax - tmin) %>%
                 dplyr::select(station_id, date, tmax, tmin, te_min = min.range, te, te_max = max.range)
 
@@ -614,7 +601,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
             # below the maximum observed range, the simulations are valid. Otherwise, re-simulate
             daily_retries <- 0
             while ( daily_retries < 100 && (any(t_ctrl$tmax < t_ctrl$tmin) || any(t_ctrl$te > t_ctrl$te_max) || any(t_ctrl$te < t_ctrl$te_min)) ) {
-                daily_retries  <- daily_retries  + 1
+                daily_retries <- daily_retries  + 1
 
                 stns_a_recalc <- t_ctrl %>% dplyr::filter(tmax < tmin | te > te_max | te < te_min) %>% dplyr::pull(station_id)
 
@@ -651,10 +638,25 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
 
             } # end of while sentence
 
+
             ##########################
             ## Report retries problems
             if(daily_retries >= 100)
                 warning("Failed to simulate random noise that doesn't violate the constraint of max. temp. > min. temp.")
+
+
+            ###############################################################
+            ## Update simulation_matrix.d with new values for tmax and tmin
+            if (daily_retries > 0) {
+                # Population of the simulation matrix with the simulated maximum temperature data
+                simulation_matrix.d <- simulation_matrix.d %>%
+                    dplyr::left_join(tmax_sim, by = c("station_id", "date"), suffix = c("", "_simulated")) %>%
+                    dplyr::mutate(tmax = tmax_simulated) %>% dplyr::select(-tmax_simulated)
+                # Population of the simulation matrix with the simulated minimum temperature data
+                simulation_matrix.d <- simulation_matrix.d %>%
+                    dplyr::left_join(tmin_sim, by = c("station_id", "date"), suffix = c("", "_simulated")) %>%
+                    dplyr::mutate(tmin = tmin_simulated) %>% dplyr::select(-tmin_simulated)
+            }
 
 
 

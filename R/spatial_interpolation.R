@@ -1,5 +1,79 @@
 
 # Interpolación de covariables
+interpolate_thresholds <- function(simulation_points, monthly_thresholds) {
+
+    # OBS:
+    # Al interpolar las covariables, no se tiene en cuenta si el usario optó por usar ruidos
+    # correlacionados espacialmente o no. Además, aunque solo sea necesario interpolar covariables
+    # para una sola estación (porque para las demás ya hay covariables), de todas formas se
+    # interpolan covariables para todas las estaciones, ignorando las covariables observadas
+    # y utilizando en su lugar las covariables interpoladas!! Esto el funcionamiento previsto!
+
+    # Datos estacionales para todas las localidades
+    umbrales.interpolados <- monthly_thresholds %>%
+        dplyr::left_join(., model$stations %>% dplyr::select(station_id, longitude, latitude)) %>%
+        sf::st_as_sf(.)
+
+    # Transformación a objeto sp para la interpolación
+    simulation_points.sp <- simulation_points %>% sf::as_Spatial()
+
+    # Combinaciones posibles de años y trimestres para la interpolación
+    combinaciones <- purrr::transpose(
+        purrr::cross2(.x = unique(monthly_thresholds$month),
+                      .y =unique(monthly_thresholds$prcp_occ)))
+
+    # Interpolación de acumulados de lluvia
+    datos_interpolados <- purrr::pmap_dfr(
+        .l = combinaciones,
+        .f = function(mes, day) {
+
+            interpolacion.valores.iniciales.sp <- umbrales.interpolados %>%
+                dplyr::filter(month == !!mes & prcp_occ == !!day) %>%
+                sf::as_Spatial()
+
+            # Valores interpolados de ocurrencia
+            datos_interpolados_max.range <-
+                automap::autoKrige(max.range~1,
+                                   interpolacion.valores.iniciales.sp,
+                                   simulation_points.sp) %>%
+                sf::st_as_sf(x = .$krige_output, crs = sf::st_crs(grilla.simulacion)) %>%
+                dplyr::select(max.range = var1.pred) %>%
+                dplyr::mutate(month = mes, prcp_occ = day) %>%
+                dplyr::mutate(longitude = sf::st_coordinates(geometry)[,'X'],
+                              latitude = sf::st_coordinates(geometry)[,'Y']) %>%
+                sf::st_set_geometry(NULL)
+
+
+            # Valores interpolados de temperatura máxima
+            datos_interpolados_min.range <-
+                automap::autoKrige(min.range~1,
+                                   interpolacion.valores.iniciales.sp,
+                                   simulation_points.sp) %>%
+                sf::st_as_sf(x = .$krige_output, crs = sf::st_crs(grilla.simulacion)) %>%
+                dplyr::select(min.range = var1.pred) %>%
+                dplyr::mutate(month = mes, prcp_occ = day) %>%
+                dplyr::mutate(longitude = sf::st_coordinates(geometry)[,'X'],
+                              latitude = sf::st_coordinates(geometry)[,'Y']) %>%
+                sf::st_set_geometry(NULL)
+
+
+            # Crear data frame con los valores interpolados
+            # Este df hay que unirlo a la grilla de simulación para cada día de la simulacion
+            # para la union tenemos las coordenadas, anos y estaciones.
+            datos_interpolados_range <- datos_interpolados_max.range %>%
+                dplyr::left_join(datos_interpolados_min.range, by = c('month', 'prcp_occ', 'latitude', 'longitude')) %>%
+                dplyr::select(month, prcp_occ, max.range, min.range, longitude, latitude)
+
+            return(datos_interpolados_range)
+        }
+    )
+
+    return (datos_interpolados)
+
+}
+
+
+# Interpolación de covariables
 interpolate_covariates <- function(simulation_points, seasonal_covariates, model_stations, simulation_dates) {
 
     # OBS:
@@ -84,6 +158,7 @@ interpolate_covariates <- function(simulation_points, seasonal_covariates, model
 
 }
 
+
 # Generacion de campos gaussianos para la alteración de los valores iniciales,
 # haciendo uso de los datos utilizados para realizar el ajuste
 generate_variograms_for_initial_values <- function(model, simulation_points, seed, month, day) {
@@ -119,7 +194,6 @@ generate_variograms_for_initial_values <- function(model, simulation_points, see
     return (variograms_for_initial_values)
 
 }
-
 
 interpolate_start_climatology <- function(model, simulation_points, seed, month, day) {
 
@@ -172,6 +246,7 @@ interpolate_start_climatology <- function(model, simulation_points, seed, month,
                 sf::st_join(tmax_interpolation %>% dplyr::select(tmax)) %>%
                 sf::st_join(tmin_interpolation %>% dplyr::select(tmin)))
 }
+
 
 # krige_covariate <- function(model, station_coordinates_grid, simulation_coordinates_grid, covariate) {
 #     variogram <- fields::vgram(loc = station_coordinates_grid, y = covariate,

@@ -2,14 +2,10 @@
 % Please edit documentation in R/data.R
 \name{netcdf.as.tibble}
 \alias{netcdf.as.tibble}
-\title{Transform netcdf4 file to tibble}
+\title{Transform netcdf4 file to tibble object}
 \usage{
-netcdf.as.tibble(
-  netcdf_filename,
-  points_to_extract,
-  points_id_column = "point_id"
-)
+netcdf.as.tibble(netcdf_filename, na.rm = T)
 }
 \description{
-Transform netcdf4 file to tibble.
+Transform netcdf4 file to tibble object.
 }

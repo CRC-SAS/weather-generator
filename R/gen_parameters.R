@@ -1,4 +1,18 @@
 
+get_temperature_thresholds <- function(model_stations, simulation_points, estadisticos_umbrales, control) {
+
+    # Si simulation points no es una grilla y todos los puntos a simular fueron usados en el ajuste
+    # entonces, como temperature_thresholds, se usan los datos generados en el ajuste sin interpolar nada
+    if (!control$sim_loc_as_grid &
+        all(lapply(sf::st_equals(simulation_points, model_stations), length) == 1))
+        return (estadisticos_umbrales)
+
+    # Si continua la ejecución de la función es porque simulation points es una grilla o NO todos
+    # los puntos a simular fueron usados en el ajuste, y es necesario interpolar estadisticos_umbrales
+    return (gamwgen:::interpolate_thresholds(simulation_points, estadisticos_umbrales))
+
+}
+
 start_climatology_month_day <- function(start_climatology, simulation_points, month, day) {
 
     start_climatology <- start_climatology %>%

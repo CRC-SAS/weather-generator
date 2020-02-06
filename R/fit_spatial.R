@@ -208,8 +208,8 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
     # Add stations's latitude and longitude to models_data
     t <- proc.time()
     models_data <- models_data %>%
-    dplyr::left_join(stations %>% dplyr::select(station_id, latitude, longitude),
-                     by = 'station_id')
+        dplyr::left_join(stations %>% dplyr::select(station_id, latitude, longitude),
+                         by = 'station_id')
     tiempo.join_stations <- proc.time() - t
 
     # Se agrega row_num para diferenciar unívocamente cada registro
@@ -468,6 +468,42 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
     # Progress Bar
     pb$tick(20, tokens = list(what = "tmin"))
 
+    ##############
+    # Progress Bar
+    pb$tick(0, tokens = list(what = "retry thresholds"))
+
+
+    ##############
+    # Retry threshold
+    estadisticos_umbrales <- purrr::map_dfr(
+        .x = 1:12,
+        .f = function(mes) {
+            umbrales.mes <- models_data %>%
+                dplyr::filter(lubridate::month(date) == mes)
+
+            umbrales.con.prcp <- dplyr::filter(umbrales.mes, prcp > control$prcp_occurrence_threshold) %>%
+                dplyr::group_by(., station_id, lubridate::month(date)) %>%
+                dplyr::summarise(., min.range = min(tmax - tmin, na.rm = T),
+                                 max.range = max(tmax - tmin, na.rm = T)) %>%
+                dplyr::mutate(., prcp_occ = 1, month = mes) %>%
+                dplyr::select(., station_id, month, prcp_occ, min.range, max.range) %>%
+                dplyr::ungroup(.)
+
+            umbrales.sin.prcp <- dplyr::filter(umbrales.mes, prcp <= control$prcp_occurrence_threshold) %>%
+                dplyr::group_by(., station_id, lubridate::month(date)) %>%
+                dplyr::summarise(., min.range = min(tmax - tmin, na.rm = T),
+                                 max.range = max(tmax - tmin, na.rm = T))  %>%
+                dplyr::mutate(., prcp_occ = 0, month = mes) %>%
+                dplyr::select(., station_id, month, prcp_occ, min.range, max.range) %>%
+                dplyr::ungroup(.)
+
+
+            umbrales <- rbind(umbrales.con.prcp, umbrales.sin.prcp)
+
+            return (umbrales)
+        }
+    )
+
 
     #################################
     ## Control de tiempo de ejecución
@@ -498,13 +534,16 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
     model[['fitted_models']][["tmin_fit"]]     <- tmin_fit
 
     # Save models data to returned model
-    model[["models_data"]]      <- models_data %>%
+    model[["models_data"]] <- models_data %>%
         dplyr::select(station_id, date, season, prcp, tmax, tmin, prcp_occ, tipo_dia, prcp_amt,
                       prcp_occ_prev, tipo_dia_prev, prcp_amt_prev, tmax_prev, tmin_prev)
 
     # Save residuals to returned model
     model[["models_residuals"]] <- models_data %>%
         dplyr::select(station_id, date, dplyr::ends_with("residuals"), tipo_dia)
+
+    # Save estadisticos.umbrales to returned model
+    model[["estadisticos_umbrales"]] <- estadisticos_umbrales
 
     # Save execution time to returned model
     model[['exec_times']][["covs_add_time"]] <- tiempo.add_covariates

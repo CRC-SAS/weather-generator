@@ -61,7 +61,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                                output_folder = getwd(), output_filename = "sim_results.nc",
                                seasonal_covariates = NULL, verbose = F) {
 
-    ## Objeto a ser retornado
+    ## Object to be returned
     gen_climate <- list()
 
     ###############################################################
@@ -93,7 +93,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                 'Se transforma simulation_locations al crs {del ajuste}')
     }
 
-    ## Crear bounding_box con un buffer de 10km y verificar que los puntos ajustados estén dentro!!
+    ## Create a bounding box to check whether the simulation location are englufed by it
     sl_bbox <- sf::st_bbox(model$stations)
 
     sl_bbox_offset <- sf::st_bbox(
@@ -106,13 +106,14 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     polygon_offset <- sf::st_as_sfc(sl_bbox_offset)
     sf::st_crs(polygon_offset) <- sf::st_crs(model$crs_used_to_fit)
 
-    ## los puntos a simular tienen que estar dentro del boundign box del ajuste
+    ## Simulation locations should be inside the bounding box
     if(!all(sf::st_contains(polygon_offset, simulation_locations, sparse = F)))
         stop('Alguno de los puntos ajustados se encuentra fuera del bounding box ',
              'creado a partir de los puntos a simular y con un offset de 10 km.')
 
-    ## Solo pueden usarse ruidos NO correlacionados espacialmente
-    ## para simular en los puntos utilizados en el ajuste
+    ## Non spatially correlated noise can only be used if the weather stations
+    ## to be simulated where used in the fitting process. The residuals of those stations are
+    ## needed to model the multivariate distributions.
     if(!control$use_spatially_correlated_noise)
         if(any(lapply(sf::st_equals(simulation_locations, model$stations), length) != 1))
             stop('Los ruidos NO correlacionados espacialmente solo pueden ser usados cuando ',
@@ -208,7 +209,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     if(!is.null(control$seed))
         set.seed(control$seed)
 
-    # Para ...
+    # Create simulation seeds to replicate results in different simulations
     realizations_seeds <- NULL
     if(!is.null(control$seed)) {
         realizations_seeds <- list()
@@ -218,7 +219,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                                             prcp_occ = ceiling(runif(min = 1, max = 10000000, n = cant_dias_sim)), # uno por día por realizacion
                                             prcp_amt = ceiling(runif(min = 1, max = 10000000, n = cant_dias_sim)), # uno por día por realizacion
                                             temp_dry = ceiling(runif(min = 1, max = 10000000, n = cant_dias_sim)), # uno por día por realizacion
-                                            temp_wet = ceiling(runif(min = 1, max = 10000000, n = cant_dias_sim))) # uno por día por realizacion
+                                            temp_wet = ceiling(runif(min = 1, max = 10000000, n = cant_dias_sim)), # uno por día por realizacion
+                                            retries = ceiling(runif(min = 1, max = 10000000, n = cant_dias_sim))) # uno por día por realizacion
         }
     }
 
@@ -277,7 +279,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
     ##################################
-    ## Matriz con los puntos a simular
+    ## Matrix with the locations to be simulated
     simulation_points <- simulation_locations %>%
         sf::st_transform(sf::st_crs(model$crs_used_to_fit)) %>%
         dplyr::mutate(point_id = dplyr::row_number(),
@@ -286,7 +288,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
     ##################################
-    ## Raster con los puntos a simular
+    ## Raster with the locations to be simulated.
     if (control$sim_loc_as_grid) {
         pnts_dist_matrix  <- gamwgen:::make_distance_matrix(simulation_locations)
         min_dist_btw_pnts <- floor(min(pnts_dist_matrix[upper.tri(pnts_dist_matrix)]))
@@ -338,7 +340,6 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             gamwgen:::get_covariates(model, simulation_points, seasonal_covariates, simulation_dates, control)
 
 
-
     #########################################
     ## Global paramteres for noise generators
     if(control$use_spatially_correlated_noise)
@@ -381,6 +382,14 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                           SX2 = dplyr::if_else(season == 2, seasonal_tmax, 0),
                           SX3 = dplyr::if_else(season == 3, seasonal_tmax, 0),
                           SX4 = dplyr::if_else(season == 4, seasonal_tmax, 0))
+
+
+    #########################################
+    ## Thresholds for performing retries. i.e.: if simulated values are above/below the
+    ## max/min range, the simulation for that day will be repeated.
+    temperature_range_thresholds <-
+        gamwgen:::get_temperature_thresholds(model$stations, simulation_points,
+                                             model$estadisticos_umbrales, control)
 
 
     ##########################################
@@ -680,6 +689,149 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             simulation_matrix.d <- simulation_matrix.d %>%
                 dplyr::mutate(tmin = raster::extract(SIMmin_points.d, simulation_points))
             #}, times = 10) # 15 milisegundos
+
+
+
+            #################################################
+            ## Check Temperatures (both, tmax and tmin) ----
+            #################################################
+
+            # Simulated maximum and minium temperature values will be valid the daily
+            # temperature range (tmax - tmin) falls between the thresholds estimated
+            # from the original data. If the simulated daily temperature is outside the
+            # thresholds, i.e.: above the maximum range or beneath the minimum range,
+            # the daily value will be resimulated until the condition is satisfied.
+
+
+            #################
+            ## Dry thresholds
+            # Maximum range
+            dry_max_range <- temperature_range_thresholds %>%
+                dplyr::filter(month == current_month & prcp_occ == 0) %>%
+                sf::st_as_sf(., coords = c('longitude', 'latitude')) %>%
+                gamwgen:::sf2raster('max.range', simulation_raster)
+            # Minimum range
+            dry_min_range <- temperature_range_thresholds %>%
+                dplyr::filter(month == current_month & prcp_occ == 0) %>%
+                sf::st_as_sf(., coords = c('longitude', 'latitude')) %>%
+                gamwgen:::sf2raster('min.range', simulation_raster)
+
+
+            ################
+            # Wet thresholds
+            # Maximum range
+            wet_max_range <- temperature_range_thresholds %>%
+                dplyr::filter(month == current_month & prcp_occ == 1) %>%
+                sf::st_as_sf(., coords = c('longitude', 'latitude')) %>%
+                gamwgen:::sf2raster('max.range', simulation_raster)
+            # Minimum range
+            wet_min_range <- temperature_range_thresholds %>%
+                dplyr::filter(month == current_month & prcp_occ == 0) %>%
+                sf::st_as_sf(., coords = c('longitude', 'latitude')) %>%
+                gamwgen:::sf2raster('min.range', simulation_raster)
+
+
+            ################
+            ## Merge rasters
+            # Maximum range
+            maximum_daily_range_raster <-
+                gamwgen:::ensamblar_raster_residuos(dry_max_range, wet_max_range, SIMocc_points.d)
+            # Minimum range
+            minimum_daily_range_raster <-
+                gamwgen:::ensamblar_raster_residuos(dry_min_range, wet_min_range, SIMocc_points.d)
+            # Daily range
+            daily_range_points.d <- base::abs(SIMmax_points.d - SIMmin_points.d)
+
+
+            # Perform the test. If the simulate temperature range is above the minimum observed range and
+            # below the maximum observed range, the simulations are valid. Otherwise, re-simulate
+            daily_retries <- 0
+            while ( daily_retries < 100 && (any(raster::getValues(SIMmax_points.d < SIMmin_points.d), na.rm = T) ||
+                                            any(raster::getValues(daily_range_points.d > maximum_daily_range_raster), na.rm = T) ||
+                                            any(raster::getValues(daily_range_points.d < minimum_daily_range_raster), na.rm = T) )) {
+                daily_retries <- daily_retries  + 1
+
+                # Raster con los valores de "ruido" para días secos
+                temperature_random_fields_dry <-
+                    control$temperature_noise_generating_function(
+                        simulation_points = simulation_points,
+                        gen_noise_params = gen_noise_params,
+                        month_number = current_month,
+                        selector = c('tmax_dry', 'tmin_dry'),
+                        seed = if_else(is.null(control$seed), NULL, realizations_seeds[[r]]$retries[[d]] + daily_retries))
+                #}, times = 10) # 180 milisegundos
+
+                # Procesamiento de residuos para dias secos
+                rasters_secos.d <- purrr::map(
+                    .x = c("tmin", "tmax"),
+                    .f = function(variable, objeto_sf) {
+                        return (gamwgen:::sf2raster(objeto_sf, paste0(variable, '_residuals'), simulation_raster))
+                    }, objeto_sf = temperature_random_fields_dry
+                )
+                names(rasters_secos.d) <- c("tmin", "tmax")
+
+                # Raster con los valores de "ruido" para días lluviosos
+                temperature_random_fields_wet <-
+                    control$temperature_noise_generating_function(
+                        simulation_points = simulation_points,
+                        gen_noise_params = gen_noise_params,
+                        month_number = current_month,
+                        selector = c('tmax_wet', 'tmin_wet'),
+                        seed = if_else(is.null(control$seed), NULL, realizations_seeds[[r]]$retries[[d]] + daily_retries))
+
+                # Procesamiento de residuos para dias humedos
+                rasters_humedos.d <- purrr::map(
+                    .x = c("tmin", "tmax"),
+                    .f = function(variable, objeto_sf) {
+                        return (gamwgen:::sf2raster(objeto_sf, paste0(variable, '_residuals'), simulation_raster))
+                    }, objeto_sf = temperature_random_fields_wet
+                )
+                names(rasters_humedos.d) <- c("tmin", "tmax")
+
+                #Ahora vamos a generar 2 rasters: uno para tmax y otro para tmin
+                #Cada raster tiene los residuos de las variables correspondientes
+                #considerando la ocurrencia de dia seco o humedo
+                SIMmax_points_noise.d <-
+                    gamwgen:::ensamblar_raster_residuos(rasters_humedos.d$tmax, rasters_secos.d$tmax, SIMocc_points.d)
+                SIMmin_points_noise.d <-
+                    gamwgen:::ensamblar_raster_residuos(rasters_humedos.d$tmin, rasters_secos.d$tmin, SIMocc_points.d)
+
+                # Generar nuevas temperaturas
+                # Maximum temperature
+                new_tmax <- SIMmax_points_climate.d + SIMmax_points_noise.d
+                # Minimum temperature
+                new_tmin <- SIMmin_points_climate.d + SIMmin_points_noise.d
+
+                # Actualizar temperaturas simuladas
+                SIMmax_points.d <- new_tmax
+                SIMmin_points.d <- new_tmin
+
+                # Daily range
+                daily_range_points.d <- SIMmax_points.d - SIMmin_points.d
+
+                #################################################
+                ## Progress Bar (for non parallel execution) ----
+                if(nworkers == 1) # for report retries!!
+                    pb$tick(0, tokens = list(r = r, d = d, t = daily_retries))
+            }
+
+
+            ##########################
+            ## Report retries problems
+            if(daily_retries >= 100)
+                warning("Failed to simulate random noise that doesn't violate the constraint of max. temp. > min. temp.")
+
+
+            ###############################################################
+            ## Update simulation_matrix.d with new values for tmax and tmin
+            if (daily_retries > 0) {
+                # Population of the simulation matrix with the simulated maximum temperature data
+                simulation_matrix.d <- simulation_matrix.d %>%
+                    dplyr::mutate(tmax = raster::extract(SIMmax_points.d, simulation_points))
+                # Population of the simulation matrix with the simulated minimum temperature data
+                simulation_matrix.d <- simulation_matrix.d %>%
+                    dplyr::mutate(tmin = raster::extract(SIMmin_points.d, simulation_points))
+            }
 
 
 

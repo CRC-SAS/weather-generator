@@ -228,8 +228,8 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
     # Add stations's latitude and longitude to models_data
     t <- proc.time()
     models_data <- models_data %>%
-    dplyr::left_join(stations %>% dplyr::select(station_id, latitude, longitude),
-                     by = 'station_id')
+        dplyr::left_join(stations %>% dplyr::select(station_id, latitude, longitude),
+                         by = 'station_id')
     tiempo.join_stations <- proc.time() - t
 
 
@@ -496,45 +496,52 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
             pb$tick(20, tokens = list(c = which(unique_stations == station), what = "tmin", stn = station))
 
 
-        # Residuals estimation
-        residuos <- station_climate %>%
-            dplyr::select(station_id, date, dplyr::ends_with("residuals"), tipo_dia)
-
-        estadisticas.umbrales <- purrr::map(
-            .x = 1:12,
-            .f = function(mes) {
-                umbrales.mes <- station_climate %>%
-                    dplyr::filter(lubridate::month(date) == mes)
-
-                umbrales.con.prcp <- dplyr::filter(umbrales.mes, prcp > 0.1) %>%
-                    dplyr::group_by(., lubridate::month(date)) %>%
-                    dplyr::summarise(., min.range = min(tmax - tmin, na.rm = T),
-                                     max.range = max(tmax - tmin, na.rm = T)) %>%
-                    dplyr::select(., min.range, max.range)
-
-                umbrales.sin.prcp <- dplyr::filter(umbrales.mes, prcp <= 0.1) %>%
-                    dplyr::group_by(., lubridate::month(date)) %>%
-                    dplyr::summarise(., min.range = min(tmax - tmin, na.rm = T),
-                                     max.range = max(tmax - tmin, na.rm = T))  %>%
-                    dplyr::select(., min.range, max.range)
-
-                return (list(con.prcp = umbrales.con.prcp, sin.prcp = umbrales.sin.prcp))
-            }
-        )
-
         # Retornar resultados como lista
         return_list <- list(station_id = station,
-                            models_data = station_climate,
                             fitted_models  = list(prcp_occ_fit = prcp_occ_fit,
                                                   prcp_amt_fit = prcp_amt_fit,
                                                   tmax_fit = tmax_fit,
-                                                  tmin_fit = tmin_fit),
-                            residuals = residuos,
-                            estadisticos.umbrales = estadisticas.umbrales)
+                                                  tmin_fit = tmin_fit))
 
         return(return_list)
 
     }
+
+
+    ##############
+    # Retry threshold
+    estadisticos_umbrales <- purrr::map_dfr(
+        .x = 1:12,
+        .f = function(mes) {
+            umbrales.mes <- models_data %>%
+                dplyr::filter(lubridate::month(date) == mes)
+
+            umbrales.con.prcp <- dplyr::filter(umbrales.mes, prcp > control$prcp_occurrence_threshold) %>%
+                dplyr::group_by(., station_id, lubridate::month(date)) %>%
+                dplyr::summarise(., min.range = min(tmax - tmin, na.rm = T),
+                                 max.range = max(tmax - tmin, na.rm = T)) %>%
+                dplyr::mutate(., prcp_occ = 1, month = mes) %>%
+                dplyr::select(., station_id, month, prcp_occ, min.range, max.range) %>%
+                dplyr::ungroup(.)
+
+            umbrales.sin.prcp <- dplyr::filter(umbrales.mes, prcp <= control$prcp_occurrence_threshold) %>%
+                dplyr::group_by(., station_id, lubridate::month(date)) %>%
+                dplyr::summarise(., min.range = min(tmax - tmin, na.rm = T),
+                                 max.range = max(tmax - tmin, na.rm = T))  %>%
+                dplyr::mutate(., prcp_occ = 0, month = mes) %>%
+                dplyr::select(., station_id, month, prcp_occ, min.range, max.range) %>%
+                dplyr::ungroup(.)
+
+
+            umbrales <- rbind(umbrales.con.prcp, umbrales.sin.prcp)
+
+            return (umbrales)
+        }
+    )
+
+
+    #################################
+    ## Control de tiempo de ejecución
     tiempo.models <- proc.time() - t.m
 
 
@@ -566,19 +573,11 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
                       prcp_occ_prev, tipo_dia_prev, prcp_amt_prev, tmax_prev, tmin_prev)
 
     # Save residuals to returned model
-    residuals <- lapply(models, '[[', 'residuals')
-    names(residuals) <- lapply(models, '[[', 'station_id')
-    model[["models_residuals"]] <- residuals
-
-    # # Save estadisticos.residuos to returned model
-    # estadisticos.residuos <- lapply(models, '[[', 'estadisticos.residuos')
-    # names(estadisticos.residuos) <- lapply(models, '[[', 'station_id')
-    # model[["estadisticos.residuos"]] <- estadisticos.residuos
+    model[["models_residuals"]] <- models_data %>%
+        dplyr::select(station_id, date, dplyr::ends_with("residuals"), tipo_dia)
 
     # Save estadisticos.umbrales to returned model
-    estadisticos.umbrales <- lapply(models, '[[', 'estadisticos.umbrales')
-    names(estadisticos.umbrales) <- lapply(models, '[[', 'station_id')
-    model[["estadisticos.umbrales"]] <- estadisticos.umbrales
+    model[["estadisticos_umbrales"]] <- estadisticos_umbrales
 
     # Save execution time to returned model
     model[['exec_times']][["exec_tot_time"]] <- tiempo.models
