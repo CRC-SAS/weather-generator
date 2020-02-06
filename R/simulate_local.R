@@ -62,18 +62,21 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
 
     ###############################################################
 
+    # Check that the fitted object is of the right class
     if(class(model) != 'gamwgen')
         stop(glue::glue('Received a model of class {class(model)} and a model of class "gamwgen" was expected.'))
 
-    # If
+    # Check that the locations to be simulated exists
     if (is.null(simulation_locations))
         stop("The parameter simulation_locations can't be null!")
 
-    # Se controlan que los datos recibidos tengan el formato correcto
+    # Check that the input objects are of the right class
     gamwgen:::check.simulation.input.data(simulation_locations, seasonal_covariates)
 
     ###############################################################
 
+    # Check that the locations to be simulated are projected in the same coordinate
+    # system as the fitted data. Otherwise, convert it
     if(sf::st_crs(simulation_locations) != sf::st_crs(model$crs_used_to_fit)) {
         simulation_locations <- simulation_locations %>%
             sf::st_transform(sf::st_crs(model$crs_used_to_fit))
@@ -83,21 +86,25 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
 
     ###############################################################
 
+    # Check that the input location to be simulated is a valid sf object
     if(!all(sf::st_is_valid(simulation_locations)))
         stop('simulation_locations is not a valid sf object.')
 
     ###############################################################
 
+    # Check consistency between start and end date of the simulation period
     if(end_date <= start_date)
         stop('End date should be greater than start date')
 
     ###############################################################
 
+    # Check that the number of realization is equal to or larger than
     if(control$nsim < 1)
         stop('Number of simulations should be one or greater than one')
 
     ###############################################################
 
+    # Check that the number of cores to be used is valid
     if(is.na(control$avbl_cores) || is.null(control$avbl_cores))
         stop('The control parameter avbl_cores must be at least 1.')
 
@@ -120,14 +127,14 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
     #  externa      |      interna  (no corresponde)
     # generalmente el ajuste es con covariables internas
 
-    ## Si seasonal_covariates != NULL se debió hacer el ajuste usando covariables
+    ## If seasonal_covariates is not NULL, model fit should have been done using covariates.
     if(!is.null(seasonal_covariates) & is.null(model$seasonal_covariates))
         stop('El ajuste fue hecho sin covariables, por lo tanto, la simulación ',
              'también debe hacerse sin covariables y no es valido utilizar el ',
              'parámetro seasonal_covariates!!')
 
-    ## Si el ajuste se hizo utilizando un archivo de covariables externo,
-    ## entonces la simulación también debe hacerse con un archivo externo
+    ## If model fit was done using an external set of covariates, the simulation
+    ## should be done with an external set of variates as well.
     if(is.null(seasonal_covariates) & !is.null(model$seasonal_covariates))
         stop('El ajuste se hizo utilizando un archivo de covariables (parametro ',
              'seasonal_covariates), por lo tanto, la simulación también debe hacerse ',
@@ -140,8 +147,8 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
 
     ###############################################################
 
-    ## Se verifica que hayan covariables suficientes para cubrir todas las fechas a simular,
-    ## pero el control solo se hace si se van a utilizar covariables en la simulación!!
+    ## Check the presence of seasonal covariables time series as long as the simulation period.
+    ## This control is only performed if the simulation will use covariables otherwise, it will be skipped.
     if(!is.null(seasonal_covariates)) {
         sim_dates_control <- tidyr::crossing(model$seasonal_covariates %>% dplyr::distinct(station_id),
                                              year = base::seq.int(lubridate::year(start_date), lubridate::year(end_date)),
@@ -159,7 +166,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
     ## INITIAL CONFIGURATIONS ##
     ############################
 
-    # Para que las funciones de RandomFields devuelvan lo esperado!!
+    # Configuration of the RandomFields package in order to produce the expected results
     RandomFields::RFoptions(spConform=FALSE)
 
     # Para ...
@@ -249,8 +256,8 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
                       latitude  = sf::st_coordinates(geometry)[,'Y'])
 
 
-    ############################################################################
-    ## Obtención de valores para el día previo al día de inicio de la simulación
+    ################################################################
+    ## Obtaining values for the day before the simulation start day
     start_date_prev_day_climatology <-
         gamwgen:::get_start_climatology(model, simulation_points, start_date, control)
 
@@ -297,8 +304,8 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
         dplyr::select(station_id, point_id, longitude, latitude)
 
 
-    #########################################################################################
-    ## Incoporar covariables si corresponde, además solo las de los anhos en simulation_dates
+    ################################################################################################
+    ## Add seasonal covariates if they were used when model fitting (only years in simulation_dates)
     if (!is.null(seasonal_covariates))
         simulation_matrix <- simulation_matrix %>% sf::st_join(seasonal_covariates) %>%
             dplyr::mutate(ST1 = dplyr::if_else(season == 1, seasonal_prcp, 0),
@@ -335,8 +342,8 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
     }
 
 
-    #########################################
-    ## Residuals estimation
+    ###############################################################################
+    ## Monthly residuals estimation for each month, type of day and weather station
     residuals_monthly_statistics <- do.call('rbind', model$models_residuals) %>%
         dplyr::select(station_id, date, tmax_residuals, tmin_residuals) %>%
         tidyr::drop_na(.) %>%
@@ -462,37 +469,38 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
         temps_retries <- 0
         daily_gen_clim <- purrr::map_dfr(1:ndates, function(d) {
 
-            #######################
-            ## Indice de meses ----
+            ##############################################################
+            ## Temporal index for each month of the simulation/realization
             current_month <- simulation_dates$month[d]
 
 
 
-            #######################################
-            ## Ocurrencia de lluvia (prcp_occ) ----
-            #######################################
+            ###########################################
+            ## Precipitation occurrence (prcp_occ) ----
+            ###########################################
 
-            # Se simula la ocurrencia de precipitación (prcp_occ)
+            # Simulation of precipitation occurrence
             prcp_occ_sim <- foreach::foreach(station = unique_stations, .multicombine = T, .combine = dplyr::bind_rows,
                                              .packages = c("dplyr")) %dopar% {
                 #
-                prcp_occ_fit <- model$fitted_models[[as.character(station)]]$prcp_occ_fit
-                stn_sim_mtrx <- simulation_matrix.d %>% dplyr::filter(station_id == as.integer(station))
+                prcp_occ_fit <- model$fitted_models[[as.character(station)]]$prcp_occ_fit # Extraction of the GAM model
+                stn_sim_mtrx <- simulation_matrix.d %>% dplyr::filter(station_id == as.integer(station)) # Creation of the data input for the model
                 #
-                result_predict <- mgcv::predict.gam(object = prcp_occ_fit, newdata = stn_sim_mtrx)
+                result_predict <- mgcv::predict.gam(object = prcp_occ_fit, newdata = stn_sim_mtrx) # Local climate prediction
                 result_rnorm   <- control$prcp_noise_generating_function(simulation_points = simulation_points %>%
                                                                              dplyr::filter(., station_id == station),
                                                                          gen_noise_params = gen_noise_params,
                                                                          month_number = current_month,
                                                                          selector = 'prcp',
                                                                          seed = realizations_seeds[[r]]$prcp_occ[[d]])
-                result_rnorm   <- result_rnorm %>% dplyr::pull(prcp_residuals)
+                result_rnorm   <- result_rnorm %>% dplyr::pull(prcp_residuals) # Local weather simulation
                 # occurrence is mgcv::predict.gam(prcp_occ_fit) + rnorm(mean=0, sd=1)
                 return (tibble::tibble(station_id = station, date = simulation_dates$date[d],
                                        prcp_occ = as.integer(result_predict + result_rnorm > 0)))
             }
 
-            # Se guarda prcp_occ en simulation_matrix.d (porque se usa para simular temperaturas)
+            # Population of simulation_matrix.d with the simulated precpitation occurrence data,
+            # because this data wil be used later in the simulations of tmax, tmin and prcp_amt
             simulation_matrix.d <- simulation_matrix.d %>%
                 dplyr::left_join(prcp_occ_sim, by = c("station_id", "date"), suffix = c("", "_simulated")) %>%
                 dplyr::mutate(prcp_occ = prcp_occ_simulated) %>% dplyr::select(-prcp_occ_simulated) %>%
@@ -500,11 +508,11 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
 
 
 
-            ########################################
-            ## Temperatura (ambas, tmax y tmin) ----
-            ########################################
+            #########################################
+            ## Temperature (both, tmax and tmin) ----
+            #########################################
 
-            # Se simula la temperatura mínima (tmin_sim)
+            # Creation of daily temperature weather componente assuming the current day is dry (no precipitation occurred)
             random_noise_dry <-  control$temperature_noise_generating_function(simulation_points = simulation_points,
                                                                                gen_noise_params = gen_noise_params,
                                                                                month_number = current_month,
@@ -514,6 +522,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
                 sf::st_drop_geometry() %>% tibble::as_tibble() %>%
                 dplyr::rename(tmax_dry = tmax_residuals, tmin_dry = tmin_residuals)
 
+            # Creation of daily temperature weather componente assuming the current day is wet (precipitation occurred)
             random_noise_wet <- control$temperature_noise_generating_function(simulation_points = simulation_points,
                                                                               gen_noise_params = gen_noise_params,
                                                                               month_number = current_month,
@@ -523,62 +532,64 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
                 sf::st_drop_geometry() %>% tibble::as_tibble() %>%
                 dplyr::rename(tmax_wet = tmax_residuals, tmin_wet = tmin_residuals)
 
+            # Merging of local weather componente for both type of days
             random_noise <- dplyr::inner_join(random_noise_dry, random_noise_wet, by = "station_id") %>%
                 tidyr::gather(noise, value, -station_id) %>% dplyr::mutate(prcp_occ = if_else(grepl('dry', noise), 0, 1))
 
 
 
-            #################################
-            ## Temperatura Máxima (tmax) ----
-            #################################
+            ##################################
+            ## Maximum temperature (tmax) ----
+            ##################################
 
-            # Se simula la temperatura máxima (tmax_sim)
+            # Simulation of maximum temperature (tmax_sim)
             tmax_sim <- foreach::foreach(station = unique_stations, .multicombine = T, .combine = dplyr::bind_rows,
                                          .packages = c("dplyr")) %dopar% {
                  #
-                 tmax_sim_fit <- model$fitted_models[[as.character(station)]]$tmax_fit
-                 stn_sim_mtrx <- simulation_matrix.d %>% dplyr::filter(station_id == as.integer(station))
-                 prcp_occ_std <- prcp_occ_sim %>% dplyr::filter(station_id == as.integer(station)) %>% dplyr::pull(prcp_occ)
+                 tmax_sim_fit <- model$fitted_models[[as.character(station)]]$tmax_fit # Extraction of the GAM model
+                 stn_sim_mtrx <- simulation_matrix.d %>% dplyr::filter(station_id == as.integer(station)) # Creation of the data input for the model
+                 prcp_occ_std <- prcp_occ_sim %>% dplyr::filter(station_id == as.integer(station)) %>% dplyr::pull(prcp_occ) # Adding type of day (dry or wet) to data input for the model, std = simulated
                  #
-                 result_predict  <- mgcv::predict.gam(object = tmax_sim_fit, newdata = stn_sim_mtrx)
+                 result_predict  <- mgcv::predict.gam(object = tmax_sim_fit, newdata = stn_sim_mtrx) # Local climate prediction
                  ruido_aleatorio <- random_noise %>%
                      dplyr::filter(station_id == as.integer(station)) %>%
                      dplyr::filter(grepl('tmax', noise), prcp_occ == prcp_occ_std) %>%
-                     dplyr::pull(value)
+                     dplyr::pull(value) # Local weather simulation
                  #
                  return (tibble::tibble(station_id = station, date = simulation_dates$date[d],
                                         tmax = result_predict + ruido_aleatorio))
              }
 
-            # Se guarda tmax en simulation_matrix.d (solo para mejorar los debugs, no se usa en ningún cálculo posterior)
+            # Population of the simulation matrix with the simulated maximum temperature data
             simulation_matrix.d <- simulation_matrix.d %>%
                 dplyr::left_join(tmax_sim, by = c("station_id", "date"), suffix = c("", "_simulated")) %>%
                 dplyr::mutate(tmax = tmax_simulated) %>% dplyr::select(-tmax_simulated)
 
 
 
-            #################################
-            ## Temperatura Mínima (tmin) ----
-            #################################
+            ##################################
+            ## Minimum temperature (tmin) ----
+            ##################################
 
+            # Simulation of minimum temperature (tmin_sim)
             tmin_sim <- foreach::foreach(station = unique_stations, .multicombine = T, .combine = dplyr::bind_rows,
                                          .packages = c("dplyr")) %dopar% {
                 #
-                tmin_sim_fit <- model$fitted_models[[as.character(station)]]$tmin_fit
-                stn_sim_mtrx <- simulation_matrix.d %>% dplyr::filter(station_id == as.integer(station))
-                prcp_occ_std <- prcp_occ_sim %>% dplyr::filter(station_id == as.integer(station)) %>% dplyr::pull(prcp_occ)
+                tmin_sim_fit <- model$fitted_models[[as.character(station)]]$tmin_fit # Extraction of the GAM model
+                stn_sim_mtrx <- simulation_matrix.d %>% dplyr::filter(station_id == as.integer(station)) # Creation of the data input for the model
+                prcp_occ_std <- prcp_occ_sim %>% dplyr::filter(station_id == as.integer(station)) %>% dplyr::pull(prcp_occ) # Adding type of day (dry or wet) to data input for the model, std = simulated
                 #
-                result_predict  <- mgcv::predict.gam(object = tmin_sim_fit, newdata = stn_sim_mtrx)
+                result_predict  <- mgcv::predict.gam(object = tmin_sim_fit, newdata = stn_sim_mtrx) # Local climate prediction
                 ruido_aleatorio <- random_noise %>%
                     dplyr::filter(station_id == as.integer(station)) %>%
                     dplyr::filter(grepl('tmin', noise), prcp_occ == prcp_occ_std) %>%
-                    dplyr::pull(value)
+                    dplyr::pull(value) # Local weather simulation
                 #
                 return (tibble::tibble(station_id = station, date = simulation_dates$date[d],
                                        tmin = result_predict + ruido_aleatorio))
             }
 
-            # Se guarda tmin en simulation_matrix.d (porque se usa para simular tmax)
+            # Population of the simulation matrix with the simulated minimum temperature data
             simulation_matrix.d <- simulation_matrix.d %>%
                 dplyr::left_join(tmin_sim, by = c("station_id", "date"), suffix = c("", "_simulated")) %>%
                 dplyr::mutate(tmin = tmin_simulated) %>% dplyr::select(-tmin_simulated)
@@ -586,10 +597,10 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
 
 
             #################################################
-            ## Control Temperaturas (ambas, tmax y tmin) ----
+            ## Check Temperatures (both, tmax and tmin) ----
             #################################################
 
-            # Se establecen los parametros de control de las temperaturas generadas
+            # Creation of a data frame with the temperature reange thresholds to check if the simulation are valid or not
             t_ctrl   <- tidyr::crossing(station_id = unique_stations, date = simulation_dates$date[d]) %>%
                 dplyr::inner_join(prcp_occ_sim, by = c("station_id", "date")) %>%
                 dplyr::inner_join(tmax_sim,     by = c("station_id", "date")) %>%
@@ -599,7 +610,8 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
                 dplyr::select(station_id, date, tmax, tmin, te_min = min.range, te, te_max = max.range)
 
 
-            # Se verifica que tmax y tmin sean válidos (sino son válidos se los recalcula)
+            # Perform the test. If the simulate temperature range is above the minimum observed range and
+            # below the maximum observed range, the simulations are valid. Otherwise, re-simulate
             daily_retries <- 0
             while ( daily_retries < 100 && (any(t_ctrl$tmax < t_ctrl$tmin) || any(t_ctrl$te > t_ctrl$te_max) || any(t_ctrl$te < t_ctrl$te_min)) ) {
                 daily_retries  <- daily_retries  + 1
@@ -622,11 +634,11 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
                     new_tmin <- mgcv::predict.gam(tmin_sim_fit, newdata = stn_sim_mtrx) +
                         rnorm(n = 1, mean = 0, sd = stn_sim_mtrx %>% dplyr::filter(month == current_month) %>% dplyr::pull(sd.tmax_residuals))
 
-                    # Actualizar temperaturas simuladas
+                    # Update simulated temperatures
                     tmax_sim <- tmax_sim %>% dplyr::mutate(tmax = ifelse(station == as.integer(station_id), new_tmax, tmax))
                     tmin_sim <- tmin_sim %>% dplyr::mutate(tmin = ifelse(station == as.integer(station_id), new_tmin, tmin))
 
-                    # Actualizar los parametros de control de las temperaturas generadas
+                    # Update the data threshold's data frame to re-check if the new simulations are valid
                     t_ctrl <- t_ctrl %>% dplyr::mutate(tmax = ifelse(station == as.integer(station_id), new_tmax, tmax),
                                                        tmin = ifelse(station == as.integer(station_id), new_tmin, tmin),
                                                        te = ifelse(station == as.integer(station_id), tmax - tmin, te))
@@ -646,29 +658,29 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
 
 
 
-            ###################################
-            ## Montos de lluvia (prcp_amt) ----
-            ###################################
+            ########################################
+            ## Precipitation amounts (prcp_amt) ----
+            ########################################
 
-            # Se calcula una cantidad de mm para las estaciones con lluvia (prcp_amt)
+            # Simulation of daily precipitation amounts in mm (prcp_amt) for those weather stations where precipitatio occurrs
             prcp_amt_sim <- foreach::foreach(station = unique_stations, .multicombine = T, .combine = dplyr::bind_rows,
                                              .packages = c("dplyr")) %dopar% {
                 #
                 if (prcp_occ_sim %>% dplyr::filter(station_id == as.integer(station)) %>% dplyr::pull(prcp_occ) %>% magrittr::not())
                     return (tibble::tibble(station_id = station, date = simulation_dates$date[d], prcp_amt = 0))
                 #
-                prcp_amt_fit <- model$fitted_models[[as.character(station)]]$prcp_amt_fit[[current_month]]
-                stn_sim_mtrx <- simulation_matrix.d %>% dplyr::filter(station_id == as.integer(station))
+                prcp_amt_fit <- model$fitted_models[[as.character(station)]]$prcp_amt_fit[[current_month]] # Extraction of the GAM model for the current month
+                stn_sim_mtrx <- simulation_matrix.d %>% dplyr::filter(station_id == as.integer(station)) # Creation of the data input for the model
                 #
-                result_predict <- mgcv::predict.gam(object = prcp_amt_fit, newdata = stn_sim_mtrx)
+                result_predict <- mgcv::predict.gam(object = prcp_amt_fit, newdata = stn_sim_mtrx) # Local climate prediction
                 result_rnorm   <- control$prcp_noise_generating_function(simulation_points = simulation_points %>%
                                                                              dplyr::filter(., station_id == station),
                                                                          gen_noise_params = gen_noise_params,
                                                                          month_number = current_month,
                                                                          selector = 'prcp',
                                                                          seed = realizations_seeds[[r]]$prcp_amt[[d]])
-                result_pnorm   <- result_rnorm %>% dplyr::pull(prcp_residuals) %>% stats::pnorm()
-                # Estimación del parametro de forma (alpha_amt) y el de escala (beta_amt)
+                result_pnorm   <- result_rnorm %>% dplyr::pull(prcp_residuals) %>% stats::pnorm() # Local weather simulation
+                # Estimation of the Gamma distribution parameters: alpha (shpae) and beta (scale)
                 alpha_amt <- MASS::gamma.shape(prcp_amt_fit)$alpha
                 beta_amt  <- exp(result_predict) / alpha_amt
                 #
@@ -676,7 +688,9 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
                                        prcp_amt = stats::qgamma(result_pnorm, shape = alpha_amt, scale = beta_amt)))
             }
 
-            # Se guarda prcp (cantidad de mm) en simulation_matrix.d (porque se usa para simular temperaturas)
+            # Population of simulation_matrix.d with the simulated precpitation amounts data. If a
+            # precipitation occurred, the simulated daily precipitation amount (mm) will be used otherwise,
+            # the value will be zero
             simulation_matrix.d <- simulation_matrix.d %>%
                 dplyr::left_join(prcp_amt_sim, by = c("station_id", "date"), suffix = c("", "_simulated")) %>%
                 dplyr::mutate(prcp_amt = prcp_amt_simulated) %>% dplyr::select(-prcp_amt_simulated)

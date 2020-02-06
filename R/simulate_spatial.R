@@ -71,18 +71,21 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
     ###############################################################
 
+    # Check that the fitted object is of the right class
     if(class(model) != 'gamwgen')
         stop(glue::glue('Received a model of class {class(model)} and a model of class "gamwgen" was expected.'))
 
-    # If
+    # Check that the locations to be simulated exists
     if (is.null(simulation_locations))
         stop("The parameter simulation_locations can't be null!")
 
-    # Se controlan que los datos recibidos tengan el formato correcto
+    # Check that the input objects are of the right class
     gamwgen:::check.simulation.input.data(simulation_locations, seasonal_covariates)
 
     ###############################################################
 
+    # Check that the locations to be simulated are projected in the same coordinate
+    # system as the fitted data. Otherwise, convert it
     if(sf::st_crs(simulation_locations) != sf::st_crs(model$crs_used_to_fit)) {
         simulation_locations <- simulation_locations %>%
             sf::st_transform(sf::st_crs(model$crs_used_to_fit))
@@ -118,21 +121,25 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
     ###############################################################
 
+    # Check that the input location to be simulated is a valid sf object
     if(!all(sf::st_is_valid(simulation_locations)))
         stop('simulation_locations is not a valid sf object.')
 
     ###############################################################
 
+    # Check consistency between start and end date of the simulation period
     if(end_date <= start_date)
         stop('End date should be greater than start date')
 
     ###############################################################
 
+    # Check that the number of realization is equal to or larger than
     if(control$nsim < 1)
         stop('Number of simulations should be one or greater than one')
 
     ###############################################################
 
+    # Check that the number of cores to be used is valid
     if(is.na(control$avbl_cores) || is.null(control$avbl_cores))
         stop('The control parameter avbl_cores must be at least 1.')
 
@@ -155,14 +162,14 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     #  externa      |      interna  (no corresponde)
     # generalmente el ajuste es con covariables internas
 
-    ## Si seasonal_covariates != NULL se debió hacer el ajuste usando covariables
+    ## If seasonal_covariates is not NULL, model fit should have been done using covariates.
     if(!is.null(seasonal_covariates) & is.null(model$seasonal_covariates))
         stop('El ajuste fue hecho sin covariables, por lo tanto, la simulación ',
              'también debe hacerse sin covariables y no es valido utilizar el ',
              'parámetro seasonal_covariates!!')
 
-    ## Si el ajuste se hizo utilizando un archivo de covariables externo,
-    ## entonces la simulación también debe hacerse con un archivo externo
+    ## If model fit was done using an external set of covariates, the simulation
+    ## should be done with an external set of variates as well.
     if(is.null(seasonal_covariates) & !is.null(model$seasonal_covariates))
         stop('El ajuste se hizo utilizando un archivo de covariables (parametro ',
              'seasonal_covariates), por lo tanto, la simulación también debe hacerse ',
@@ -175,8 +182,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
     ###############################################################
 
-    ## Se verifica que hayan covariables suficientes para cubrir todas las fechas a simular,
-    ## pero el control solo se hace si se van a utilizar covariables en la simulación!!
+    ## Check the presence of seasonal covariables time series as long as the simulation period.
+    ## This control is only performed if the simulation will use covariables otherwise, it will be skipped.
     if(!is.null(seasonal_covariates)) {
         sim_dates_control <- tidyr::crossing(model$seasonal_covariates %>% dplyr::distinct(station_id),
                                              year = base::seq.int(lubridate::year(start_date), lubridate::year(end_date)),
@@ -194,7 +201,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     ## INITIAL CONFIGURATIONS ##
     ############################
 
-    # Para que las funciones de RandomFields devuelvan lo esperado!!
+    # Configuration of the RandomFields package in order to produce the expected results
     RandomFields::RFoptions(spConform=FALSE)
 
     # Para ...
@@ -303,8 +310,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     }
 
 
-    ############################################################################
-    ## Obtención de valores para el día previo al día de inicio de la simulación
+    ################################################################
+    ## Obtaining values for the day before the simulation start day
     start_date_prev_day_climatology <-
         gamwgen:::get_start_climatology(model, simulation_points, start_date, control)
 
@@ -358,8 +365,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
         dplyr::select(point_id, longitude, latitude)
 
 
-    #########################################################################################
-    ## Incoporar covariables si corresponde, además solo las de los anhos en simulation_dates
+    ################################################################################################
+    ## Add seasonal covariates if they were used when model fitting (only years in simulation_dates)
     if (!is.null(seasonal_covariates))
         simulation_matrix <- simulation_matrix %>% sf::st_join(seasonal_covariates) %>%
             dplyr::mutate(ST1 = dplyr::if_else(season == 1, seasonal_prcp, 0),
@@ -490,17 +497,17 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
         ## Ver version anterior para más detalles (commit: 1898e5a)
         daily_gen_clim <- purrr::map_dfr(1:ndates, function(d) {
 
-            #######################
-            ## Indice de meses ----
+            ##############################################################
+            ## Temporal index for each month of the simulation/realization
             current_month <- simulation_dates$month[d]
 
 
 
-            #######################################
-            ## Ocurrencia de lluvia (prcp_occ) ----
-            #######################################
+            ###########################################
+            ## Precipitation occurrence (prcp_occ) ----
+            ###########################################
 
-            # Simulacion de ocurrencia de lluvia
+            # Simulation of precipitation occurrence
             #microbenchmark::microbenchmark({
             SIMocc <- mgcv::predict.bam(model$fitted_models$prcp_occ_fit,
                                         newdata = simulation_matrix.d,
@@ -546,9 +553,9 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
 
-            ########################################
-            ## Temperatura (ambas, tmax y tmin) ----
-            ########################################
+            #########################################
+            ## Temperature (both, tmax and tmin) ----
+            #########################################
 
             #  Raster con los valores de "ruido" para días secos
             #microbenchmark::microbenchmark({
@@ -612,11 +619,11 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
 
-            #################################
-            ## Temperatura Máxima (tmax) ----
-            #################################
+            ##################################
+            ## Maximum temperature (tmax) ----
+            ##################################
 
-            # Simulacion de temperatura máxima
+            # Simulation of maximum temperature (SIMmax)
             #microbenchmark::microbenchmark({
             SIMmax <- mgcv::predict.bam(model$fitted_models$tmax_fit,
                                         newdata = simulation_matrix.d,
@@ -644,11 +651,11 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
 
-            #################################
-            ## Temperatura Mínima (tmin) ----
-            #################################
+            ##################################
+            ## Minimum temperature (tmin) ----
+            ##################################
 
-            # Simulacion de temperatura mínima
+            # Simulation of minimum temperature (SIMmin)
             #microbenchmark::microbenchmark({
             SIMmin <- mgcv::predict.bam(model$fitted_models$tmin_fit,
                                         newdata = simulation_matrix.d,
@@ -676,9 +683,9 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
 
-            ###################################
-            ## Montos de lluvia (prcp_amt) ----
-            ###################################
+            ########################################
+            ## Precipitation amounts (prcp_amt) ----
+            ########################################
 
             # Filtrar el modelo a usar por el mes en curso
             #microbenchmark::microbenchmark({
