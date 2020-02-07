@@ -496,8 +496,14 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
             pb$tick(20, tokens = list(c = which(unique_stations == station), what = "tmin", stn = station))
 
 
+        # Residuals estimation
+        residuos <- station_climate %>%
+            dplyr::select(station_id, date, dplyr::ends_with("residuals"), tipo_dia)
+
+
         # Retornar resultados como lista
         return_list <- list(station_id = station,
+                            residuals = residuos,
                             fitted_models  = list(prcp_occ_fit = prcp_occ_fit,
                                                   prcp_amt_fit = prcp_amt_fit,
                                                   tmax_fit = tmax_fit,
@@ -573,8 +579,9 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
                       prcp_occ_prev, tipo_dia_prev, prcp_amt_prev, tmax_prev, tmin_prev)
 
     # Save residuals to returned model
-    model[["models_residuals"]] <- models_data %>%
-        dplyr::select(station_id, date, dplyr::ends_with("residuals"), tipo_dia)
+    residuals <- lapply(models, '[[', 'residuals')
+    names(residuals) <- lapply(models, '[[', 'station_id')
+    model[["models_residuals"]] <- do.call('rbind', residuals) %>% tibble::as_tibble()
 
     # Save estadisticos.umbrales to returned model
     model[["estadisticos_umbrales"]] <- estadisticos_umbrales

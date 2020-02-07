@@ -1,6 +1,6 @@
 
 # Interpolación de covariables
-interpolate_thresholds <- function(simulation_points, monthly_thresholds) {
+interpolate_thresholds <- function(simulation_points, monthly_thresholds, model_stations) {
 
     # OBS:
     # Al interpolar las covariables, no se tiene en cuenta si el usario optó por usar ruidos
@@ -11,8 +11,8 @@ interpolate_thresholds <- function(simulation_points, monthly_thresholds) {
 
     # Datos estacionales para todas las localidades
     umbrales.interpolados <- monthly_thresholds %>%
-        dplyr::left_join(., model$stations %>% dplyr::select(station_id, longitude, latitude)) %>%
-        sf::st_as_sf(.)
+        dplyr::left_join(model_stations %>% dplyr::select(station_id, longitude, latitude), by = 'station_id') %>%
+        sf::st_as_sf(coords = c('longitude', 'latitude'), crs = sf::st_crs(simulation_points))
 
     # Transformación a objeto sp para la interpolación
     simulation_points.sp <- simulation_points %>% sf::as_Spatial()
@@ -20,41 +20,43 @@ interpolate_thresholds <- function(simulation_points, monthly_thresholds) {
     # Combinaciones posibles de años y trimestres para la interpolación
     combinaciones <- purrr::transpose(
         purrr::cross2(.x = unique(monthly_thresholds$month),
-                      .y =unique(monthly_thresholds$prcp_occ)))
+                      .y = unique(monthly_thresholds$prcp_occ)))
 
     # Interpolación de acumulados de lluvia
     datos_interpolados <- purrr::pmap_dfr(
         .l = combinaciones,
-        .f = function(mes, day) {
+        .f = function(month, prcp_occ) {
 
             interpolacion.valores.iniciales.sp <- umbrales.interpolados %>%
-                dplyr::filter(month == !!mes & prcp_occ == !!day) %>%
+                dplyr::filter(month == !!month & prcp_occ == !!prcp_occ) %>%
                 sf::as_Spatial()
 
             # Valores interpolados de ocurrencia
             datos_interpolados_max.range <-
                 automap::autoKrige(max.range~1,
                                    interpolacion.valores.iniciales.sp,
-                                   simulation_points.sp) %>%
+                                   simulation_points.sp,
+                                   debug.level = 0) %>%
                 sf::st_as_sf(x = .$krige_output, crs = sf::st_crs(grilla.simulacion)) %>%
                 dplyr::select(max.range = var1.pred) %>%
-                dplyr::mutate(month = mes, prcp_occ = day) %>%
+                dplyr::mutate(month = !!month, prcp_occ = !!prcp_occ) %>%
                 dplyr::mutate(longitude = sf::st_coordinates(geometry)[,'X'],
                               latitude = sf::st_coordinates(geometry)[,'Y']) %>%
-                sf::st_set_geometry(NULL)
+                sf::st_drop_geometry() %>% tibble::as_tibble()
 
 
             # Valores interpolados de temperatura máxima
             datos_interpolados_min.range <-
                 automap::autoKrige(min.range~1,
                                    interpolacion.valores.iniciales.sp,
-                                   simulation_points.sp) %>%
+                                   simulation_points.sp,
+                                   debug.level = 0) %>%
                 sf::st_as_sf(x = .$krige_output, crs = sf::st_crs(grilla.simulacion)) %>%
                 dplyr::select(min.range = var1.pred) %>%
-                dplyr::mutate(month = mes, prcp_occ = day) %>%
+                dplyr::mutate(month = !!month, prcp_occ = !!prcp_occ) %>%
                 dplyr::mutate(longitude = sf::st_coordinates(geometry)[,'X'],
                               latitude = sf::st_coordinates(geometry)[,'Y']) %>%
-                sf::st_set_geometry(NULL)
+                sf::st_drop_geometry() %>% tibble::as_tibble()
 
 
             # Crear data frame con los valores interpolados

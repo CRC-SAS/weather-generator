@@ -9,7 +9,7 @@ get_temperature_thresholds <- function(model_stations, simulation_points, estadi
 
     # Si continua la ejecución de la función es porque simulation points es una grilla o NO todos
     # los puntos a simular fueron usados en el ajuste, y es necesario interpolar estadisticos_umbrales
-    return (gamwgen:::interpolate_thresholds(simulation_points, estadisticos_umbrales))
+    return (gamwgen:::interpolate_thresholds(simulation_points, estadisticos_umbrales, model_stations))
 
 }
 

@@ -289,12 +289,12 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
     ## Global paramteres for noise generators
     if(control$use_spatially_correlated_noise)
         gen_noise_params <- gamwgen:::generate_month_params(
-            residuals = do.call('rbind', model$models_residuals),
+            residuals = model$models_residuals,
             observed_climate = model$models_data,
             stations = model$stations)
     if(!control$use_spatially_correlated_noise)
         gen_noise_params <- gamwgen:::generate_residuals_statistics(
-            models_residuals = do.call('rbind', model$models_residuals))
+            models_residuals = model$models_residuals)
 
 
     #######################################################################################
@@ -332,7 +332,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
 
     ###############################################################################
     ## Monthly residuals estimation for each month, type of day and weather station
-    residuals_monthly_statistics <- do.call('rbind', model$models_residuals) %>%
+    residuals_monthly_statistics <- model$models_residuals %>%
         dplyr::select(station_id, date, tmax_residuals, tmin_residuals) %>%
         tidyr::drop_na(.) %>%
         dplyr::mutate(month = lubridate::month(date)) %>%
@@ -592,7 +592,8 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
                 dplyr::inner_join(prcp_occ_sim, by = c("station_id", "date")) %>%
                 dplyr::inner_join(tmax_sim,     by = c("station_id", "date")) %>%
                 dplyr::inner_join(tmin_sim,     by = c("station_id", "date")) %>%
-                dplyr::left_join(temperature_range_thresholds, by = c("station_id", "date", "prcp_occ")) %>%
+                dplyr::mutate(month = lubridate::month(date)) %>%
+                dplyr::left_join(temperature_range_thresholds, by = c("station_id", "month", "prcp_occ")) %>%
                 dplyr::mutate(te = tmax - tmin) %>%
                 dplyr::select(station_id, date, tmax, tmin, te_min = min.range, te, te_max = max.range)
 

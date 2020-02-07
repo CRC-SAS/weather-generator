@@ -748,7 +748,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             daily_retries <- 0
             while ( daily_retries < 100 && (any(raster::getValues(SIMmax_points.d < SIMmin_points.d), na.rm = T) ||
                                             any(raster::getValues(daily_range_points.d > maximum_daily_range_raster), na.rm = T) ||
-                                            any(raster::getValues(daily_range_points.d < minimum_daily_range_raster), na.rm = T) )) {
+                                            any(raster::getValues(daily_range_points.d < minimum_daily_range_raster), na.rm = T)) ) {
                 daily_retries <- daily_retries  + 1
 
                 # Raster con los valores de "ruido" para días secos
@@ -758,7 +758,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                         gen_noise_params = gen_noise_params,
                         month_number = current_month,
                         selector = c('tmax_dry', 'tmin_dry'),
-                        seed = if_else(is.null(control$seed), NULL, realizations_seeds[[r]]$retries[[d]] + daily_retries))
+                        seed = if (is.null(control$seed)) NULL else realizations_seeds[[r]]$retries[[d]] + daily_retries)
                 #}, times = 10) # 180 milisegundos
 
                 # Procesamiento de residuos para dias secos
@@ -777,7 +777,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                         gen_noise_params = gen_noise_params,
                         month_number = current_month,
                         selector = c('tmax_wet', 'tmin_wet'),
-                        seed = if_else(is.null(control$seed), NULL, realizations_seeds[[r]]$retries[[d]] + daily_retries))
+                        seed = if (is.null(control$seed)) NULL else realizations_seeds[[r]]$retries[[d]] + daily_retries)
 
                 # Procesamiento de residuos para dias humedos
                 rasters_humedos.d <- purrr::map(
@@ -846,14 +846,14 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
             # Estimación del parametro de forma
             #microbenchmark::microbenchmark({
-            alphaamt  <- MASS::gamma.shape(prcp_amt_fit)$alpha
+            alphaamt <- MASS::gamma.shape(prcp_amt_fit)$alpha
             #}, times = 10) # 20 milisegundos
             # Estimación de los parametros de escala
             #microbenchmark::microbenchmark({
             betaamt <- base::exp(mgcv::predict.bam(prcp_amt_fit,
-                                   newdata = simulation_matrix.d,
-                                   #cluster = cluster,  # no mejora mucho el tiempo
-                                   newdata.guaranteed = TRUE))/alphaamt
+                                                   newdata = simulation_matrix.d,
+                                                   #cluster = cluster,  # no mejora mucho el tiempo
+                                                   newdata.guaranteed = TRUE))/alphaamt
             #}, times = 100) # 360 milisegundos
 
             # Raster con los valores de "ruido"
@@ -870,7 +870,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             # Simulacion de montos
             #microbenchmark::microbenchmark({
             SIMamt <- stats::qgamma(stats::pnorm(raster::extract(SIMamt_points_noise.d, simulation_points)),
-                             shape = rep(alphaamt, length(betaamt)), scale = betaamt)
+                                    shape = rep(alphaamt, length(betaamt)), scale = betaamt)
             #}, times = 10) # 15 milisegundos
 
             # Raster con los valores "climáticos"
