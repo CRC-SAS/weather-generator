@@ -517,22 +517,17 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             ###########################################
 
             # Simulation of precipitation occurrence
-            #microbenchmark::microbenchmark({
             SIMocc <- mgcv::predict.bam(model$fitted_models$prcp_occ_fit,
                                         newdata = simulation_matrix.d,
                                         #cluster = cluster,  # empeora el tiempo para grillas grandes
                                         newdata.guaranteed = TRUE) # una optimizacion
-            #}, times = 10) # 480 milisegundos
 
             # Raster con los valores "climáticos"
-            #microbenchmark::microbenchmark({
             SIMocc_points_climate.d <- simulation_points %>%
                 dplyr::mutate(SIMocc = !!SIMocc) %>%
                 gamwgen:::sf2raster('SIMocc', simulation_raster)
-            #}, times = 10) # 8 milisegundos
 
             # Raster con los valores de "ruido"
-            #microbenchmark::microbenchmark({
             SIMocc_points_noise.d <- control$prcp_noise_generating_function(
                 simulation_points = simulation_points,
                 gen_noise_params = gen_noise_params,
@@ -540,25 +535,18 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                 selector = 'prcp',
                 seed = realizations_seeds[[r]]$prcp_occ[[d]]) %>%
                 gamwgen:::sf2raster('prcp_residuals', simulation_raster)
-            #}, times = 10) # 45 milisegundos
 
             # Raster con los valores simulados
-            #microbenchmark::microbenchmark({
             SIMocc_points.d <- SIMocc_points_climate.d + SIMocc_points_noise.d
-            #}, times = 10) # 4 milisegundos
 
             # Raster con los valores simulados reclasificados a 0 y/o 1
-            #microbenchmark::microbenchmark({
             SIMocc_points.d <- raster::reclassify(SIMocc_points.d, clasification_matrix)
-            #}, times = 10) # 4 milisegundos
 
             # Agregar valores de ocurrencia a la grilla de simulacion
-            #microbenchmark::microbenchmark({
             simulation_matrix.d <- simulation_matrix.d %>%
                 dplyr::mutate(prcp_occ = raster::extract(SIMocc_points.d, simulation_points),
                               tipo_dia = factor(prcp_occ, levels = c(1, 0),
                                                 labels = c('Lluvioso', 'Seco')))
-            #}, times = 10) # 15 milisegundos
 
 
 
@@ -567,7 +555,6 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             #########################################
 
             #  Raster con los valores de "ruido" para días secos
-            #microbenchmark::microbenchmark({
             temperature_random_fields_dry <-
                 control$temperature_noise_generating_function(
                     simulation_points = simulation_points,
@@ -575,23 +562,17 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                     month_number = current_month,
                     selector = c('tmax_dry', 'tmin_dry'),
                     seed = realizations_seeds[[r]]$temp_dry[[d]])
-            #}, times = 10) # 180 milisegundos
 
             # Procesamiento de residuos para dias secos
-            #microbenchmark::microbenchmark({
             rasters_secos.d <- purrr::map(
                 .x = c("tmin", "tmax"),
                 .f = function(variable, objeto_sf) {
                     return (gamwgen:::sf2raster(objeto_sf, paste0(variable, '_residuals'), simulation_raster))
                 }, objeto_sf = temperature_random_fields_dry
             )
-            #}, times = 10) # 14 milisegundos
-            #microbenchmark::microbenchmark({
             names(rasters_secos.d) <- c("tmin", "tmax")
-            #}, times = 10) # 2 milisegundos
 
             # Raster con los valores de "ruido" para días lluviosos
-            #microbenchmark::microbenchmark({
             temperature_random_fields_wet <-
                 control$temperature_noise_generating_function(
                     simulation_points = simulation_points,
@@ -599,32 +580,23 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                     month_number = current_month,
                     selector = c('tmax_wet', 'tmin_wet'),
                     seed = realizations_seeds[[r]]$temp_wet[[d]])
-            #}, times = 10) # 180 milisegundos
 
             # Procesamiento de residuos para dias humedos
-            #microbenchmark::microbenchmark({
             rasters_humedos.d <- purrr::map(
                 .x = c("tmin", "tmax"),
                 .f = function(variable, objeto_sf) {
                     return (gamwgen:::sf2raster(objeto_sf, paste0(variable, '_residuals'), simulation_raster))
                 }, objeto_sf = temperature_random_fields_wet
             )
-            #}, times = 10) # 14 milisegundos
-            #microbenchmark::microbenchmark({
             names(rasters_humedos.d) <- c("tmin", "tmax")
-            #}, times = 10) # 2 milisegundos
 
             #Ahora vamos a generar 2 rasters: uno para tmax y otro para tmin
             #Cada raster tiene los residuos de las variables correspondientes
             #considerando la ocurrencia de dia seco o humedo
-            #microbenchmark::microbenchmark({
             SIMmax_points_noise.d <-
                 gamwgen:::ensamblar_raster_residuos(rasters_humedos.d$tmax, rasters_secos.d$tmax, SIMocc_points.d)
-            #}, times = 10) # 15 milisegundos
-            #microbenchmark::microbenchmark({
             SIMmin_points_noise.d <-
                 gamwgen:::ensamblar_raster_residuos(rasters_humedos.d$tmin, rasters_secos.d$tmin, SIMocc_points.d)
-            #}, times = 10) # 15 milisegundos
 
 
 
@@ -633,30 +605,22 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             ##################################
 
             # Simulation of maximum temperature (SIMmax)
-            #microbenchmark::microbenchmark({
             SIMmax <- mgcv::predict.bam(model$fitted_models$tmax_fit,
                                         newdata = simulation_matrix.d,
                                         #cluster = cluster,  # no mejora mucho el tiempo
                                         newdata.guaranteed = TRUE) # una optimizacion
-            #}, times = 100) # 540 milisegundos
 
             # Raster con los valores "climáticos"
-            #microbenchmark::microbenchmark({
             SIMmax_points_climate.d <- simulation_points %>%
                 dplyr::mutate(SIMmax = !!SIMmax) %>%
                 gamwgen:::sf2raster('SIMmax', simulation_raster)
-            #}, times = 10) # 8 milisegundos
 
             # Raster con los valores simulados
-            #microbenchmark::microbenchmark({
             SIMmax_points.d <- SIMmax_points_climate.d + SIMmax_points_noise.d
-            #}, times = 10) # 4 milisegundos
 
             # Agregar valores de temperatura mínima a los puntos de simulación
-            #microbenchmark::microbenchmark({
             simulation_matrix.d <- simulation_matrix.d %>%
                 dplyr::mutate(tmax = raster::extract(SIMmax_points.d, simulation_points))
-            #}, times = 10) # 15 milisegundos
 
 
 
@@ -665,30 +629,22 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             ##################################
 
             # Simulation of minimum temperature (SIMmin)
-            #microbenchmark::microbenchmark({
             SIMmin <- mgcv::predict.bam(model$fitted_models$tmin_fit,
                                         newdata = simulation_matrix.d,
                                         #cluster = cluster,  # no mejora mucho el tiempo
                                         newdata.guaranteed = TRUE) # una optimizacion
-            #}, times = 100) # 580 milisegundos
 
             # Raster con los valores "climáticos"
-            #microbenchmark::microbenchmark({
             SIMmin_points_climate.d <- simulation_points %>%
                 dplyr::mutate(SIMmin = !!SIMmin) %>%
                 gamwgen:::sf2raster('SIMmin', simulation_raster)
-            #}, times = 10) # 8 milisegundos
 
             # Raster con los valores simulados
-            #microbenchmark::microbenchmark({
             SIMmin_points.d <- SIMmin_points_climate.d + SIMmin_points_noise.d
-            #}, times = 10) # 4 milisegundos
 
             # Agregar valores de temperatura mínima a los puntos de simulación
-            #microbenchmark::microbenchmark({
             simulation_matrix.d <- simulation_matrix.d %>%
                 dplyr::mutate(tmin = raster::extract(SIMmin_points.d, simulation_points))
-            #}, times = 10) # 15 milisegundos
 
 
 
@@ -840,24 +796,17 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             ########################################
 
             # Filtrar el modelo a usar por el mes en curso
-            #microbenchmark::microbenchmark({
             prcp_amt_fit <- model$fitted_models$prcp_amt_fit[[current_month]]
-            #}, times = 10) # 5 milisegundos
 
             # Estimación del parametro de forma
-            #microbenchmark::microbenchmark({
             alphaamt <- MASS::gamma.shape(prcp_amt_fit)$alpha
-            #}, times = 10) # 20 milisegundos
             # Estimación de los parametros de escala
-            #microbenchmark::microbenchmark({
             betaamt <- base::exp(mgcv::predict.bam(prcp_amt_fit,
                                                    newdata = simulation_matrix.d,
                                                    #cluster = cluster,  # no mejora mucho el tiempo
                                                    newdata.guaranteed = TRUE))/alphaamt
-            #}, times = 100) # 360 milisegundos
 
             # Raster con los valores de "ruido"
-            #microbenchmark::microbenchmark({
             SIMamt_points_noise.d <- control$prcp_noise_generating_function(
                 simulation_points = simulation_points,
                 gen_noise_params = gen_noise_params,
@@ -865,31 +814,22 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                 selector = 'prcp',
                 seed = realizations_seeds[[r]]$prcp_amt[[d]]) %>%
                 gamwgen:::sf2raster('prcp_residuals', simulation_raster)
-            #}, times = 10) # 45 milisegundos
 
             # Simulacion de montos
-            #microbenchmark::microbenchmark({
             SIMamt <- stats::qgamma(stats::pnorm(raster::extract(SIMamt_points_noise.d, simulation_points)),
                                     shape = rep(alphaamt, length(betaamt)), scale = betaamt)
-            #}, times = 10) # 15 milisegundos
 
             # Raster con los valores "climáticos"
-            #microbenchmark::microbenchmark({
             SIMamt_points_climate.d <- simulation_points %>%
                 dplyr::mutate(SIMamt = !!SIMamt) %>%
                 gamwgen:::sf2raster('SIMamt', simulation_raster)
-            #}, times = 10) # 8 milisegundos
 
             # Enmascarar pixeles sin ocurrencia de lluvia
-            #microbenchmark::microbenchmark({
             SIMamt_points.d <- SIMamt_points_climate.d * SIMocc_points.d
-            #}, times = 10) # 4 milisegundos
 
             # Agregar valores de los montos de prcp a los puntos de simulación
-            #microbenchmark::microbenchmark({
             simulation_matrix.d <- simulation_matrix.d %>%
                 dplyr::mutate(prcp_amt = raster::extract(SIMamt_points.d, simulation_points))
-            #}, times = 10) # 15 milisegundos
 
 
 
