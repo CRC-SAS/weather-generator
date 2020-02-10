@@ -1,4 +1,30 @@
 
+# This function returns True when the seasonal covariates aren't related
+# to any particular station or simulation point, and so, when the seasonal
+# covariates must be repeated for any simulation point or station instead
+# of being interpolated!!!
+repeat_seasonal_covariates <- function(seasonal_covariates) {
+
+    # If seasonal_covariates have a column named station_id,
+    # it don't must be repeated for each simulation point
+    if("station_id" %in% colnames(seasonal_covariates))
+        return (FALSE)
+
+    # Get years and seasons in seasonal_covariates
+    real_years_x_seasons <- seasonal_covariates %>% dplyr::select(year, season)
+
+    # Make a tibble with all combinations of years and seasons
+    unique_years <- seasonal_covariates %>% dplyr::pull(year) %>% base::unique()
+    ctrl_years_x_seasons <- tidyr::crossing(year = unique_years, season = c(1,2,3,4))
+
+    # Check if the two previous tibbles are equals
+    ctrl <- dplyr::all_equal(real_years_x_seasons, ctrl_years_x_seasons, convert = T)
+
+    # Return a logical value
+    return (base::isTRUE(ctrl))
+
+}
+
 
 #' @title Exclude incomplete years
 #' @description Exclude incomplete years.
@@ -177,8 +203,13 @@ check.fit.input.data <- function(climate, stations, seasonal.covariates) {
 
 check.simulation.input.data <- function(simulation.locations, seasonal.covariates) {
 
+    repeatable_seasonal_cov <- gamwgen:::repeat_seasonal_covariates(seasonal.covariates)
+
     sim.loc.columns <- c(geometry = "sfc_POINT")
-    seasonal.invariant.columns <- c(station_id = "integer", year = "integer", season = "integer")
+    if (repeatable_seasonal_cov)
+        seasonal.invariant.columns <- c(year = "integer", season = "integer")
+    if (!repeatable_seasonal_cov)
+        seasonal.invariant.columns <- c(station_id = "integer", year = "integer", season = "integer")
     seasonal.ends.with.columns <- c(tmax = "numeric", tmin = "numeric", prcp = "numeric")
 
     check.object(simulation.locations, "simulation_locations", c("sf", "tbl_df", "tbl", "data.frame"), sim.loc.columns)

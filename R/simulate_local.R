@@ -150,12 +150,18 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
     ## Check the presence of seasonal covariables time series as long as the simulation period.
     ## This control is only performed if the simulation will use covariables otherwise, it will be skipped.
     if(!is.null(seasonal_covariates)) {
-        sim_dates_control <- tidyr::crossing(model$seasonal_covariates %>% dplyr::distinct(station_id),
-                                             year = base::seq.int(lubridate::year(start_date), lubridate::year(end_date)),
-                                             season = as.integer(c(1, 2, 3, 4)))
-        seasonal_cov_ctrl <- model$seasonal_covariates %>% dplyr::select(station_id, year, season) %>% dplyr::distinct()
+        if(gamwgen:::repeat_seasonal_covariates(seasonal_covariates)) {
+            sim_dates_control <- tidyr::crossing(year = base::seq.int(lubridate::year(start_date), lubridate::year(end_date)),
+                                                 season = as.integer(c(1, 2, 3, 4)))
+            seasonal_cov_ctrl <- seasonal_covariates %>% dplyr::select(year, season) %>% dplyr::distinct()
+        } else {
+            sim_dates_control <- tidyr::crossing(seasonal_covariates %>% dplyr::distinct(station_id),
+                                                 year = base::seq.int(lubridate::year(start_date), lubridate::year(end_date)),
+                                                 season = as.integer(c(1, 2, 3, 4)))
+            seasonal_cov_ctrl <- seasonal_covariates %>% dplyr::select(station_id, year, season) %>% dplyr::distinct()
+        }
         if (!all(do.call(paste0, sim_dates_control) %in% do.call(paste0, seasonal_cov_ctrl)))
-            stop("Simulation years aren't in model$seasonal_covariates!")
+            stop("Simulation years aren't in seasonal_covariates!")
     }
 
     ###############################################################
