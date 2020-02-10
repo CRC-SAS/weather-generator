@@ -10,18 +10,7 @@ repeat_seasonal_covariates <- function(seasonal_covariates) {
     if("station_id" %in% colnames(seasonal_covariates))
         return (FALSE)
 
-    # Get years and seasons in seasonal_covariates
-    real_years_x_seasons <- seasonal_covariates %>% dplyr::select(year, season)
-
-    # Make a tibble with all combinations of years and seasons
-    unique_years <- seasonal_covariates %>% dplyr::pull(year) %>% base::unique()
-    ctrl_years_x_seasons <- tidyr::crossing(year = unique_years, season = c(1,2,3,4))
-
-    # Check if the two previous tibbles are equals
-    ctrl <- dplyr::all_equal(real_years_x_seasons, ctrl_years_x_seasons, convert = T)
-
-    # Return a logical value
-    return (base::isTRUE(ctrl))
+    return (TRUE)
 
 }
 
