@@ -23,11 +23,11 @@ autorun_from_yaml <- function(params_yaml_filename = NULL) {
 
     # Set correct path to files provided with gamwgen package
     if (use_package_provided_files) {
-        params$fit$climate  <- system.file(glue::glue("autorun/{params$model}"), "climate.csv",  package = "gamwgen")
-        params$fit$stations <- system.file(glue::glue("autorun/{params$model}"), "stations.csv", package = "gamwgen")
-        params$fit$seasonal_covariates  <- system.file(glue::glue("autorun/{params$model}"), "seasonal_covariates_fit.csv", package = "gamwgen")
-        params$sim$simulation_locations <- system.file(glue::glue("autorun/{params$model}"), "simulation_locations.csv",    package = "gamwgen")
-        params$sim$seasonal_covariates  <- system.file(glue::glue("autorun/{params$model}"), "seasonal_covariates_sim.csv", package = "gamwgen")
+        params$fit$climate  <- system.file(glue::glue("autorun/{params$model}"), params$fit$climate,  package = "gamwgen")
+        params$fit$stations <- system.file(glue::glue("autorun/{params$model}"), params$fit$stations, package = "gamwgen")
+        params$fit$seasonal_covariates  <- system.file(glue::glue("autorun/{params$model}"), params$fit$seasonal_covariates,  package = "gamwgen")
+        params$sim$simulation_locations <- system.file(glue::glue("autorun/{params$model}"), params$sim$simulation_locations, package = "gamwgen")
+        params$sim$seasonal_covariates  <- system.file(glue::glue("autorun/{params$model}"), params$sim$seasonal_covariates,  package = "gamwgen")
     }
 
     # ------------------------------------------------------------------------------
