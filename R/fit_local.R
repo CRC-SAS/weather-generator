@@ -120,19 +120,28 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
 
     ## Variable that indicate if it's necessary to remove
     ## the parallelization configuration
-    remove_parallelization_conf <- F
+    remove_snow_foreach_conf <- F
+    remove_parallel_conf <- F
 
-    ## Register a sequential or a parallel backend for the foreach package
-    if (control$avbl_cores == 1) {
-        foreach::registerDoSEQ()
-    } else {
-        remove_parallelization_conf <- T
+    ## Cluster creation, option 1
+    if (control$avbl_cores > 1 & length(unique_stations) > 1) {
+        remove_snow_foreach_conf <- T
+        clusterized_gam <- F
         # Create cluster
         cluster  <- snow::makeCluster(type = "SOCK",
                                       spec = rep('localhost', length.out = control$avbl_cores),
                                       outfile = ifelse(verbose, "", snow::defaultClusterOptions$outfile))
         # Register cluster as backend for the %dopar% function
         doSNOW::registerDoSNOW(cluster)
+    } else {
+        foreach::registerDoSEQ()
+    }
+    ## Cluster creation, option 2
+    if (control$avbl_cores > 1 & length(unique_stations) == 1) {
+        remove_parallel_conf <- T
+        clusterized_gam <- T
+        # Create cluster
+        cluster <- parallel::makeCluster(control$avbl_cores)
     }
 
     ## Register the number of workers to decide
@@ -294,7 +303,7 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
                                   data = station_climate[prcp_occ_indexes,],
                                   family = stats::binomial(probit),
                                   method = 'fREML',
-                                  #cluster = cluster,
+                                  cluster = if(clusterized_gam) cluster else NULL,
                                   control = list(nthreads = control$avbl_cores))
         tiempo.prcp_occ_fit <- proc.time() - t
 
@@ -354,7 +363,7 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
                                           dplyr::filter(as.logical(prcp_occ) & month == m),
                                       family = stats::Gamma(link = log),
                                       method = 'fREML',
-                                      #cluster = cluster,
+                                      cluster = if(clusterized_gam) cluster else NULL,
                                       control = list(nthreads = control$avbl_cores))
             tiempo.prcp_amt_fit <- proc.time() - t
 
@@ -414,7 +423,7 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
         tmax_fit <- mgcv::bam(formula = tmax_fm,
                               data = station_climate[tmax_indexes,],
                               method = 'fREML',
-                              #cluster = cluster,
+                              cluster = if(clusterized_gam) cluster else NULL,
                               control = list(nthreads = control$avbl_cores))
         tiempo.tmax_fit <- proc.time() - t
 
@@ -473,7 +482,7 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
         tmin_fit <- mgcv::bam(formula = tmin_fm,
                               data = station_climate[tmin_indexes,],
                               method = 'fREML',
-                              #cluster = cluster,
+                              cluster = if(clusterized_gam) cluster else NULL,
                               control = list(nthreads = control$avbl_cores))
         tiempo.tmin_fit <- proc.time() - t
 
@@ -603,10 +612,13 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
 
 
     ## Remove parallelization conf, if necessary
-    if(remove_parallelization_conf) {
+    if(remove_snow_foreach_conf) {
         foreach::registerDoSEQ()
         snow::stopCluster(cluster)
     }
+    if(remove_parallel_conf)
+        parallel::stopCluster(cluster)
+
 
     ## Return model
     model

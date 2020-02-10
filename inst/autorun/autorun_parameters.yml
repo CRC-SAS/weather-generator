@@ -1,0 +1,37 @@
+
+# Indica el modelo a ser ejecutado
+model: "local" # ["local", "spatial"]
+
+# Parametros del ajuste
+fit:
+    run: TRUE
+    stations: "stations.csv"
+    climate: "climate.csv"
+    seasonal_covariates: "seasonal_covariates_fit.csv"
+    control:
+        avbl_cores: 2
+        prcp_occurrence_threshold: 0.1
+        planar_crs_in_metric_coords: 22185
+    verbose: FALSE
+    fitted_object: &fitted_object "gamwgen_fit.rds"
+
+sim:
+    run: TRUE
+    fitted_model: *fitted_object
+    simulation_locations: "simulation_locations.csv"
+    start_date: "2015-12-15"
+    end_date: "2016-01-15"
+    output_folder: ""
+    output_filename: "sim_results.nc"
+    control:
+        nsim: 2
+        seed: NULL
+        avbl_cores: 2
+        bbox_offset: 100000
+        sim_loc_as_grid: TRUE
+        use_spatially_correlated_noise: TRUE
+        use_temporary_files_to_save_ram: TRUE
+        remove_temp_files_used_to_save_ram: TRUE
+    seasonal_covariates: "seasonal_covariates_sim.csv"
+    verbose: FALSE
+    simulated_object: "gamwgen_sim.rds"

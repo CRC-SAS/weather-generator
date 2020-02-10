@@ -3,5 +3,5 @@ library(gamwgen)
 
 test_check("gamwgen")
 
-load(file='data/test/stations.RData')
-load(file='data/test/climate.RData')
+load(file='data/tests/stations.RData')
+load(file='data/tests/climate.RData')

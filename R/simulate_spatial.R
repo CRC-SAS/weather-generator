@@ -411,7 +411,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     #######################################################
     ## Set the progress bar to know how long this will take
     pb <- progress::progress_bar$new(
-        format = paste0(ifelse(nworkers == 1, " realization:", "finished realizations:"),
+        format = paste0(ifelse(nworkers == 1, " realization:", " finished realizations:"),
                         " :r / ", control$nsim, ifelse(nworkers == 1, paste0(" | day: :d / ", ndates), ""),
                         " | progress: :bar :percent (in :elapsed) | eta: :eta"),
         total = ifelse(nworkers == 1, control$nsim*ndates, control$nsim),
