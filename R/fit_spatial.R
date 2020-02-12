@@ -178,23 +178,27 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
                       tipo_dia_prev = lag(tipo_dia),
                       prcp_amt_prev = lag(prcp_amt),
                       tmax_prev     = lag(tmax),
-                      tmin_prev     = lag(tmin)) %>%
-        # Add seasonal climate to station_climate
-        dplyr::left_join(seasonal_covariates,
-                         by = c("station_id", "year", "season")) %>%
-        # Add seasonal covariates to station_climate
-        dplyr::mutate(ST1 = if_else(season == 1, seasonal_prcp, 0),
-                      ST2 = if_else(season == 2, seasonal_prcp, 0),
-                      ST3 = if_else(season == 3, seasonal_prcp, 0),
-                      ST4 = if_else(season == 4, seasonal_prcp, 0),
-                      SN1 = if_else(season == 1, seasonal_tmin, 0),
-                      SN2 = if_else(season == 2, seasonal_tmin, 0),
-                      SN3 = if_else(season == 3, seasonal_tmin, 0),
-                      SN4 = if_else(season == 4, seasonal_tmin, 0),
-                      SX1 = if_else(season == 1, seasonal_tmax, 0),
-                      SX2 = if_else(season == 2, seasonal_tmax, 0),
-                      SX3 = if_else(season == 3, seasonal_tmax, 0),
-                      SX4 = if_else(season == 4, seasonal_tmax, 0))
+                      tmin_prev     = lag(tmin))
+    # Add covariables, if necesary
+    if (!is.null(seasonal_covariates))
+        models_data <- models_data %>%
+            # Add seasonal climate to station_climate
+            dplyr::left_join(seasonal_covariates,
+                             by = c("station_id", "year", "season")) %>%
+            # Add seasonal covariates to station_climate
+            dplyr::mutate(ST1 = if_else(season == 1, seasonal_prcp, 0),
+                          ST2 = if_else(season == 2, seasonal_prcp, 0),
+                          ST3 = if_else(season == 3, seasonal_prcp, 0),
+                          ST4 = if_else(season == 4, seasonal_prcp, 0),
+                          SN1 = if_else(season == 1, seasonal_tmin, 0),
+                          SN2 = if_else(season == 2, seasonal_tmin, 0),
+                          SN3 = if_else(season == 3, seasonal_tmin, 0),
+                          SN4 = if_else(season == 4, seasonal_tmin, 0),
+                          SX1 = if_else(season == 1, seasonal_tmax, 0),
+                          SX2 = if_else(season == 2, seasonal_tmax, 0),
+                          SX3 = if_else(season == 3, seasonal_tmax, 0),
+                          SX4 = if_else(season == 4, seasonal_tmax, 0))
+    # Compute total time to add covariables
     tiempo.add_covariates <- proc.time() - t
 
     # Ungroup and collect data from cluster
@@ -244,8 +248,9 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
     ## Fit model for precipitation occurrence.
 
     # Remove NAs
-    prcp_occ_fit_noNA_cols <- c('prcp_occ', 'prcp_occ_prev', 'ST1', 'ST2', 'ST3', 'ST4',
-                                'doy', 'time', 'row_num')
+    prcp_occ_fit_noNA_cols <- c('prcp_occ', 'prcp_occ_prev', 'doy', 'time', 'row_num')
+    if (!is.null(seasonal_covariates))
+        prcp_occ_fit_noNA_cols <- append(prcp_occ_fit_noNA_cols, c('ST1', 'ST2', 'ST3', 'ST4'))
     prcp_occ_indexes <- models_data %>% tidyr::drop_na(prcp_occ_fit_noNA_cols) %>% dplyr::pull(row_num)
 
     # Create formula
@@ -302,8 +307,9 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
     ## Fit model for precipitation amounts.
 
     # Remove NAs
-    prcp_amt_fit_noNA_cols <- c('prcp_amt', 'prcp_occ_prev', 'ST1', "ST2", 'ST3', 'ST4',
-                                'doy', 'time', 'row_num')
+    prcp_amt_fit_noNA_cols <- c('prcp_amt', 'prcp_occ_prev', 'doy', 'time', 'row_num')
+    if (!is.null(seasonal_covariates))
+        prcp_amt_fit_noNA_cols <- append(prcp_amt_fit_noNA_cols, c('ST1', 'ST2', 'ST3', 'ST4'))
     gamma_indexes <- models_data %>% tidyr::drop_na(prcp_amt_fit_noNA_cols) %>% dplyr::pull(row_num)
 
     # Create formula
@@ -357,9 +363,10 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
     ## Fit model for max temperature.
 
     # Remove NAs
-    tx_fit_noNA_cols <- c('tmax', 'tmax_prev', 'tmin_prev', 'prcp_occ', 'prcp_occ_prev',
-                          'seasonal_tmax', 'seasonal_tmin', 'row_num')
-    tmax_indexes <- models_data %>% tidyr::drop_na(tx_fit_noNA_cols) %>% dplyr::pull(row_num)
+    tmax_fit_noNA_cols <- c('tmax', 'tmax_prev', 'tmin_prev', 'prcp_occ', 'prcp_occ_prev', 'row_num')
+    if (!is.null(seasonal_covariates))
+        tmax_fit_noNA_cols <- append(tmax_fit_noNA_cols, c('seasonal_tmax', 'seasonal_tmin'))
+    tmax_indexes <- models_data %>% tidyr::drop_na(tmax_fit_noNA_cols) %>% dplyr::pull(row_num)
 
     # Create formula
     tmax_fm <- tmax ~ s(time, bs = 'gp', k = 1000) +
@@ -417,9 +424,10 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
     ## Fit model for min temperature.
 
     # Remove NAs
-    tn_fit_noNA_cols <- c('tmin', 'tmax_prev', 'tmin_prev', 'prcp_occ', 'prcp_occ_prev',
-                          'seasonal_tmax', 'seasonal_tmin', 'row_num')
-    tmin_indexes <- models_data %>% tidyr::drop_na(tn_fit_noNA_cols) %>% dplyr::pull(row_num)
+    tmin_fit_noNA_cols <- c('tmin', 'tmax_prev', 'tmin_prev', 'prcp_occ', 'prcp_occ_prev', 'row_num')
+    if (!is.null(seasonal_covariates))
+        tmin_fit_noNA_cols <- append(tmin_fit_noNA_cols, c('seasonal_tmax', 'seasonal_tmin'))
+    tmin_indexes <- models_data %>% tidyr::drop_na(tmin_fit_noNA_cols) %>% dplyr::pull(row_num)
 
     # Create formula
     tmin_fm <- tmin ~ s(time, bs = 'gp', k = 1000) +
