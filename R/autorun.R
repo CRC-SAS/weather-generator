@@ -33,14 +33,19 @@ autorun_from_yaml <- function(params_yaml_filename = NULL) {
     # ------------------------------------------------------------------------------
 
     # -----------------------------------------------------------------------------#
-    # --- STEP 2. Select model ----
+    # --- STEP 2. Set functions according to selected model ----
 
+    # Validate selected model
+    base::match.arg(params$model, c('local', 'spatial'))
+
+    # Set functions for the local model
     if (params$model == 'local') {
         fit_ctrl_fn <- gamwgen::local_fit_control
         fit_fn      <- gamwgen::local_calibrate
         sim_ctrl_fn <- gamwgen::local_simulation_control
         sim_fn      <- gamwgen::local_simulation
     }
+    # Set functions for the spatial model
     if (params$model == 'spatial') {
         fit_ctrl_fn <- gamwgen::spatial_fit_control
         fit_fn      <- gamwgen::spatial_calibrate
