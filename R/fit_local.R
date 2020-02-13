@@ -273,7 +273,10 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
                                .options.snow = list(progress = progress_pb), .verbose = verbose) %dopar% {
 
         station_climate <- models_data %>%
-            dplyr::filter(station_id == station)
+            dplyr::filter(station_id == station) %>%
+            dplyr::mutate(prcp_occ_residuals = NA_real_,
+                          tmax_residuals = NA_real_,
+                          tmin_residuals = NA_real_)
 
 
         ##########################################
@@ -288,7 +291,6 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
         prcp_occ_fit_noNA_cols <- c('prcp_occ', 'prcp_occ_prev', 'doy', 'time', 'row_num')
         if (!is.null(seasonal_covariates))
             prcp_occ_fit_noNA_cols <- append(prcp_occ_fit_noNA_cols, c('ST1', 'ST2', 'ST3', 'ST4'))
-        station_climate <- readRDS("aux.rds")
         prcp_occ_indexes <- station_climate %>%
             tidyr::drop_na(tidyselect::all_of(prcp_occ_fit_noNA_cols)) %>%
             dplyr::pull(row_num)
@@ -367,7 +369,7 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
         }
 
 
-        prcp_amt_fit <- foreach::foreach(m = 1:12, .multicombine = T) %dopar% {
+        prcp_amt_fit <- foreach::foreach(m = 1:12, .multicombine = T, .packages = c('dplyr')) %dopar% {
             t <- proc.time()
             prcp_amt_fit <- mgcv::bam(formula = prcp_amt_fm,
                                       data = station_climate[gamma_indexes,] %>%
