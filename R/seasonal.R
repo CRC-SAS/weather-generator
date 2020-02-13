@@ -39,7 +39,8 @@ summarise_seasonal_climate <- function(datos_climaticos, umbral_faltantes = 0.2)
             if (anyNA(estadisticas$seasonal_prcp) || anyNA(estadisticas$seasonal_tmax) || anyNA(estadisticas$seasonal_tmin)) {
                 estadisticas_as_df     <- estadisticas %>% base::as.data.frame()
                 estadisticas_missmda   <- missMDA::imputePCA(X = dplyr::select(estadisticas_as_df, seasonal_prcp, seasonal_tmax, seasonal_tmin))
-                estadisticas_imputadas <- cbind(dplyr::select(estadisticas, station_id, year, season), estadisticas_missmda$completeObs)
+                estadisticas_imputadas <- cbind(dplyr::select(estadisticas, station_id, year, season), estadisticas_missmda$completeObs) %>%
+                    dplyr::mutate(seasonal_prcp = if_else(seasonal_prcp < 0, 0, seasonal_prcp))
                 return (estadisticas_imputadas %>% tibble::as_tibble())
             }
             return (estadisticas) # en caso que no sea necesario imputar nada, estadisticas tiene los resultados finales
