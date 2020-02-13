@@ -4,11 +4,7 @@
 \alias{netcdf.extract.points.as.tibble}
 \title{Extract specific points from netcdf4, as tibble}
 \usage{
-netcdf.extract.points.as.tibble(
-  netcdf_filename,
-  points_to_extract,
-  points_id_column = "point_id"
-)
+netcdf.extract.points.as.tibble(netcdf_filename, points_to_extract)
 }
 \description{
 Extract specific points from a netcdf4 file, as a tibble object.
