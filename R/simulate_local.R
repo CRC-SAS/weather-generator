@@ -279,8 +279,9 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
 
     #################################################################
     ## Se pueden excluir los registros de años que no serán simulados
-    seasonal_covariates <- seasonal_covariates %>%
-        dplyr::filter(year %in% unique(simulation_dates$year))
+    if (!is.null(seasonal_covariates))
+        seasonal_covariates <- seasonal_covariates %>%
+            dplyr::filter(year %in% unique(simulation_dates$year))
 
 
     #############################################################
