@@ -173,6 +173,25 @@ check.ends.with.columns <- function(object, obj.name, obj.cols) {
 
 }
 
+check.one.of.columns <- function(object, obj.name, obj.cols) {
+
+    if (!any(names(obj.cols) %in% names(object))) {
+        warning (glue::glue("{obj.name} must have one of this columns {paste(names(obj.cols), collapse = ', ')}!"),
+                 call. = FALSE, immediate. = TRUE)
+        stop ("Entry data aren't in the correct format!", call. = FALSE)
+    }
+
+    for (c in names(obj.cols)) {
+        if (c %in% names(object)) {
+            if (class(dplyr::pull(object,!!c))[[1]] != obj.cols[[c]]) {
+                warning (glue::glue("{obj.name} column named {c} must be {obj.cols[[c]]}"), call. = FALSE, immediate. = TRUE)
+                stop ("Entry data aren't in the correct format!", call. = FALSE)
+            }
+        }
+    }
+
+}
+
 check.fit.input.data <- function(climate, stations, seasonal.covariates) {
 
     climate.columns <- c(date = "Date", station_id = "integer", tmax = "numeric", tmin = "numeric", prcp = "numeric")
@@ -212,16 +231,27 @@ check.simulation.input.data <- function(simulation.locations, seasonal.covariate
 
 check.points.to.extract <- function(points_to_extract) {
 
-    points.columns <- c(point_id = "integer", geometry = "sfc_POINT")
+    points.columns <- c(geometry = "sfc_POINT")
     check.object(points_to_extract, "points_to_extract", c("sf", "tbl_df", "tbl", "data.frame"), points.columns)
+    points.one.of.columns <- c(point_id = "integer", station_id = "integer")
+    check.one.of.columns(points_to_extract, "points_to_extract", points.one.of.columns)
 
 }
 
 
 #' @title Extract specific points from netcdf4, as tibble
 #' @description Extract specific points from a netcdf4 file, as a tibble object.
+#' @import dplyr
+#' @import magrittr
 #' @export
-netcdf.extract.points.as.tibble <- function(netcdf_filename, points_to_extract, points_id_column = "point_id") {
+netcdf.extract.points.as.tibble <- function(netcdf_filename, points_to_extract) {
+
+    # Se carga el paquete magrittr para poder usar %T>% y apagar el warning lanzado por dplyr::one_of
+    suppressPackageStartupMessages(library("magrittr"))
+    old_warn_value <- getOption("warn")
+
+    # Verificar columnas del objeto points_to_extract
+    gamwgen:::check.points.to.extract(points_to_extract)
 
     # Determinar variables y cantidad de realizaciones
     netcdf_file          <- ncdf4::nc_open(filename = netcdf_filename)
@@ -233,11 +263,11 @@ netcdf.extract.points.as.tibble <- function(netcdf_filename, points_to_extract, 
 
     # Transform points to the correct crs
     points <- points_to_extract %>%
-        sf::st_transform(crs = coord_ref_system) %>%
-        dplyr::select(point_id = !!points_id_column)
-
-    # Verificar columnas del objeto points_to_extract
-    gamwgen:::check.points.to.extract(points)
+        sf::st_transform(crs = coord_ref_system) %T>%
+        { base::options(warn=-1) } %>%
+        dplyr::select(dplyr::one_of("station_id", "point_id")) %T>%
+        { base::options(warn=old_warn_value) } %>%
+        dplyr::mutate(ID = 1:dplyr::n())
 
     # Determinar posiciones de cada estacion (fila/columna)
     first_brick <- raster::brick(netcdf_filename, varname = variables[1], lvar = 4, level = 1,
@@ -247,19 +277,30 @@ netcdf.extract.points.as.tibble <- function(netcdf_filename, points_to_extract, 
         dplyr::bind_cols(points) %>% tidyr::drop_na(cell)
 
     # Obtener los datos de todas las variables y realizaciones en un data frame
-    datos_simulaciones <- purrr::pmap_dfr(
+    datos_simulaciones_wide <- purrr::pmap_dfr(
         .l = purrr::cross2(variables, seq_len(numero_realizaciones)) %>% purrr::transpose(),
         .f = function(variable, numero_realizacion) {
             brick_variable <- raster::brick(netcdf_filename, varname = variable, lvar = 4, level = numero_realizacion)
             points_data  <- raster::extract(x = brick_variable, y = dplyr::pull(cell_of_pnt, cell), df = TRUE) %>%
-                dplyr::mutate(variable = variable, realizacion = numero_realizacion, point_id = dplyr::pull(cell_of_pnt, point_id))
-        }
-    ) %>% tidyr::pivot_longer(cols = starts_with("X"), names_to = "fecha_string", values_to = "valor") %>%
-        dplyr::mutate(fecha = as.Date(fecha_string, format ="X%Y.%m.%d")) %>%
-        dplyr::select(point_id, realizacion, fecha, variable, valor) %>%
-        tidyr::pivot_wider(names_from = "variable", values_from = "valor") %>%
-        dplyr::arrange(point_id, realizacion, fecha) %>%
-        dplyr::mutate(tipo_dia = factor(ifelse(as.logical(prcp), 'Lluvioso', 'Seco'), levels = c('Lluvioso', 'Seco')))
+                dplyr::mutate(variable = variable, realization = numero_realizacion, ctrl_id = dplyr::pull(cell_of_pnt, ID))
+        })
+
+    # Reestructurar datos_simulaciones
+    datos_simulaciones_large <- datos_simulaciones_wide %>%
+        tidyr::pivot_longer(cols = starts_with("X"), names_to = "date_string", values_to = "valor") %>%
+        dplyr::mutate(date = as.Date(date_string, format ="X%Y.%m.%d")) %>% dplyr::select(-date_string) %>%
+        tidyr::pivot_wider(names_from = "variable", values_from = "valor")
+
+    # Modificaciones finales (se agrega los ids recibidos en points_to_extract)
+    datos_simulaciones <- datos_simulaciones_large %>%
+        dplyr::inner_join(points, by = "ID") %>% dplyr::select(-geometry) %>%
+        dplyr::mutate(type_day = base::factor(x = ifelse(as.logical(prcp), 'Wet', 'Dry'),
+                                              levels = c('Wet', 'Dry'))) %T>%
+        { base::options(warn=-1) } %>%
+        dplyr::select(dplyr::one_of("station_id", "point_id"), realization, date,
+                      tmax, tmin, prcp, type_day) %>%
+        dplyr::arrange_at(dplyr::vars(realization, dplyr::one_of("station_id", "point_id"), date)) %T>%
+        { base::options(warn=old_warn_value) }
 
     return (datos_simulaciones)
 
@@ -273,9 +314,91 @@ netcdf.as.tibble <- function(netcdf_filename, na.rm = T) {
 
     result <- tidync::tidync(netcdf_filename) %>%
         tidync::hyper_tibble(na.rm = na.rm) %>%
-        dplyr::mutate(time = lubridate::as_date(time))
+        dplyr::mutate(time = lubridate::as_date(time),
+                      type_day = base::factor(x = ifelse(as.logical(prcp), 'Wet', 'Dry'),
+                                              levels = c('Wet', 'Dry'))) %>%
+        dplyr::rename(date = time,
+                      longitude = projection_x_coordinate,
+                      latitude = projection_y_coordinate) %>%
+        dplyr::select(realization, date, tmax, tmin, prcp, type_day, longitude, latitude)
 
     return (result)
+
+}
+
+
+#' @title Transform netcdf4 file to sf object
+#' @description Transform netcdf4 file to sf object.
+#' @export
+netcdf.as.sf <- function(netcdf_filename, na.rm = T) {
+
+    nc_proj4string <- ncmeta::nc_att(netcdf_filename, "NC_GLOBAL", "CRS")$value$CRS
+    nc_crs  <- sf::st_crs(nc_proj4string)
+
+    result <- tidync::tidync(netcdf_filename) %>%
+        tidync::hyper_tibble(na.rm = na.rm) %>%
+        dplyr::mutate(time = lubridate::as_date(time),
+                      type_day = base::factor(x = ifelse(as.logical(prcp), 'Wet', 'Dry'),
+                                              levels = c('Wet', 'Dry')),
+                      longitude = projection_x_coordinate,
+                      latitude = projection_y_coordinate) %>%
+        dplyr::rename(date = time) %>%
+        sf::st_as_sf(coords = c('projection_x_coordinate', 'projection_y_coordinate'),
+                     crs = nc_crs) %>%
+        dplyr::select(realization, date, tmax, tmin, prcp, type_day, longitude, latitude)
+
+    return (result)
+
+}
+
+
+#' @title Extract specific points from netcdf4, as sf
+#' @description Extract specific points from a netcdf4 file, as a sf object.
+#' @import dplyr
+#' @import magrittr
+#' @export
+netcdf.extract.points.as.sf <- function(netcdf_filename, points_to_extract) {
+
+    # Se carga el paquete magrittr para poder usar %T>% y apagar el warning lanzado por dplyr::one_of
+    suppressPackageStartupMessages(library("magrittr"))
+    old_warn_value <- getOption("warn")
+
+    # Verificar columnas del objeto points_to_extract
+    gamwgen:::check.points.to.extract(points_to_extract)
+
+    # Determinar la proyección de las coordenadas en el NetCDF
+    nc_proj4string <- ncmeta::nc_att(netcdf_filename, "NC_GLOBAL", "CRS")$value$CRS
+    nc_crs  <- sf::st_crs(nc_proj4string)
+
+    # Determinar la resolución del raster generado a partir del NetCDF
+    first_raster <- raster::raster(netcdf_filename, varname = "tmax", level = 1)
+    resolution <- max(raster::res(first_raster))
+
+    # Extraer datos del NetCDF (todos los datos) y transformar cada punto
+    # en un poligono cuadrado de lado igual a resolution/2, esto para poder
+    # intersectar estos poligonos con los puntos a extraer!!
+    all_data_polygonized <- gamwgen::netcdf.as.sf(netcdf_filename) %>%
+        sf::st_buffer(dist = resolution/2, endCapStyle="SQUARE")
+
+    # Transform points to the correct crs
+    points_to_extract <- points_to_extract %>%
+        sf::st_transform(crs = nc_crs) %T>%
+        { base::options(warn=-1) } %>%
+        dplyr::select(-dplyr::one_of("longitude", "latitude")) %T>%
+        { base::options(warn=old_warn_value) }
+
+    # Se seleccionan solo los resultados deseados
+    resulting_data <- all_data_polygonized %>%
+        sf::st_join(points_to_extract, left = FALSE) %>% sf::st_drop_geometry() %>% tibble::as_tibble() %T>%
+        { base::options(warn=-1) } %>%
+        dplyr::select(dplyr::one_of("station_id", "point_id"), realization, date, tmax, tmin, prcp, type_day,
+                      longitude, latitude) %>%
+        dplyr::arrange_at(dplyr::vars(realization, dplyr::one_of("station_id", "point_id"), date)) %T>%
+        { base::options(warn=old_warn_value) } %>%
+        dplyr::mutate(projection_x_coordinate = longitude, projection_y_coordinate = latitude) %>%
+        sf::st_as_sf(coords = c("projection_x_coordinate", "projection_y_coordinate"), crs = nc_crs)
+
+    return (resulting_data)
 
 }
 
