@@ -251,7 +251,7 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
     prcp_occ_fit_noNA_cols <- c('prcp_occ', 'prcp_occ_prev', 'doy', 'time', 'row_num')
     if (!is.null(seasonal_covariates))
         prcp_occ_fit_noNA_cols <- append(prcp_occ_fit_noNA_cols, c('ST1', 'ST2', 'ST3', 'ST4'))
-    prcp_occ_indexes <- station_climate %>%
+    prcp_occ_indexes <- models_data %>%
         tidyr::drop_na(tidyselect::all_of(prcp_occ_fit_noNA_cols)) %>%
         dplyr::pull(row_num)
 
@@ -312,7 +312,7 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
     prcp_amt_fit_noNA_cols <- c('prcp_amt', 'prcp_occ_prev', 'doy', 'time', 'row_num')
     if (!is.null(seasonal_covariates))
         prcp_amt_fit_noNA_cols <- append(prcp_amt_fit_noNA_cols, c('ST1', 'ST2', 'ST3', 'ST4'))
-    gamma_indexes <- station_climate %>%
+    gamma_indexes <- models_data %>%
         tidyr::drop_na(tidyselect::all_of(prcp_amt_fit_noNA_cols)) %>%
         dplyr::pull(row_num)
 
@@ -370,7 +370,7 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
     tmax_fit_noNA_cols <- c('tmax', 'tmax_prev', 'tmin_prev', 'prcp_occ', 'prcp_occ_prev', 'row_num')
     if (!is.null(seasonal_covariates))
         tmax_fit_noNA_cols <- append(tmax_fit_noNA_cols, c('seasonal_tmax', 'seasonal_tmin'))
-    tmax_indexes <- station_climate %>%
+    tmax_indexes <- models_data %>%
         tidyr::drop_na(tidyselect::all_of(tmax_fit_noNA_cols)) %>%
         dplyr::pull(row_num)
 
@@ -433,7 +433,7 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
     tmin_fit_noNA_cols <- c('tmin', 'tmax_prev', 'tmin_prev', 'prcp_occ', 'prcp_occ_prev', 'row_num')
     if (!is.null(seasonal_covariates))
         tmin_fit_noNA_cols <- append(tmin_fit_noNA_cols, c('seasonal_tmax', 'seasonal_tmin'))
-    tmin_indexes <- station_climate %>%
+    tmin_indexes <- models_data %>%
         tidyr::drop_na(tidyselect::all_of(tmin_fit_noNA_cols)) %>%
         dplyr::pull(row_num)
 
