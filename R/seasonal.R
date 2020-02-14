@@ -47,3 +47,59 @@ summarise_seasonal_climate <- function(datos_climaticos, umbral_faltantes = 0.2)
         }
     )
 }
+
+
+# Definition of a function to fill gaps in the seasonal covariates data. It must be
+#  used with caution given that the missing years, now filled, were not included in the fitting of the model
+fill_missing_seasonal_climate <- function(seasonal_covariates) {
+    ## fills missing seasonal averages for tmax and tmin, and sum for prcp, with quality control and missing values imputation
+    filled.data <- purrr::map_dfr(
+        .x = c('seasonal_prcp', 'seasonal_tmax', 'seasonal_tmin'),
+        .f = function(variable) {
+
+            # Selection of the variable to be filled
+            seasonal.data <- seasonal_covariates %>%
+                dplyr::select(station_id, year, season, variable) %>%
+                tidyr::spread(., station_id, variable) %>%
+                as.data.frame(.)
+
+            # If there are missing data, the gaps will be filled.
+            # Otherwise, nothing will be done to the original data
+            if (anyNA(seasonal.data)) {
+                # Gap filling method: missMDA
+                seasonal_filled_missmda <- missMDA::imputePCA(X = seasonal.data %>%
+                                                                  dplyr::select(., -c('year', 'season')))
+                imputed.variable <- cbind(dplyr::select(seasonal.data, year, season), seasonal_filled_missmda$completeObs) %>%
+                    tidyr::gather(station_id, value, -c('year', 'season')) %>%
+                    dplyr::mutate(., variable_id = variable) %>%
+                    dplyr::select(station_id, year, season, variable_id, value)
+
+                # Prevent negative precipitation from happening
+                if (variable == 'seasonal_prcp') {
+                    imputed.variable %<>% dplyr::mutate(value = if_else(value < 0, 0, value))
+                }
+
+            } else {
+                imputed.variable <-   seasonal_covariates %>%
+                    dplyr::select(station_id, year, season, variable) %>%
+                    dplyr::rename(value = variable) %>%
+                    dplyr::mutate(variable_id = variable) %>%
+                    dplyr::select(station_id, year, season, variable_id, value)
+
+            }
+
+            # return results
+            return(imputed.variable)
+        }
+    )
+
+    # Arrange tibble to meet the expected format
+    seasonal_covariates <- filled.data %>%
+        tidyr::spread(variable_id, value) %>%
+        dplyr::mutate(station_id = as.integer(station_id)) %>%
+        tibble::as_tibble(.)
+
+    # Return object with filled gaps
+    return(seasonal_covariates)
+}
+
