@@ -173,7 +173,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
     ############################
 
     # Configuration of the RandomFields package in order to produce the expected results
-    RandomFields::RFoptions(spConform=FALSE)
+    RandomFields::RFoptions(printlevel = 0, spConform = FALSE)
 
     # Para ...
     if(!is.null(control$seed))
