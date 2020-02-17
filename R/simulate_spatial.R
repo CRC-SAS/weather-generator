@@ -61,7 +61,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                                output_folder = getwd(), output_filename = "sim_results.nc",
                                seasonal_covariates = NULL, verbose = F) {
 
-    ## Object to be returned
+    ## Español: Objeto que será devuelto
+    ## English: Object to be returned
     gen_climate <- list()
 
     ###############################################################
@@ -71,20 +72,25 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
     ###############################################################
 
-    # Check that the fitted object is of the right class
+    # Español: Comprobar que el objeto ajustado sea de la clase correcta
+    # English: Check that the fitted object is of the right class
     if(class(model) != 'gamwgen')
         stop(glue::glue('Received a model of class {class(model)} and a model of class "gamwgen" was expected.'))
 
-    # Check that the locations to be simulated exists
+    # Español: Comprobar que las locación a simular existan
+    # English: Check that the locations to be simulated exists
     if (is.null(simulation_locations))
         stop("The parameter simulation_locations can't be null!")
 
-    # Check that the input objects are of the right class
+    # Español: Comporbar que el objeto de entrada
+    # English: Check that the input objects are of the right class
     gamwgen:::check.simulation.input.data(simulation_locations, seasonal_covariates)
 
     ###############################################################
 
-    # Check that the locations to be simulated are projected in the same coordinate
+    # Español: Comprobar que las locaciones a simular estén proyectadas en el mismo sistema de
+    # coordenadas que el de los datos ajustados. De otra manera, se convierte
+    # English: Check that the locations to be simulated are projected in the same coordinate
     # system as the fitted data. Otherwise, convert it
     if(sf::st_crs(simulation_locations) != sf::st_crs(model$crs_used_to_fit)) {
         simulation_locations <- simulation_locations %>%
@@ -93,7 +99,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                 'Se transforma simulation_locations al crs {del ajuste}')
     }
 
-    ## Create a bounding box to check whether the simulation location are englufed by it
+    ## Español: Creacion de un área de influencia que debe abarcar a las locaciones a simular
+    ## English: Create a bounding box to check whether the simulation location are engulfed by it
     sl_bbox <- sf::st_bbox(model$stations)
 
     sl_bbox_offset <- sf::st_bbox(
@@ -106,11 +113,15 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     polygon_offset <- sf::st_as_sfc(sl_bbox_offset)
     sf::st_crs(polygon_offset) <- sf::st_crs(model$crs_used_to_fit)
 
-    ## Simulation locations should be inside the bounding box
+    ## Español: Las locaciones a simular deben estar dentro del área
+    ## English: Simulation locations should be inside the bounding box
     if(!all(sf::st_contains(polygon_offset, simulation_locations, sparse = F)))
         stop('Alguno de los puntos ajustados se encuentra fuera del bounding box ',
              'creado a partir de los puntos a simular y con un offset de 10 km.')
 
+    ## Español: El ruido espacialmente no correlacionado sólo puede ser usado si las estacion
+    ## meteorológicas a simular fueron incluidas en el ajuste. Los residuos de estas estaciones
+    ## son necesarios para modelar las distribuciones multivariadas.
     ## Non spatially correlated noise can only be used if the weather stations
     ## to be simulated where used in the fitting process. The residuals of those stations are
     ## needed to model the multivariate distributions.
@@ -122,25 +133,29 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
     ###############################################################
 
-    # Check that the input location to be simulated is a valid sf object
+    # Español: Comprobar que las locaciones a simular sean un objeto sf válido
+    # English: Check that the input location to be simulated is a valid sf object
     if(!all(sf::st_is_valid(simulation_locations)))
         stop('simulation_locations is not a valid sf object.')
 
     ###############################################################
 
-    # Check consistency between start and end date of the simulation period
+    # Español: Comporbar la consistencia entre las fechas de comienzo y fin del período de simulación
+    # English: Check consistency between start and end date of the simulation period
     if(end_date <= start_date)
         stop('End date should be greater than start date')
 
     ###############################################################
 
-    # Check that the number of realization is equal to or larger than
+    # Español: Comprobar que el numero de realización sea mayor o igual a uno
+    # English: Check that the number of realization is equal to or larger than one
     if(control$nsim < 1)
         stop('Number of simulations should be one or greater than one')
 
     ###############################################################
 
-    # Check that the number of cores to be used is valid
+    # Español: Comprobar que el número de núcleos usado sea válido
+    # English: Check that the number of cores to be used is valid
     if(is.na(control$avbl_cores) || is.null(control$avbl_cores))
         stop('The control parameter avbl_cores must be at least 1.')
 
@@ -163,7 +178,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     #  externa      |      interna  (no corresponde)
     # generalmente el ajuste es con covariables internas
 
-    ## If seasonal_covariates is not NULL, model fit should have been done using covariates.
+    ## Español: Si seasonal_climate no es NULL, el ajuste del modelo debió haber sido hecho usando covariables
+    ## English: If seasonal_climate is not NULL, model fit should have been done using covariates.
     if(!is.null(seasonal_covariates) & is.null(model$seasonal_covariates))
         stop('El ajuste fue hecho sin covariables, por lo tanto, la simulación ',
              'también debe hacerse sin covariables y no es valido utilizar el ',
@@ -183,7 +199,9 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
     ###############################################################
 
-    ## Check the presence of seasonal covariables time series as long as the simulation period.
+    ## Español: Se comprueba la presencia de series de covariables estacionales tan largas como el período de simulación
+    ## Este control solo se realizará si llevará a cabo si la simulación usará covariables, de otra manera será salteado
+    ## English: Check the presence of seasonal covariables time series as long as the simulation period.
     ## This control is only performed if the simulation will use covariables otherwise, it will be skipped.
     if(!is.null(seasonal_covariates)) {
         if(gamwgen:::repeat_seasonal_covariates(seasonal_covariates)) {
@@ -208,14 +226,16 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     ## INITIAL CONFIGURATIONS ##
     ############################
 
-    # Configuration of the RandomFields package in order to produce the expected results
+    # Español: Configuración del paquete RandomFields para producir los resultados esperados
+    # English: Configuration of the RandomFields package in order to produce the expected results
     RandomFields::RFoptions(printlevel = 0, spConform = FALSE)
 
     # Para ...
     if(!is.null(control$seed))
         set.seed(control$seed)
 
-    # Create simulation seeds to replicate results in different simulations
+    # Español: Creaión de semillas para la simulción para así poder replicar los resultados
+    # English: Create simulation seeds to replicate results in different simulations
     realizations_seeds <- NULL
     if(!is.null(control$seed)) {
         realizations_seeds <- list()
@@ -234,7 +254,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     ## Parallelization initialization ##
     ####################################
 
-
+    ## Español: Vairbale que indica si es necesario remover
+    ## la confguración de la paralelización
     ## Variable that indicate if it's necessary to remove
     ## the parallelization configuration
     remove_parallelization_conf <- F
@@ -266,13 +287,15 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
     ############################################
-    ## Process output_folder and output_filename
+    ## Español: Carpeta de destino y nombre del archivo
+    ## English: Process output_folder and output_filename
     output_folder <- sub('/$', '', output_folder)
     output_filename <- sub('\\.([^.]*)$', '', output_filename)
 
 
     ####################################
-    ## Generate simulation dates
+    ## Español: Generar fechas de simulación
+    ## English: Generate simulation dates
     simulation_dates <-
         tibble::tibble(date = seq.Date(from = as.Date(start_date),
                                        to = as.Date(end_date),
@@ -280,12 +303,14 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
         dplyr::mutate(year   = lubridate::year(date),
                       month  = lubridate::month(date),
                       season = lubridate::quarter(date, fiscal_start = 12))
-    ## Numbers of days to be simulated
+    ## Español: Número de días a simular
+    ## English: Numbers of days to be simulated
     ndates <- nrow(simulation_dates)
 
 
     ##################################
-    ## Matrix with the locations to be simulated
+    ## Español: Matriz de locaciones a ser simulados
+    ## English: Matrix with the locations to be simulated
     simulation_points <- simulation_locations %>%
         sf::st_transform(sf::st_crs(model$crs_used_to_fit)) %>%
         dplyr::mutate(point_id = dplyr::row_number(),
@@ -294,7 +319,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
     ##################################
-    ## Raster with the locations to be simulated.
+    ## Español: Raster con las locaciones a simular
+    ## English: Raster with the locations to be simulated.
     if (control$sim_loc_as_grid) {
         pnts_dist_matrix  <- gamwgen:::make_distance_matrix(simulation_locations)
         min_dist_btw_pnts <- floor(min(pnts_dist_matrix[upper.tri(pnts_dist_matrix)]))
@@ -319,18 +345,22 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
     ################################################################
-    ## Obtaining values for the day before the simulation start day
+    ## Español: Se obtiene los valores al día previo del comienzo de la simulación
+    ## English: Obtaining values for the day before the simulation start day
     start_date_prev_day_climatology <-
         gamwgen:::get_start_climatology(model, simulation_points, start_date, control)
 
 
     ######################################################################################
+
+    # Verifiar si esto es necesario
+
     ## Si no se recibe un seasonal_covariates externo, se utiliza el generado en el ajuste
     # Si por ahí fallan los controles, con esto se garantiza que: si se usaron covariables
     # al momento de realizar el ajuste, también se utilize covariables en la simulación, y
     # lo mismo para el caso inverso, es decir, cuando no se usó covariables ene l ajuste!!
-    if(is.null(seasonal_covariates))
-        seasonal_covariates <- model$seasonal_covariates
+    # if(is.null(seasonal_covariates))
+    #     seasonal_covariates <- model$seasonal_covariates
 
 
     #################################################################
@@ -342,13 +372,14 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
     #############################################################
     ## Obtención de covariables, si van a ser utilizadas, sino no
-    if (!is.null(seasonal_covariates))
-        seasonal_covariates <-
-            gamwgen:::get_covariates(model, simulation_points, seasonal_covariates, simulation_dates, control)
+     if (!is.null(seasonal_covariates))
+         seasonal_covariates <-
+             gamwgen:::get_covariates(model, simulation_points, seasonal_covariates, simulation_dates, control)
 
 
     #########################################
-    ## Global paramteres for noise generators
+    ## Español: Parámetros globales para la generación de ruido
+    ## English: Global paramteres for noise generators
     if(control$use_spatially_correlated_noise)
         gen_noise_params <- gamwgen:::generate_month_params(
             residuals = model$models_residuals,
@@ -360,21 +391,25 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
     ############################################
-    ## Matriz de clasificacion de días lluviosos
+    ## Español: Matriz de clasificacion de días lluviosos
+    ## English: Clasification matrix for wet days
     clasification_matrix <- matrix(c(-Inf, 0, 0, 0, Inf, 1),
                                    ncol = 3,
                                    byrow = TRUE)
 
 
     #######################################################################################
-    ## Se crea una matriz de simulación, esta va a contener todos los datos necesarios para
-    ## la simulación de cada día a simular, si se utilizan covariables, se las incluye aquí
+    ## Español: Se crea una matriz de simulación, esta va a contener todos los datos necesarios para
+    ## la simulación de cada día a simular
+    ## English: A simulation matrix is created, it will have all the necessary data for the
+    ## simulation of each day to simulate
     simulation_matrix <- simulation_points %>%
         dplyr::select(point_id, longitude, latitude)
 
 
     ################################################################################################
-    ## Add seasonal covariates if they were used when model fitting (only years in simulation_dates)
+    ## Español: Se agregan covariables estacionales si fueron usadas al ajustar el modelo (Sólo los años en simulation_dates)
+    ## English: Add seasonal covariates if they were used when model fitting (only years in simulation_dates)
     if (!is.null(seasonal_covariates))
         simulation_matrix <- simulation_matrix %>% sf::st_join(seasonal_covariates) %>%
             dplyr::mutate(ST1 = dplyr::if_else(season == 1, seasonal_prcp, 0),
@@ -392,11 +427,13 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
     #########################################
-    ## Thresholds for performing retries. i.e.: if simulated values are above/below the
+    ## Español: Umbrales para reintentar la simulación. Es decir, si los valores simulados están por encima/debajo del
+    ## rango mínimo/máximo, la simulación para ese día se repetirá
+    ## English: Thresholds for performing retries. i.e.: if simulated values are above/below the
     ## max/min range, the simulation for that day will be repeated.
     temperature_range_thresholds <-
         gamwgen:::get_temperature_thresholds(model$stations, simulation_points,
-                                             model$estadisticos_umbrales, control)
+                                             model$statistics_threshold, control)
 
 
     ##########################################
@@ -405,7 +442,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
     #################################
-    ## Control de tiempo de ejecución
+    ## Español: Control de tiempo de ejecución
+    ## English: Check the execution time
     t.sim <- proc.time()
 
 
@@ -429,7 +467,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
     ###########################################
-    ## Crear objeto para guardar los resultados
+    ## Español: Crear objeto para guardar los resultados
+    ## English: Creation of an objet to store the results
     gamwgen:::CrearNetCDF(nc_file = glue::glue("{output_folder}/{output_filename}.nc"),
                           num_realizations = control$nsim,
                           sim_dates = simulation_dates$date,
@@ -438,7 +477,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
     ######
-    ##
+    ## Español: Comienzo de la simulación
+    ## English: Simulation start
     nsim_gen_clim <- foreach::foreach(r = 1:control$nsim,
                                       .combine = dplyr::bind_rows,
                                       .export = c('output_folder', 'output_filename'),
@@ -447,12 +487,14 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                                       .verbose=verbose) %dopar% {
 
         ######################################################################
-        ## Para que las funciones de RandomFields devuelvan lo esperado!! ----
-        RandomFields::RFoptions(spConform=FALSE)
+        # Español: Para que las funciones de RandomFields devuelvan lo esperado!! ----
+        # English: Configuration of the RandomFields package in order to produce the expected results
+        RandomFields::RFoptions(printlevel = 0, spConform = FALSE)
 
 
         ##################################################
-        ## Para cuando necesitamos repetir resultados ----
+        ## Español: Para cuando necesitamos repetir resultados
+        ## English: In case results need to be repeated
         set.seed(realizations_seeds[[r]]$general[[r]])
 
 
@@ -464,46 +506,59 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
         #################################################################################
-        ## Creacion de los puntos de simulacion para el dia i (eq. daily covariates) ----
+        ## Español: Creacion de los puntos de simulacion para el dia i (eq. daily covariates) ----
+        ## English: Creation of simulation points por the i-th day
         #################################################################################
         simulation_matrix.d <- simulation_matrix %>%
-            # Si se usan covariables, simulation_matrix tiene las covariables
+            # Español: Si se usan covariables, simulation_matrix tiene las covariables
             # para cada season de cada year en simulation_dates! Por lo tanto,
             # se debe filtrar por season y year para acelerar el sf::st_join!
+            # English: If covariates are used, simulation_matrix should have the covariates
+            # for each season of every year in simuladyion_dates. So,
+            # it should be filtered by season and year to speed up the process
             {if (is.null(seasonal_covariates)) dplyr::filter(.)
              else dplyr::filter(., year == simulation_dates$year[1], season == simulation_dates$season[1])} %>%
-            # Luego se agrega la climatología inicial, es decir, la del día previo al primer día
+            # Español: Luego se agrega la climatología inicial, es decir, la del día previo al primer día
             # a simular. Las columnas incorporadas por esta acción son: prcp_occ, tmax y tmin,
             # por lo tanto, deben ser renombradas a: prcp_occ_prev, tmax_prev y tmin_prev
+            # English: Daily climatology is added, i.e.: the climatology of the previous day of the first
+            # day of the simulation period. The variables added are: prcp_occ, tmax and tmin,
+            # therefore, they shoulb be renamed: prcp_occ_prev, tmax_prev and tmin_prev
             sf::st_join(start_date_prev_day_climatology) %>%
             dplyr::rename(prcp_occ_prev = prcp_occ, tmax_prev = tmax, tmin_prev = tmin) %>%
-            # a esto se debe agregar tipo_dia_prev y prcp_amt_prev
-            dplyr::mutate(tipo_dia_prev = factor(prcp_occ_prev, levels = c(1, 0), labels = c('Lluvioso', 'Seco')),
+            # Español: Se debe agregar variables complementarias: type_day_prev y prcp_amt_prev
+            # English: Complementary variables are added: type_day_prev and prcp_amt_prev
+            dplyr::mutate(type_day_prev = factor(prcp_occ_prev, levels = c(1, 0), labels = c('Wet', 'Dry')),
                           prcp_amt_prev = NA_real_) %>%  # no se tiene la amplitud de prcp para el día previo al 1er día a simular!
-            # Se agregan date, time y doy del primer día a simular
+            # Español: Se agregan date, time y doy del primer día a simular
+            # English: More variables are added: date, time and doy of the first day
             dplyr::mutate(date = simulation_dates$date[1],
                           time = as.numeric(date)/1000,
                           doy = lubridate::yday(date),
                           month = lubridate::month(date)) %>%
-            # Se crean columnas para almacenar los resultados de la simulación
+            # Español: Se crean columnas para almacenar los resultados de la simulación
+            # English: Empty columns are created to store the results
             dplyr::mutate(prcp_occ = NA_integer_,
                           tmax = NA_real_,
                           tmin = NA_real_,
-                          tipo_dia = NA_character_,
+                          type_day = NA_character_,
                           prcp_amt = NA_real_) %>%
-            # para control de paralelización
+            # Español: para control de paralelización
+            # English: To manage paralelization
             dplyr::mutate(nsim = r)
 
 
         #######################################
-        ## Tiempos a tomar por cada realización
+        ## Español: Tiempos a tomar por cada realización
+        ## English: Time for each realization
         tiempos <- tibble::tibble(tiempo.gen_clim = list(),
                                   tiempo.save_rds = list())
         tiempos <- tiempos %>% dplyr::add_row()
 
 
         #################################
-        ## Control de tiempo de ejecución
+        ## Español: Control de tiempo de ejecución
+        ## English: Control time of the execution
         t.daily_gen_clim <- proc.time()
 
 
@@ -514,46 +569,52 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
         daily_gen_clim <- purrr::map_dfr(1:ndates, function(d) {
 
             ##############################################################
-            ## Temporal index for each month of the simulation/realization
+            ## Español: Índice temporal para cada mes de la simulación/realización
+            ## English: Temporal index for each month of the simulation/realization
             current_month <- simulation_dates$month[d]
-
 
 
             ###########################################
             ## Precipitation occurrence (prcp_occ) ----
             ###########################################
 
-            # Simulation of precipitation occurrence
+            # Español: Simulación de la ocurrencia de lluvia
+            # English: Simulation of precipitation occurrence
             SIMocc <- mgcv::predict.bam(model$fitted_models$prcp_occ_fit,
                                         newdata = simulation_matrix.d,
                                         #cluster = cluster,  # empeora el tiempo para grillas grandes
                                         newdata.guaranteed = TRUE) # una optimizacion
 
-            # Raster con los valores "climáticos"
+            # Español: Raster con el componente "climático"
+            # English: Raster with the climatic component
             SIMocc_points_climate.d <- simulation_points %>%
                 dplyr::mutate(SIMocc = !!SIMocc) %>%
                 gamwgen:::sf2raster('SIMocc', simulation_raster)
 
-            # Raster con los valores de "ruido"
+            # Español: Raster con el componente "meteorológico"
+            # English: raster with the meteorological component
             SIMocc_points_noise.d <- control$prcp_noise_generating_function(
-                simulation_points = simulation_points,
-                gen_noise_params = gen_noise_params,
-                month_number = current_month,
-                selector = 'prcp',
-                seed = realizations_seeds[[r]]$prcp_occ[[d]]) %>%
-                gamwgen:::sf2raster('prcp_residuals', simulation_raster)
+                simulation_points = simulation_points, # Location
+                gen_noise_params = gen_noise_params, # Monthly parameters
+                month_number = current_month, # Month
+                selector = 'prcp', # Variables
+                seed = realizations_seeds[[r]]$prcp_occ[[d]]) %>% # Seed
+                gamwgen:::sf2raster('prcp_residuals', simulation_raster) # Conversion to raster
 
-            # Raster con los valores simulados
+            # Español: Raster con los valores simulados
+            # English: Raster with the simulated values
             SIMocc_points.d <- SIMocc_points_climate.d + SIMocc_points_noise.d
 
-            # Raster con los valores simulados reclasificados a 0 y/o 1
+            # Español: Raster con los valores simulados reclasificados a 0 y/o 1
+            # English: Raster with the reclasified simulated values to 0 and/or 1
             SIMocc_points.d <- raster::reclassify(SIMocc_points.d, clasification_matrix)
 
-            # Agregar valores de ocurrencia a la grilla de simulacion
+            # Español: Agregar valores de ocurrencia a la grilla de simulacion
+            # English: Add occurrence values to the simulation grid
             simulation_matrix.d <- simulation_matrix.d %>%
                 dplyr::mutate(prcp_occ = raster::extract(SIMocc_points.d, simulation_points),
-                              tipo_dia = factor(prcp_occ, levels = c(1, 0),
-                                                labels = c('Lluvioso', 'Seco')))
+                              type_day = factor(prcp_occ, levels = c(1, 0),
+                                                labels = c('Wet', 'Dry')))
 
 
 
@@ -561,7 +622,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             ## Temperature (both, tmax and tmin) ----
             #########################################
 
-            #  Raster con los valores de "ruido" para días secos
+            #  Español: Raster con el componente meterológico para días secos
+            #  English: Raster with the meterological component for dry days
             temperature_random_fields_dry <-
                 control$temperature_noise_generating_function(
                     simulation_points = simulation_points,
@@ -570,7 +632,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                     selector = c('tmax_dry', 'tmin_dry'),
                     seed = realizations_seeds[[r]]$temp_dry[[d]])
 
-            # Procesamiento de residuos para dias secos
+            # Español: Procesamiento de residuos para dias secos
+            # English: Dry days residues processing
             rasters_secos.d <- purrr::map(
                 .x = c("tmin", "tmax"),
                 .f = function(variable, objeto_sf) {
@@ -579,7 +642,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             )
             names(rasters_secos.d) <- c("tmin", "tmax")
 
-            # Raster con los valores de "ruido" para días lluviosos
+            # Español: Raster con el componente meterológico para días lluviosos
+            # English: Raster with the meterological component for wet days
             temperature_random_fields_wet <-
                 control$temperature_noise_generating_function(
                     simulation_points = simulation_points,
@@ -588,7 +652,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                     selector = c('tmax_wet', 'tmin_wet'),
                     seed = realizations_seeds[[r]]$temp_wet[[d]])
 
-            # Procesamiento de residuos para dias humedos
+            # Español: Procesamiento de residuos para dias humedos
+            # English: Wet days residues processing
             rasters_humedos.d <- purrr::map(
                 .x = c("tmin", "tmax"),
                 .f = function(variable, objeto_sf) {
@@ -597,9 +662,12 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             )
             names(rasters_humedos.d) <- c("tmin", "tmax")
 
-            #Ahora vamos a generar 2 rasters: uno para tmax y otro para tmin
-            #Cada raster tiene los residuos de las variables correspondientes
-            #considerando la ocurrencia de dia seco o humedo
+            # Español: Se generan dos rasters, uno para tmax y otro para tmin
+            # Cada raster tiene los residuos de las variables correspondientes
+            # considerando la ocurrencia de dia seco o humedo
+            # English: Two rasters are generated, uno for tmax and another one for tmin
+            # Each raster has the residues of the corresponding variables
+            # considering the occurrence of precipitation
             SIMmax_points_noise.d <-
                 gamwgen:::ensamblar_raster_residuos(rasters_humedos.d$tmax, rasters_secos.d$tmax, SIMocc_points.d)
             SIMmin_points_noise.d <-
@@ -611,21 +679,27 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             ## Maximum temperature (tmax) ----
             ##################################
 
-            # Simulation of maximum temperature (SIMmax)
+            # Español: Simulación del componente meteorológico
+            # de la temperatura máxima (SIMmax)
+            # English: Simulation of the climatic component of
+            #  maximum temperature (SIMmax)
             SIMmax <- mgcv::predict.bam(model$fitted_models$tmax_fit,
                                         newdata = simulation_matrix.d,
                                         #cluster = cluster,  # no mejora mucho el tiempo
                                         newdata.guaranteed = TRUE) # una optimizacion
 
-            # Raster con los valores "climáticos"
+            # Español: Raster con el componente climático de tmax
+            # English: Raster with the climatic component of tmax
             SIMmax_points_climate.d <- simulation_points %>%
                 dplyr::mutate(SIMmax = !!SIMmax) %>%
                 gamwgen:::sf2raster('SIMmax', simulation_raster)
 
-            # Raster con los valores simulados
+            # Español: Raster con los valores simulados
+            # English: Raster with the simulated values
             SIMmax_points.d <- SIMmax_points_climate.d + SIMmax_points_noise.d
 
-            # Agregar valores de temperatura mínima a los puntos de simulación
+            # Español: Agregar valores de temperatura mínima a los puntos de simulación
+            # English: Add simulated tmax values to the simulation points
             simulation_matrix.d <- simulation_matrix.d %>%
                 dplyr::mutate(tmax = raster::extract(SIMmax_points.d, simulation_points))
 
@@ -635,21 +709,27 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             ## Minimum temperature (tmin) ----
             ##################################
 
-            # Simulation of minimum temperature (SIMmin)
+            # Español: Simulación del componente meteorológico
+            # de la temperatura mínima (SIMmin)
+            # English: Simulation of the climatic component of
+            #  minimum temperature (SIMmin)
             SIMmin <- mgcv::predict.bam(model$fitted_models$tmin_fit,
                                         newdata = simulation_matrix.d,
                                         #cluster = cluster,  # no mejora mucho el tiempo
                                         newdata.guaranteed = TRUE) # una optimizacion
 
-            # Raster con los valores "climáticos"
+            # Español: Raster con el componente climático de tmin
+            # English: Raster with the climatic component of tmin
             SIMmin_points_climate.d <- simulation_points %>%
                 dplyr::mutate(SIMmin = !!SIMmin) %>%
                 gamwgen:::sf2raster('SIMmin', simulation_raster)
 
-            # Raster con los valores simulados
+            # Español: Raster con los valores simulados
+            # English: Raster with the simulated values
             SIMmin_points.d <- SIMmin_points_climate.d + SIMmin_points_noise.d
 
-            # Agregar valores de temperatura mínima a los puntos de simulación
+            # Español: Agregar valores de temperatura mínima a los puntos de simulación
+            # English: Add simulated tmax values to the simulation points
             simulation_matrix.d <- simulation_matrix.d %>%
                 dplyr::mutate(tmin = raster::extract(SIMmin_points.d, simulation_points))
 
@@ -659,7 +739,12 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             ## Check Temperatures (both, tmax and tmin) ----
             #################################################
 
-            # Simulated maximum and minium temperature values will be valid the daily
+            # Español: Los valores de temperaturas máximas y mínimas simulados serán válidos si el
+            # rango (tmax- tmin) diario cae dentro de los umbrales estimados a partir
+            # de los datos originales. Si lo valores de temperatura simulados está fuera
+            # de los umbrales, i.e.: por encima del rango máximo o por debajo del mínimo,
+            # ese valor diario será vuelto a simular hasta que se satisfaga la condición.
+            # English:Simulated maximum and minium temperature values will be valid if the daily
             # temperature range (tmax - tmin) falls between the thresholds estimated
             # from the original data. If the simulated daily temperature is outside the
             # thresholds, i.e.: above the maximum range or beneath the minimum range,
@@ -667,7 +752,9 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
             #################
-            ## Dry thresholds
+            ## Español: Creación de rasters con umbrales para días secos
+            ## English: Creation of raster with thresholds for dry days
+
             # Maximum range
             dry_max_range <- temperature_range_thresholds %>%
                 dplyr::filter(month == current_month & prcp_occ == 0) %>%
@@ -681,7 +768,9 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
             ################
-            # Wet thresholds
+            ## Español: Creación de rasters con umbrales para días lluviosos
+            ## English: Creation of raster with thresholds for wet days
+
             # Maximum range
             wet_max_range <- temperature_range_thresholds %>%
                 dplyr::filter(month == current_month & prcp_occ == 1) %>%
@@ -695,18 +784,22 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
             ################
-            ## Merge rasters
+            ## Español: Se combinan ambos rasters considerando el tipo de día
+            ## English: Both rasters are combined considering type of day
+
             # Maximum range
             maximum_daily_range_raster <-
                 gamwgen:::ensamblar_raster_residuos(dry_max_range, wet_max_range, SIMocc_points.d)
             # Minimum range
             minimum_daily_range_raster <-
                 gamwgen:::ensamblar_raster_residuos(dry_min_range, wet_min_range, SIMocc_points.d)
-            # Daily range
+            # Español: Calculo del rango diario simulado (tmax- tmin)
+            # English: Calculation of the daily simulated range (tmax - tmin)
             daily_range_points.d <- base::abs(SIMmax_points.d - SIMmin_points.d)
 
-
-            # Perform the test. If the simulate temperature range is above the minimum observed range and
+            # Español: Se realiza la comprobación. Si la temperatura simulada está por encima del rango mínimo observado y
+            # por debajo del rango máximo observado, las simulaciones son válidas. De otra manera, se repite la simulación
+            # English: Perform the test. If the simulate temperature range is above the minimum observed range and
             # below the maximum observed range, the simulations are valid. Otherwise, re-simulate
             daily_retries <- 0
             while ( daily_retries < 100 && (any(raster::getValues(SIMmax_points.d < SIMmin_points.d), na.rm = T) ||
@@ -714,7 +807,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                                             any(raster::getValues(daily_range_points.d < minimum_daily_range_raster), na.rm = T)) ) {
                 daily_retries <- daily_retries  + 1
 
-                # Raster con los valores de "ruido" para días secos
+                #  Español: Raster con el componente meterológico para días secos
+                #  English: Raster with the meterological component for dry days
                 temperature_random_fields_dry <-
                     control$temperature_noise_generating_function(
                         simulation_points = simulation_points,
@@ -722,9 +816,10 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                         month_number = current_month,
                         selector = c('tmax_dry', 'tmin_dry'),
                         seed = if (is.null(control$seed)) NULL else realizations_seeds[[r]]$retries[[d]] + daily_retries)
-                #}, times = 10) # 180 milisegundos
+                #}, times = 10)
 
-                # Procesamiento de residuos para dias secos
+                # Español: Procesamiento de residuos para dias secos
+                # English: Dry days residues processing
                 rasters_secos.d <- purrr::map(
                     .x = c("tmin", "tmax"),
                     .f = function(variable, objeto_sf) {
@@ -733,7 +828,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                 )
                 names(rasters_secos.d) <- c("tmin", "tmax")
 
-                # Raster con los valores de "ruido" para días lluviosos
+                # Español: Raster con el componente meterológico para días lluviosos
+                # English: Raster with the meterological component for wet days
                 temperature_random_fields_wet <-
                     control$temperature_noise_generating_function(
                         simulation_points = simulation_points,
@@ -742,7 +838,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                         selector = c('tmax_wet', 'tmin_wet'),
                         seed = if (is.null(control$seed)) NULL else realizations_seeds[[r]]$retries[[d]] + daily_retries)
 
-                # Procesamiento de residuos para dias humedos
+                # Español: Procesamiento de residuos para dias humedos
+                # English: Wet days residues processing
                 rasters_humedos.d <- purrr::map(
                     .x = c("tmin", "tmax"),
                     .f = function(variable, objeto_sf) {
@@ -751,25 +848,27 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                 )
                 names(rasters_humedos.d) <- c("tmin", "tmax")
 
-                #Ahora vamos a generar 2 rasters: uno para tmax y otro para tmin
-                #Cada raster tiene los residuos de las variables correspondientes
-                #considerando la ocurrencia de dia seco o humedo
+                # Español: Raster con los valores simulados
+                # English: Raster with the simulated values
                 SIMmax_points_noise.d <-
                     gamwgen:::ensamblar_raster_residuos(rasters_humedos.d$tmax, rasters_secos.d$tmax, SIMocc_points.d)
                 SIMmin_points_noise.d <-
                     gamwgen:::ensamblar_raster_residuos(rasters_humedos.d$tmin, rasters_secos.d$tmin, SIMocc_points.d)
 
-                # Generar nuevas temperaturas
+                # Español: Se genera un raster con nuevas temperaturas
+                # # English: A raster with the new temperatures is generated
                 # Maximum temperature
                 new_tmax <- SIMmax_points_climate.d + SIMmax_points_noise.d
                 # Minimum temperature
                 new_tmin <- SIMmin_points_climate.d + SIMmin_points_noise.d
 
-                # Actualizar temperaturas simuladas
+                # Español: Actualizar temperaturas simuladas
+                # English: Update simulated temperatures
                 SIMmax_points.d <- new_tmax
                 SIMmin_points.d <- new_tmin
 
-                # Daily range
+                # Español: Nuevo rango diario
+                # English: New daily range
                 daily_range_points.d <- SIMmax_points.d - SIMmin_points.d
 
                 #################################################
@@ -786,7 +885,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
             ###############################################################
-            ## Update simulation_matrix.d with new values for tmax and tmin
+            ## Español: Actualización de simulation_matrix.d con los nuevos valores de tmax y tmin
+            ## English: Update simulation_matrix.d with new values for tmax and tmin
             if (daily_retries > 0) {
                 # Population of the simulation matrix with the simulated maximum temperature data
                 simulation_matrix.d <- simulation_matrix.d %>%
@@ -802,18 +902,22 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             ## Precipitation amounts (prcp_amt) ----
             ########################################
 
-            # Filtrar el modelo a usar por el mes en curso
+            # Español: Filtrar el modelo a usar por el mes en curso
+            # English: Filter the model to use by current month
             prcp_amt_fit <- model$fitted_models$prcp_amt_fit[[current_month]]
 
-            # Estimación del parametro de forma
+            # Español: Estimación del parametro de forma
+            # English: Estimation of the shape parameter
             alphaamt <- MASS::gamma.shape(prcp_amt_fit)$alpha
-            # Estimación de los parametros de escala
+            # Español: Estimación de los parametros de escala
+            # English: Estimation of the scale parameter
             betaamt <- base::exp(mgcv::predict.bam(prcp_amt_fit,
                                                    newdata = simulation_matrix.d,
                                                    #cluster = cluster,  # no mejora mucho el tiempo
                                                    newdata.guaranteed = TRUE))/alphaamt
 
-            # Raster con los valores de "ruido"
+            # Español: Raster con los valores de "ruido"
+            # English: raster with the noise values
             SIMamt_points_noise.d <- control$prcp_noise_generating_function(
                 simulation_points = simulation_points,
                 gen_noise_params = gen_noise_params,
@@ -822,19 +926,23 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                 seed = realizations_seeds[[r]]$prcp_amt[[d]]) %>%
                 gamwgen:::sf2raster('prcp_residuals', simulation_raster)
 
-            # Simulacion de montos
+            # Español: Simulacion de montos
+            # English: Amounts simulation
             SIMamt <- stats::qgamma(stats::pnorm(raster::extract(SIMamt_points_noise.d, simulation_points)),
                                     shape = rep(alphaamt, length(betaamt)), scale = betaamt)
 
-            # Raster con los valores "climáticos"
+            # Español: Raster con el componente meterológico
+            # English: Raster with the meteorological component
             SIMamt_points_climate.d <- simulation_points %>%
                 dplyr::mutate(SIMamt = !!SIMamt) %>%
                 gamwgen:::sf2raster('SIMamt', simulation_raster)
 
-            # Enmascarar pixeles sin ocurrencia de lluvia
+            # Español: Enmascarar pixeles sin ocurrencia de lluvia
+            # English: Mask pixels without precipitation occurrence
             SIMamt_points.d <- SIMamt_points_climate.d * SIMocc_points.d
 
-            # Agregar valores de los montos de prcp a los puntos de simulación
+            # Español: Agregar valores de los montos de prcp a los puntos de simulación
+            # English: Add the amounts of precipitation to simulation points
             simulation_matrix.d <- simulation_matrix.d %>%
                 dplyr::mutate(prcp_amt = raster::extract(SIMamt_points.d, simulation_points))
 
@@ -844,10 +952,12 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             ## Preparar simulation_matrix.d para la simulación del siguiente día ----
             #########################################################################
 
+            # Español: Se prepara la matriz de datos para la simulación del día i + 1
+            # English: Prepartion of the data matriz for the simulation of the i + 1 day
             current_sim_matrix  <- simulation_matrix.d %>%
                 sf::st_drop_geometry() %>% tibble::as_tibble()
             current_sim_results <- current_sim_matrix %>%
-                dplyr::select(dplyr::one_of("station_id", "point_id"), prcp_occ, tmax, tmin, prcp_amt, tipo_dia)
+                dplyr::select(dplyr::one_of("station_id", "point_id"), prcp_occ, tmax, tmin, prcp_amt, type_day)
             # OJO: se usa el operador <<- para utilizar los resultados el siguiente día
             simulation_matrix.d <<- simulation_matrix %>%
                 # Si se usan covariables, simulation_matrix tiene las covariables
@@ -855,15 +965,18 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                 # se debe filtrar por season y year para acelerar el sf::st_join!
                 {if (is.null(seasonal_covariates)) dplyr::filter(.)
                 else dplyr::filter(., year == simulation_dates$year[d+1], season == simulation_dates$season[d+1])} %>%
-                # Ya no se agrega la climatología inicial (la del día previo al primer día a simular),
+                # Español: Ya no se agrega la climatología inicial (la del día previo al primer día a simular),
                 # sino que, como climatología previa se usan los resultados del día en curso
+                # English: Start climatology is no longer added bu replaced by the simulated values of the previous day
                 dplyr::inner_join(current_sim_results, by = c("point_id")) %>%
-                # Finalmente, se hacen las actualizaciones necesarias para que simulation_matrix.d
+                # Español: Se hacen las actualizaciones necesarias para que simulation_matrix.d
                 # pueda ser utilizada en la siguiente iteración, es decir para el siguiente día a simular
+                # English: Necessary updates are performed to simulation_matriz.d so it can be used
+                # in the next iteration, i.e.: for the next day
                 dplyr::mutate(prcp_occ_prev = prcp_occ,
                               tmax_prev = tmax,
                               tmin_prev = tmin,
-                              tipo_dia_prev = tipo_dia,
+                              type_day_prev = type_day,
                               prcp_amt_prev = prcp_amt,
                               date = simulation_dates$date[d+1],
                               time = as.numeric(date)/1000,
@@ -872,7 +985,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                               prcp_occ = NA_integer_,
                               tmax = NA_real_,
                               tmin = NA_real_,
-                              tipo_dia = NA_character_,
+                              type_day = NA_character_,
                               prcp_amt = NA_real_,
                               nsim = r)
 
@@ -886,7 +999,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
             ###########################
-            ## Devolver resultados ----
+            ## Español: Devolver resultados ----
+            ## English: Return results
             return (
                 tibble::tibble(
                     date = simulation_dates$date[d],
@@ -903,9 +1017,9 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
         tiempos <- dplyr::mutate(tiempos, tiempo.gen_clim = list(proc.time() - t.daily_gen_clim))
 
 
-
         ###################################################################
-        ## Se guarda en disco el tibble con los rasters de la realización
+        ## Español: Se guarda en disco el tibble con los rasters de la realización
+        ## English: It written on disk the tibble with rasters of the realization
         rds_path <- glue::glue("{output_folder}/{output_filename}_realization_{r}.rds")
         if(control$use_temporary_files_to_save_ram) {
             t.saveRDS <- proc.time()
@@ -916,7 +1030,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
         ######################
-        ## Liberar memoria RAM
+        ## Español: Liberar memoria RAM
+        ## English: Free memory RAM
         if(control$use_temporary_files_to_save_ram) {
             rm(daily_gen_clim)
             invisible(gc())
@@ -925,7 +1040,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
         #################
-        ## Retorno final
+        ## Español: Retorno final
+        ## English: Return results
         return (tibble::tibble(nsim = r,
                                nsim_gen_climate = ifelse(control$use_temporary_files_to_save_ram, list(rds_path), list(daily_gen_clim))
                                ) %>% dplyr::bind_cols(tiempos))
@@ -939,7 +1055,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
 
     ####################################################
-    ## Tomar tiempos de generación del archivo de salida
+    ## Español: Tomar tiempos de generación del archivo de salida
+    ## English: Take generation time of the output file
     ctrl_output_file <- purrr::map2_dfr(
         nsim_gen_clim %>% dplyr::pull(nsim),
         nsim_gen_clim %>% dplyr::pull(nsim_gen_climate),
@@ -961,7 +1078,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             }
 
             #############################
-            ## Generar archivos de salida
+            ## Español: Generar archivos de salida
+            ## English: Generate output file
             t.gen_file <- proc.time()
             gamwgen:::GuardarRealizacionNetCDFfromRasters(nc_file = glue::glue("{output_folder}/{output_filename}.nc"),
                                                           numero_realizacion = r,
@@ -972,21 +1090,24 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             tiempos <- dplyr::mutate(tiempos, tiempo.gen_file = list(proc.time() - t.gen_file))
 
             ######################
-            ## Liberar memoria RAM
+            ## Español: Liberar memoria RAM
+            ## English: Free memory RAM
             if(control$use_temporary_files_to_save_ram) {
                 rm(daily_gen_clim)
                 invisible(gc())
             }
 
             #################
-            ## Retorno final
+            ## Español: Retorno final
+            ## English: Last return
             return (tibble::tibble(nsim = r) %>% dplyr::bind_cols(tiempos))
         })
 
 
 
     #################################
-    ## Control de tiempo de ejecución
+    ## Español: Control de tiempo de ejecución
+    ## English: Control execution time
     tiempo.sim <- proc.time() - t.sim
 
 
@@ -995,15 +1116,16 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     ## Preparar datos de salida ##
     ##############################
 
+    # Español: Se guardan los resultados en el objeto de salida
+    # English: Save results in the output file
+    gen_climate[['nsim']] <- control$nsim # Number of simulations
+    gen_climate[['seed']] <- control$seed # Initial seed
+    gen_climate[['realizations_seeds']] <- realizations_seeds # Realization seed
+    gen_climate[['simulation_points']] <- simulation_points # Simulation locations
+    gen_climate[['output_file_with_results']] <- glue::glue("{output_folder}/{output_filename}.nc") # Output file name
+    gen_climate[['output_file_fomart']] <- "NetCDF4" # Output file format
 
-    gen_climate[['nsim']] <- control$nsim
-    gen_climate[['seed']] <- control$seed
-    gen_climate[['realizations_seeds']] <- realizations_seeds
-    gen_climate[['simulation_points']] <- simulation_points
-    gen_climate[['output_file_with_results']] <- glue::glue("{output_folder}/{output_filename}.nc")
-    gen_climate[['output_file_fomart']] <- "NetCDF4"
-
-    fitted_stations <- model$stations;  climate <- model$climate
+    fitted_stations <- model$stations;  climate <- model$climate # Observed meteorological data
     fsc_filename <- glue::glue("{output_folder}/fitted_stations_and_climate.RData")
     save(fitted_stations, climate, file = fsc_filename)
     gen_climate[['rdata_file_with_fitted_stations_and_climate']] <- fsc_filename
@@ -1044,13 +1166,13 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
         snow::stopCluster(cluster)
     }
 
-
-    ## Remove temporary files
+    ## Español: Se borran los archivos temporarios
+    ## English: Remove temporary files
     if(control$use_temporary_files_to_save_ram && control$remove_temp_files_used_to_save_ram)
         purrr::walk( nsim_gen_clim %>% dplyr::pull(nsim_gen_climate),
                      function(filename) { file.remove(filename); invisible(gc()) } )
 
-
-    ## Return result
+    ## Español: Devolver resultado
+    ## English: Return result
     gen_climate
 }

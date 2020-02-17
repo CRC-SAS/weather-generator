@@ -623,7 +623,7 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
             threshold.month <- models_data %>%
                 dplyr::filter(lubridate::month(date) == mes)
 
-            threshold_wet <- dplyr::filter(umbrales.mes, prcp > control$prcp_occurrence_threshold) %>%
+            threshold_wet <- dplyr::filter(threshold.month, prcp > control$prcp_occurrence_threshold) %>%
                 dplyr::group_by(., station_id, lubridate::month(date)) %>%
                 dplyr::summarise(., min.range = min(tmax - tmin, na.rm = T),
                                  max.range = max(tmax - tmin, na.rm = T)) %>%
@@ -631,7 +631,7 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
                 dplyr::select(., station_id, month, prcp_occ, min.range, max.range) %>%
                 dplyr::ungroup(.)
 
-            threshold_dry <- dplyr::filter(umbrales.mes, prcp <= control$prcp_occurrence_threshold) %>%
+            threshold_dry <- dplyr::filter(threshold.month, prcp <= control$prcp_occurrence_threshold) %>%
                 dplyr::group_by(., station_id, lubridate::month(date)) %>%
                 dplyr::summarise(., min.range = min(tmax - tmin, na.rm = T),
                                  max.range = max(tmax - tmin, na.rm = T))  %>%
