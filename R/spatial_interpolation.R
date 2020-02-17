@@ -173,7 +173,7 @@ generate_variograms_for_initial_values <- function(model, simulation_points, see
                       time = as.numeric(date)/1000) %>%
         dplyr::left_join(model$stations, by = "station_id") %>%
         dplyr::select(station_id, date, year, month, day,
-                      season, prcp_occ, tmax, tmin, tipo_dia,
+                      season, prcp_occ, tmax, tmin, type_day,
                       longitude, latitude, geometry) %>%
         sf::st_as_sf(crs = sf::st_crs(model$stations))
 
