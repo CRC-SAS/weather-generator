@@ -6,7 +6,7 @@ get_temperature_thresholds <- function(model_stations, simulation_points, estadi
     if (!control$sim_loc_as_grid &
         all(lapply(sf::st_equals(simulation_points, model_stations), length) == 1))
         return (estadisticos_umbrales %>%
-                    dplyr::left_join(model_stations %>% dplyr::select(station_id, longitude, latitude), by = 'station_id') %>%
+                    dplyr::left_join(simulation_points %>% dplyr::select(station_id, longitude, latitude), by = 'station_id') %>%
                     dplyr::select(-geometry))
 
     # Si continua la ejecución de la función es porque simulation points es una grilla o NO todos
