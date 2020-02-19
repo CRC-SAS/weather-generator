@@ -3,10 +3,10 @@
 # Definicion de funcion para la generación de campos gaussianos para ocurrencia de temperatura
 random_field_noise_temperature <- function(simulation_points, gen_noise_params, month_number, selector, seed) {
 
-    if (length(selector) == 1 && selector == "Lluvioso")
+    if (length(selector) == 1 && selector == "Wet")
         selector = c('tmax_wet', 'tmin_wet')
 
-    if (length(selector) == 1 && selector == "Seco")
+    if (length(selector) == 1 && selector == "Dry")
         selector = c('tmax_dry', 'tmin_dry')
 
     ## OBS:
@@ -96,13 +96,13 @@ not_spatially_correlated_random_field_noise_temperature <- function(simulation_p
     set.seed(seed)
 
     if (all(endsWith(selector, "_wet")))
-        selector = "Lluvioso"
+        selector = "Wet"
 
     if (all(endsWith(selector, "_dry")))
-        selector = "Seco"
+        selector = "Dry"
 
     campos_simulados <- gen_noise_params %>%
-        dplyr::filter(month == month_number, tipo_dia == selector) %>%
+        dplyr::filter(month == month_number, type_day == selector) %>%
         dplyr::rowwise() %>%
         dplyr::mutate(ruidos =
             list(MASS::mvrnorm(mu = c(mean.tmax_residuals, mean.tmin_residuals),

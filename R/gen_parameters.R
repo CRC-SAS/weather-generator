@@ -5,7 +5,9 @@ get_temperature_thresholds <- function(model_stations, simulation_points, estadi
     # entonces, como temperature_thresholds, se usan los datos generados en el ajuste sin interpolar nada
     if (!control$sim_loc_as_grid &
         all(lapply(sf::st_equals(simulation_points, model_stations), length) == 1))
-        return (estadisticos_umbrales)
+        return (estadisticos_umbrales %>%
+                    dplyr::left_join(simulation_points %>% dplyr::select(station_id, longitude, latitude), by = 'station_id') %>%
+                    dplyr::select(-geometry))
 
     # Si continua la ejecución de la función es porque simulation points es una grilla o NO todos
     # los puntos a simular fueron usados en el ajuste, y es necesario interpolar estadisticos_umbrales
@@ -75,7 +77,7 @@ generate_random_temperatura_noise <- function(residuals_statistics, simulation_d
     ruidos_aleatorios <- residuals_statistics %>%
         dplyr::filter(month %in% unique(simulation_dates$month)) %>%
         purrr::pmap_dfr(
-            function(station_id, month, tipo_dia, sd.tmax_residuals, sd.tmin_residuals,
+            function(station_id, month, type_day, sd.tmax_residuals, sd.tmin_residuals,
                      mean.tmax_residuals, mean.tmin_residuals, cov.residuals,
                      var.tmax_residuals, var.tmin_residuals) {
                 ruidos <- MASS::mvrnorm(n = nrow(simulation_dates %>% dplyr::filter(month == !!month)),
@@ -85,7 +87,7 @@ generate_random_temperatura_noise <- function(residuals_statistics, simulation_d
                     magrittr::set_colnames(c("tmax_noise", "tmin_noise"))
                 tibble::tibble(station_id = as.integer(station_id),
                                date       = simulation_dates %>% dplyr::filter(month == !!month) %>% dplyr::pull(date),
-                               tipo_dia   = tipo_dia,
+                               type_day   = type_day,
                                tmax_noise = ruidos[,"tmax_noise"],
                                tmin_noise = ruidos[,"tmin_noise"])
             })
@@ -94,12 +96,12 @@ generate_random_temperatura_noise <- function(residuals_statistics, simulation_d
 generate_residuals_statistics <- function(models_residuals) {
 
     residuals_statistics <- models_residuals %>% tidyr::drop_na() %>%
-        dplyr::select(station_id, date, tmax_residuals, tmin_residuals, tipo_dia) %>%
+        dplyr::select(station_id, date, tmax_residuals, tmin_residuals, type_day) %>%
         dplyr::mutate(month = lubridate::month(date)) %>%
         dplyr::group_by(station_id, month) %>%
         dplyr::mutate(sd.tmax_residuals = stats::sd(tmax_residuals, na.rm = T),
                       sd.tmin_residuals = stats::sd(tmin_residuals, na.rm = T)) %>%
-        dplyr::group_by(tipo_dia, add = T) %>%
+        dplyr::group_by(type_day, add = T) %>%
         dplyr::mutate(mean.tmax_residuals = mean(tmax_residuals, na.rm = T),
                       mean.tmin_residuals = mean(tmin_residuals, na.rm = T),
                       cov.residuals       = stats::cov(tmax_residuals, tmin_residuals, use = "pairwise.complete.obs"),
@@ -130,29 +132,29 @@ generate_month_params <- function(residuals, observed_climate, stations) {
             month_climate   <- observed_climate %>%
                 dplyr::filter(lubridate::month(date) == m) %>%
                 dplyr::mutate(., year = lubridate::year(date)) %>%
-                dplyr::select(date, year, station_id, tmax, tmin, prcp, tipo_dia) %>%
+                dplyr::select(date, year, station_id, tmax, tmin, prcp, type_day) %>%
                 tidyr::drop_na(.)
 
             # Crear matriz de residuos de temperatura maxima en formato ancho
             tmax_residuals_matrix_dry_days <- month_residuals %>%
-                dplyr::filter(., tipo_dia == 'Seco') %>%
+                dplyr::filter(., type_day == 'Dry') %>%
                 dplyr::select(., station_id, date, tmax_residuals) %>%
                 tidyr::spread(., key = station_id, value = tmax_residuals) %>%
                 dplyr::select(., colnames(distance_matrix))
             tmax_residuals_matrix_wet_days <- month_residuals %>%
-                dplyr::filter(., tipo_dia == 'Lluvioso') %>%
+                dplyr::filter(., type_day == 'Wet') %>%
                 dplyr::select(., station_id, date, tmax_residuals) %>%
                 tidyr::spread(., key = station_id, value = tmax_residuals) %>%
                 dplyr::select(., colnames(distance_matrix))
 
             # Crear matriz de residuos de temperatura minima en formato ancho
             tmin_residuals_matrix_dry_days <- month_residuals %>%
-                dplyr::filter(., tipo_dia == 'Seco') %>%
+                dplyr::filter(., type_day == 'Dry') %>%
                 dplyr::select(., station_id, date, tmin_residuals) %>%
                 tidyr::spread(., key = station_id, value = tmin_residuals) %>%
                 dplyr::select(., colnames(distance_matrix))
             tmin_residuals_matrix_wet_days <- month_residuals %>%
-                dplyr::filter(., tipo_dia == 'Lluvioso') %>%
+                dplyr::filter(., type_day == 'Wet') %>%
                 dplyr::select(., station_id, date, tmin_residuals) %>%
                 tidyr::spread(., key = station_id, value = tmin_residuals) %>%
                 dplyr::select(., colnames(distance_matrix))
@@ -165,24 +167,24 @@ generate_month_params <- function(residuals, observed_climate, stations) {
 
             # Matrix de datos observados de temperatura maxima en formato ancho
             tmax_matrix_dry_days <- month_climate %>%
-                dplyr::filter(., tipo_dia == 'Seco') %>%
+                dplyr::filter(., type_day == 'Dry') %>%
                 dplyr::select(., station_id, date, tmax) %>%
                 tidyr::spread(., key = station_id, value = tmax) %>%
                 dplyr::select(., colnames(distance_matrix))
             tmax_matrix_wet_days <- month_climate %>%
-                dplyr::filter(., tipo_dia == 'Lluvioso') %>%
+                dplyr::filter(., type_day == 'Wet') %>%
                 dplyr::select(., station_id, date, tmax) %>%
                 tidyr::spread(., key = station_id, value = tmax) %>%
                 dplyr::select(., colnames(distance_matrix))
 
             # Matrix de datos observados de temperatura minima en formato ancho
             tmin_matrix_dry_days <- month_climate %>%
-                dplyr::filter(., tipo_dia == 'Seco') %>%
+                dplyr::filter(., type_day == 'Dry') %>%
                 dplyr::select(., station_id, date, tmin) %>%
                 tidyr::spread(., key = station_id, value = tmin) %>%
                 dplyr::select(., colnames(distance_matrix))
             tmin_matrix_wet_days <- month_climate %>%
-                dplyr::filter(., tipo_dia == 'Lluvioso') %>%
+                dplyr::filter(., type_day == 'Wet') %>%
                 dplyr::select(., station_id, date, tmin) %>%
                 tidyr::spread(., key = station_id, value = tmin) %>%
                 dplyr::select(., colnames(distance_matrix))
