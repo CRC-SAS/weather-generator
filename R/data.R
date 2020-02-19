@@ -370,15 +370,37 @@ netcdf.extract.points.as.sf <- function(netcdf_filename, points_to_extract) {
     nc_proj4string <- ncmeta::nc_att(netcdf_filename, "NC_GLOBAL", "CRS")$value$CRS
     nc_crs  <- sf::st_crs(nc_proj4string)
 
-    # Determinar la resolución del raster generado a partir del NetCDF
-    first_raster <- raster::raster(netcdf_filename, varname = "tmax", level = 1)
-    resolution <- max(raster::res(first_raster))
+    # Extraer datos del NetCDF (todos los datos)
+    netcdf_as_sf <- gamwgen::netcdf.as.sf(netcdf_filename)
 
-    # Extraer datos del NetCDF (todos los datos) y transformar cada punto
-    # en un poligono cuadrado de lado igual a resolution/2, esto para poder
-    # intersectar estos poligonos con los puntos a extraer!!
-    all_data_polygonized <- gamwgen::netcdf.as.sf(netcdf_filename) %>%
-        sf::st_buffer(dist = resolution/2, endCapStyle="SQUARE")
+    # Extraer las coordenadas de las ubiciones en el netcdf
+    netcdf_points <- netcdf_as_sf %>%
+        dplyr::filter(realization == 1) %>%
+        sf::st_drop_geometry() %>%
+        dplyr::distinct(longitude, latitude) %>%
+        dplyr::mutate(lon = longitude, lat = latitude) %>%
+        sf::st_as_sf(coords = c('lon', 'lat'), crs = nc_crs) %>%
+        dplyr::mutate(ID = 1:dplyr::n())
+
+    # Obtener la menor distancia entre las ubicaciones extraídas
+    min_distance <- 10000
+    if (nrow(netcdf_points) > 1)
+        min_distance <- purrr::map_dfr(
+            .x = netcdf_points %>% dplyr::pull(ID),
+            .f = function(id, all_pts) {
+                target_point  <- all_pts %>% dplyr::filter(ID == id)
+                remaining_pts <- all_pts %>% dplyr::filter(ID != id)
+                remianing_nid <- sf::st_nearest_feature(target_point, remaining_pts)
+                nearest_point <- remaining_pts %>% dplyr::slice(remianing_nid)
+                dist_nearest  <- sf::st_distance(target_point, nearest_point) %>% as.integer()
+                return (tibble::tibble(ID = id, nID = nid, distance = dist_nearest))
+            }, all_pts = netcdf_points) %>%
+            dplyr::pull(distance) %>% min()
+
+    # Transformar cada punto extraído del netcdf en un poligono cuadrado de lado igual a
+    # min_distance/2, esto para poder intersectar estos poligonos con los puntos a extraer!!
+    netcdf_as_sf_polygonized <- netcdf_as_sf %>%
+        sf::st_buffer(dist = min_distance/2, endCapStyle="SQUARE")
 
     # Transform points to the correct crs
     points_to_extract <- points_to_extract %>%
@@ -388,7 +410,7 @@ netcdf.extract.points.as.sf <- function(netcdf_filename, points_to_extract) {
         { base::options(warn=old_warn_value) }
 
     # Se seleccionan solo los resultados deseados
-    resulting_data <- all_data_polygonized %>%
+    resulting_data <- netcdf_as_sf_polygonized %>%
         sf::st_join(points_to_extract, left = FALSE) %>% sf::st_drop_geometry() %>% tibble::as_tibble() %T>%
         { base::options(warn=-1) } %>%
         dplyr::select(dplyr::one_of("station_id", "point_id"), realization, date, tmax, tmin, prcp, type_day,
