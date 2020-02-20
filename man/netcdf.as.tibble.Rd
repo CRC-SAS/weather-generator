@@ -4,7 +4,12 @@
 \alias{netcdf.as.tibble}
 \title{Transform netcdf4 file to tibble object}
 \usage{
-netcdf.as.tibble(netcdf_filename, na.rm = T)
+netcdf.as.tibble(
+  netcdf_filename,
+  na.rm = T,
+  add.id = F,
+  id.column = "point_id"
+)
 }
 \description{
 Transform netcdf4 file to tibble object.

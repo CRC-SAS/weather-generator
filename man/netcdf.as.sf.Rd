@@ -4,7 +4,7 @@
 \alias{netcdf.as.sf}
 \title{Transform netcdf4 file to sf object}
 \usage{
-netcdf.as.sf(netcdf_filename, na.rm = T)
+netcdf.as.sf(netcdf_filename, na.rm = T, add.id = F, id.column = "point_id")
 }
 \description{
 Transform netcdf4 file to sf object.

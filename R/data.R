@@ -310,9 +310,9 @@ netcdf.extract.points.as.tibble <- function(netcdf_filename, points_to_extract) 
 #' @title Transform netcdf4 file to tibble object
 #' @description Transform netcdf4 file to tibble object.
 #' @export
-netcdf.as.tibble <- function(netcdf_filename, na.rm = T) {
+netcdf.as.tibble <- function(netcdf_filename, na.rm = T, add.id = F, id.column = "point_id") {
 
-    result <- tidync::tidync(netcdf_filename) %>%
+    netcdf_as_tibble <- tidync::tidync(netcdf_filename) %>%
         tidync::hyper_tibble(na.rm = na.rm) %>%
         dplyr::mutate(time = lubridate::as_date(time),
                       type_day = base::factor(x = ifelse(as.logical(prcp), 'Wet', 'Dry'),
@@ -322,7 +322,17 @@ netcdf.as.tibble <- function(netcdf_filename, na.rm = T) {
                       latitude = projection_y_coordinate) %>%
         dplyr::select(realization, date, tmax, tmin, prcp, type_day, longitude, latitude)
 
-    return (result)
+    if (add.id) {
+        netcdf_points <- netcdf_as_sf %>%
+            dplyr::filter(realization == 1) %>%
+            sf::st_drop_geometry() %>%
+            dplyr::distinct(longitude, latitude) %>%
+            dplyr::mutate(!!id.column := 1:dplyr::n())
+        netcdf_as_tibble <- netcdf_as_tibble %>%
+            dplyr::left_join(netcdf_points, by = c("longitude", "latitude"))
+    }
+
+    return (netcdf_as_tibble)
 
 }
 
@@ -330,12 +340,12 @@ netcdf.as.tibble <- function(netcdf_filename, na.rm = T) {
 #' @title Transform netcdf4 file to sf object
 #' @description Transform netcdf4 file to sf object.
 #' @export
-netcdf.as.sf <- function(netcdf_filename, na.rm = T) {
+netcdf.as.sf <- function(netcdf_filename, na.rm = T, add.id = F, id.column = "point_id") {
 
     nc_proj4string <- ncmeta::nc_att(netcdf_filename, "NC_GLOBAL", "CRS")$value$CRS
     nc_crs  <- sf::st_crs(nc_proj4string)
 
-    result <- tidync::tidync(netcdf_filename) %>%
+    netcdf_as_sf <- tidync::tidync(netcdf_filename) %>%
         tidync::hyper_tibble(na.rm = na.rm) %>%
         dplyr::mutate(time = lubridate::as_date(time),
                       type_day = base::factor(x = ifelse(as.logical(prcp), 'Wet', 'Dry'),
@@ -347,7 +357,17 @@ netcdf.as.sf <- function(netcdf_filename, na.rm = T) {
                      crs = nc_crs) %>%
         dplyr::select(realization, date, tmax, tmin, prcp, type_day, longitude, latitude)
 
-    return (result)
+    if (add.id) {
+        netcdf_points <- netcdf_as_sf %>%
+            dplyr::filter(realization == 1) %>%
+            sf::st_drop_geometry() %>%
+            dplyr::distinct(longitude, latitude) %>%
+            dplyr::mutate(!!id.column := 1:dplyr::n())
+        netcdf_as_sf <- netcdf_as_sf %>%
+            dplyr::left_join(netcdf_points, by = c("longitude", "latitude"))
+    }
+
+    return (netcdf_as_sf)
 
 }
 
