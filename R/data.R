@@ -393,7 +393,8 @@ netcdf.extract.points.as.sf <- function(netcdf_filename, points_to_extract) {
                 remianing_nid <- sf::st_nearest_feature(target_point, remaining_pts)
                 nearest_point <- remaining_pts %>% dplyr::slice(remianing_nid)
                 dist_nearest  <- sf::st_distance(target_point, nearest_point) %>% as.integer()
-                return (tibble::tibble(ID = id, nID = nid, distance = dist_nearest))
+                return (tibble::tibble(ID = target_point$ID, nID = nearest_point$ID,
+                                       distance = dist_nearest))
             }, all_pts = netcdf_points) %>%
             dplyr::pull(distance) %>% min()
 
