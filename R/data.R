@@ -271,7 +271,7 @@ netcdf.extract.points.as.tibble <- function(netcdf_filename, points_to_extract) 
 
     # Determinar posiciones de cada estacion (fila/columna)
     first_brick <- raster::brick(netcdf_filename, varname = variables[1], lvar = 4, level = 1,
-                                 stopIfNotEqualSpaced=FALSE) %>% dplyr::first()
+                                 stopIfNotEqualSpaced = FALSE) %>% dplyr::first()
     cell_of_pnt <- raster::extract(x = first_brick, y = points, cellnumbers = TRUE, df = TRUE) %>%
         dplyr::select(cells) %>% dplyr::rename(cell = cells) %>%
         dplyr::bind_cols(points) %>% tidyr::drop_na(cell)
@@ -280,7 +280,8 @@ netcdf.extract.points.as.tibble <- function(netcdf_filename, points_to_extract) 
     datos_simulaciones_wide <- purrr::pmap_dfr(
         .l = purrr::cross2(variables, seq_len(numero_realizaciones)) %>% purrr::transpose(),
         .f = function(variable, numero_realizacion) {
-            brick_variable <- raster::brick(netcdf_filename, varname = variable, lvar = 4, level = numero_realizacion)
+            brick_variable <- raster::brick(netcdf_filename, varname = variable, lvar = 4, level = numero_realizacion,
+                                            stopIfNotEqualSpaced = FALSE)
             points_data  <- raster::extract(x = brick_variable, y = dplyr::pull(cell_of_pnt, cell), df = TRUE) %>%
                 dplyr::mutate(variable = variable, realization = numero_realizacion, ctrl_id = dplyr::pull(cell_of_pnt, ID))
         })
