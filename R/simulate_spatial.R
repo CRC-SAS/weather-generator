@@ -58,7 +58,7 @@ spatial_simulation_control <- function(nsim = 1,
 #' @export
 spatial_simulation <- function(model, simulation_locations, start_date, end_date,
                                control = gamwgen:::spatial_simulation_control(),
-                               output_folder = getwd(), output_filename = "sim_results.nc",
+                               output_folder = getwd(), output_filename = "sim_results.csv",
                                seasonal_covariates = NULL, verbose = F) {
 
     ## Español: Objeto que será devuelto
@@ -293,6 +293,13 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     output_filename <- sub('\\.([^.]*)$', '', output_filename)
 
 
+    ############################################
+    ## Español: Borrar archivos temporales de corridas previas
+    ## English: Delete temporary files of previous runs
+    files_pattern <- glue::glue("{output_filename}_realization_[0-9]+\\.rds")
+    file.remove(list.files(output_folder, pattern = files_pattern, full.names = T))
+
+
     ####################################
     ## Español: Generar fechas de simulación
     ## English: Generate simulation dates
@@ -404,7 +411,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     ## English: A simulation matrix is created, it will have all the necessary data for the
     ## simulation of each day to simulate
     simulation_matrix <- simulation_points %>%
-        dplyr::select(point_id, longitude, latitude)
+        dplyr::select(tidyselect::any_of(c("station_id", "point_id")), longitude, latitude)
 
 
     ################################################################################################
@@ -464,16 +471,6 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     progress_pb <- function(r) {
         pb$tick(1, tokens = list(r = r))
     }
-
-
-    ###########################################
-    ## Español: Crear objeto para guardar los resultados
-    ## English: Creation of an objet to store the results
-    gamwgen:::CrearNetCDF(nc_file = glue::glue("{output_folder}/{output_filename}.nc"),
-                          num_realizations = control$nsim,
-                          sim_dates = simulation_dates$date,
-                          coordinates = raster::rasterToPoints(simulation_raster),
-                          coord_ref_system = sf::st_crs(simulation_points))
 
 
     ######
@@ -957,7 +954,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             current_sim_matrix  <- simulation_matrix.d %>%
                 sf::st_drop_geometry() %>% tibble::as_tibble()
             current_sim_results <- current_sim_matrix %>%
-                dplyr::select(dplyr::one_of("station_id", "point_id"), prcp_occ, tmax, tmin, prcp_amt, type_day)
+                dplyr::select(tidyselect::any_of(c("station_id", "point_id")), prcp_occ, tmax, tmin, prcp_amt, type_day)
             # OJO: se usa el operador <<- para utilizar los resultados el siguiente día
             simulation_matrix.d <<- simulation_matrix %>%
                 # Si se usan covariables, simulation_matrix tiene las covariables
@@ -1001,13 +998,10 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             ###########################
             ## Español: Devolver resultados ----
             ## English: Return results
-            return (
-                tibble::tibble(
-                    date = simulation_dates$date[d],
-                    raster_prcp = list(SIMamt_points.d),
-                    raster_tmax = list(SIMmax_points.d),
-                    raster_tmin = list(SIMmin_points.d)
-                ))
+            return (current_sim_matrix %>% dplyr::mutate(retries = daily_retries) %>%
+                        dplyr::select(nsim, tidyselect::any_of(c("station_id", "point_id")), longitude, latitude,
+                                      date, prcp_occ, prcp_occ_prev, tmax, tmax_prev, tmin, tmin_prev,
+                                      type_day, type_day_prev, prcp_amt, prcp_amt_prev, retries))
         })
 
 
@@ -1015,6 +1009,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
         ##############################################
         ## Tomar tiempo de generación del clima diario
         tiempos <- dplyr::mutate(tiempos, tiempo.gen_clim = list(proc.time() - t.daily_gen_clim))
+
 
 
         ###################################################################
@@ -1081,12 +1076,9 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
             ## Español: Generar archivos de salida
             ## English: Generate output file
             t.gen_file <- proc.time()
-            gamwgen:::GuardarRealizacionNetCDFfromRasters(nc_file = glue::glue("{output_folder}/{output_filename}.nc"),
-                                                          numero_realizacion = r,
-                                                          sim_dates = simulation_dates$date,
-                                                          raster_tmax = daily_gen_clim$raster_tmax,
-                                                          raster_tmin = daily_gen_clim$raster_tmin,
-                                                          raster_prcp = daily_gen_clim$raster_prcp)
+            gamwgen:::GuardarRealizacionEnCSV(filename = glue::glue("{output_folder}/{output_filename}.csv"),
+                                              numero_realizacion = r, tibble_with_data = daily_gen_clim,
+                                              avbl_cores = control$avbl_cores)
             tiempos <- dplyr::mutate(tiempos, tiempo.gen_file = list(proc.time() - t.gen_file))
 
             ######################
@@ -1122,8 +1114,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     gen_climate[['seed']] <- control$seed # Initial seed
     gen_climate[['realizations_seeds']] <- realizations_seeds # Realization seed
     gen_climate[['simulation_points']] <- simulation_points # Simulation locations
-    gen_climate[['output_file_with_results']] <- glue::glue("{output_folder}/{output_filename}.nc") # Output file name
-    gen_climate[['output_file_fomart']] <- "NetCDF4" # Output file format
+    gen_climate[['output_file_with_results']] <- glue::glue("{output_folder}/{output_filename}.csv") # Output file name
+    gen_climate[['output_file_fomart']] <- "CSV" # Output file format
 
     fitted_stations <- model$stations;  climate <- model$climate # Observed meteorological data
     fsc_filename <- glue::glue("{output_folder}/fitted_stations_and_climate.RData")

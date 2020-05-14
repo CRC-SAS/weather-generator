@@ -49,7 +49,7 @@ local_simulation_control <- function(nsim = 1,
 #' @export
 local_simulation <- function(model, simulation_locations, start_date, end_date,
                              control = gamwgen:::local_simulation_control(),
-                             output_folder = getwd(), output_filename = "sim_results.nc",
+                             output_folder = getwd(), output_filename = "sim_results.csv",
                              seasonal_covariates = NULL, verbose = F) {
 
     ## Español: Objeto que será devuelto
@@ -265,6 +265,13 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
     output_filename <- sub('\\.([^.]*)$', '', output_filename)
 
 
+    ############################################
+    ## Español: Borrar archivos temporales de corridas previas
+    ## English: Delete temporary files of previous runs
+    files_pattern <- glue::glue("{output_filename}_realization_[0-9]+\\.rds")
+    file.remove(list.files(output_folder, pattern = files_pattern, full.names = T))
+
+
     ####################################
     ## Español: Generar fechas de simulación
     ## English: Generate simulation dates
@@ -345,7 +352,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
     ## English: A simulation matrix is created, it will have all the necessary data for the
     ## simulation of each day to simulate
     simulation_matrix <- simulation_points %>%
-        dplyr::select(station_id, point_id, longitude, latitude)
+        dplyr::select(tidyselect::any_of(c("station_id", "point_id")), longitude, latitude)
 
 
     ################################################################################################
@@ -374,7 +381,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
     ## max/min range, the simulation for that day will be repeated.
     temperature_range_thresholds <-
         gamwgen:::get_temperature_thresholds(model$stations, simulation_points,
-                                             model$estadisticos_umbrales, control)
+                                             model$statistics_threshold, control)
 
 
     ###############################################################################
@@ -417,16 +424,6 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
     progress_pb <- function(r) {
         pb$tick(1, tokens = list(r = r))
     }
-
-
-    ###########################################
-    ## Español: Crear objeto para guardar los resultados
-    ## English: Creation of an objet to store the results
-    gamwgen:::CrearNetCDF(nc_file = glue::glue("{output_folder}/{output_filename}.nc"),
-                          num_realizations = control$nsim,
-                          sim_dates = simulation_dates$date,
-                          coordinates = sf::st_coordinates(simulation_points),
-                          coord_ref_system = sf::st_crs(simulation_points))
 
 
     ######
@@ -481,7 +478,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
             dplyr::rename(prcp_occ_prev = prcp_occ, tmax_prev = tmax, tmin_prev = tmin) %>%
             # Español: Se debe agregar variables complementarias: type_day_prev y prcp_amt_prev
             # English: Complementary variables are added: type_day_prev and prcp_amt_prev
-            dplyr::mutate(tipo_dia_prev = factor(prcp_occ_prev, levels = c(1, 0), labels = c('Lluvioso', 'Seco')),
+            dplyr::mutate(type_day_prev = factor(prcp_occ_prev, levels = c(1, 0), labels = c('Wet', 'Dry')),
                           prcp_amt_prev = NA_real_) %>%  # no se tiene la amplitud de prcp para el día previo al 1er día a simular!
             # Español: Se agregan date, time y doy del primer día a simular
             # English: More variables are added: date, time and doy of the first day
@@ -494,7 +491,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
             dplyr::mutate(prcp_occ = NA_integer_,
                           tmax = NA_real_,
                           tmin = NA_real_,
-                          tipo_dia = NA_character_,
+                          type_day = NA_character_,
                           prcp_amt = NA_real_) %>%
             # Español: para control de paralelización
             # English: To manage paralelization
@@ -558,7 +555,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
             simulation_matrix.d <- simulation_matrix.d %>%
                 dplyr::left_join(prcp_occ_sim, by = c("station_id", "date"), suffix = c("", "_simulated")) %>%
                 dplyr::mutate(prcp_occ = prcp_occ_simulated) %>% dplyr::select(-prcp_occ_simulated) %>%
-                dplyr::mutate(tipo_dia = factor(prcp_occ, levels = c(0, 1), labels = c('Seco', 'Lluvioso')))
+                dplyr::mutate(type_day = factor(ifelse(as.logical(prcp_occ), 'Wet', 'Dry'), levels = c('Wet', 'Dry')))
 
 
 
@@ -808,7 +805,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
             current_sim_matrix  <- simulation_matrix.d %>%
                 sf::st_drop_geometry() %>% tibble::as_tibble()
             current_sim_results <- current_sim_matrix %>%
-                dplyr::select(station_id, point_id, prcp_occ, tmax, tmin, prcp_amt, tipo_dia)
+                dplyr::select(tidyselect::any_of(c("station_id", "point_id")), prcp_occ, tmax, tmin, prcp_amt, type_day)
             # OJO: se usa el operador <<- para utilizar los resultados el siguiente día
             simulation_matrix.d <<- simulation_matrix %>%
                 # Si se usan covariables, simulation_matrix tiene las covariables
@@ -819,7 +816,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
                 # Español: Ya no se agrega la climatología inicial (la del día previo al primer día a simular),
                 # sino que, como climatología previa se usan los resultados del día en curso
                 # English: Start climatology is no longer added bu replaced by the simulated values of the previous day
-                dplyr::inner_join(current_sim_results, by = c("station_id", "point_id")) %>%
+                dplyr::inner_join(current_sim_results, by = c("point_id")) %>%
                 # Español: Se hacen las actualizaciones necesarias para que simulation_matrix.d
                 # pueda ser utilizada en la siguiente iteración, es decir para el siguiente día a simular
                 # English: Necessary updates are performed to simulation_matriz.d so it can be used
@@ -827,7 +824,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
                 dplyr::mutate(prcp_occ_prev = prcp_occ,
                               tmax_prev = tmax,
                               tmin_prev = tmin,
-                              tipo_dia_prev = tipo_dia,
+                              type_day_prev = type_day,
                               prcp_amt_prev = prcp_amt,
                               date = simulation_dates$date[d+1],
                               time = as.numeric(date)/1000,
@@ -836,7 +833,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
                               prcp_occ = NA_integer_,
                               tmax = NA_real_,
                               tmin = NA_real_,
-                              tipo_dia = NA_character_,
+                              type_day = NA_character_,
                               prcp_amt = NA_real_,
                               nsim = r)
 
@@ -853,9 +850,9 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
             ## Español: Devolver resultados ----
             ## English: Return results
             return (current_sim_matrix %>% dplyr::mutate(retries = daily_retries) %>%
-                        dplyr::select(nsim, station_id, point_id, longitude, latitude, date,
-                                      prcp_occ, prcp_occ_prev, tmax, tmax_prev, tmin, tmin_prev,
-                                      tipo_dia, tipo_dia_prev, prcp_amt, prcp_amt_prev, retries))
+                        dplyr::select(nsim, tidyselect::any_of(c("station_id", "point_id")), longitude, latitude,
+                                      date, prcp_occ, prcp_occ_prev, tmax, tmax_prev, tmin, tmin_prev,
+                                      type_day, type_day_prev, prcp_amt, prcp_amt_prev, retries))
         })
 
 
@@ -930,10 +927,9 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
             ## Español: Generar archivos de salida
             ## English: Generate output file
             t.gen_file <- proc.time()
-            gamwgen:::GuardarRealizacionNetCDFfromTibble(nc_file = glue::glue("{output_folder}/{output_filename}.nc"),
-                                                         numero_realizacion = r,
-                                                         sim_dates = simulation_dates$date,
-                                                         tibble_with_data = daily_gen_clim)
+            gamwgen:::GuardarRealizacionEnCSV(filename = glue::glue("{output_folder}/{output_filename}.csv"),
+                                              numero_realizacion = r, tibble_with_data = daily_gen_clim,
+                                              avbl_cores = control$avbl_cores)
             tiempos <- dplyr::mutate(tiempos, tiempo.gen_file = list(proc.time() - t.gen_file))
 
             ######################
@@ -969,8 +965,8 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
     gen_climate[['seed']] <- control$seed # Initial seed
     gen_climate[['realizations_seeds']] <- realizations_seeds # Realization seed
     gen_climate[['simulation_points']] <- simulation_points # Simulation locations
-    gen_climate[['output_file_with_results']] <- glue::glue("{output_folder}/{output_filename}.nc") # Output file name
-    gen_climate[['output_file_fomart']] <- "NetCDF4" # Output file format
+    gen_climate[['output_file_with_results']] <- glue::glue("{output_folder}/{output_filename}.csv") # Output file name
+    gen_climate[['output_file_fomart']] <- "CSV" # Output file format
 
     fitted_stations <- model$stations;  climate <- model$climate # Observed meteorological data
     fsc_filename <- glue::glue("{output_folder}/fitted_stations_and_climate.RData")
