@@ -69,6 +69,7 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
 
     suppressPackageStartupMessages(library("dplyr"))
     suppressPackageStartupMessages(library("foreach"))
+    base::invisible(utils::capture.output(suppressPackageStartupMessages(library("RandomFields"))))
 
     ###############################################################
 
