@@ -1,0 +1,433 @@
+---
+title: "Manual generador local"
+output: 
+  html_document:
+    number_sections: TRUE
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Este es un ejemplo de aplicación del Generador Estocástico diario y multisitio 
+basado en GAMs. Para ello se ajustará el modelo local del generador para una 
+localidad de la Pampa Húmeda Argentina. 
+
+# Introducción 
+
+El objetivo de esta sección es familiarizarnos con el entorno de trabajo que proporciona R y RStudio. Al finalizarla deberíamos ser capaces de instalar y cargar los paquetes que se necesiten paras la generación de datos estocástica.
+
+## Instalar R y RStudio
+
+Para instalar R vamos a la página web de R project: http://www.r-project.org.
+
+```{r eval = TRUE, echo = FALSE, fig.align = "center", fig.cap = "Figura 1. Página principal de R project"}
+knitr::include_graphics("./R_webpage.png")  
+```
+
+Para descargar la aplicación hacemos clic en **CRAN** y pinchamos sobre el enlace del “espejo” (mirror) más próximo a nuestra ubicación. Seleccionemos la URL de, por ejemplo. Universidad Nacional de La Plata (http://mirror.fcaglp.unlp.edu.ar/CRAN/).
+
+```{r eval = TRUE, echo = FALSE, fig.align = "center", fig.cap = "Figura 2. Espejos para cada país del R project"}
+knitr::include_graphics("./R_mirror.png") 
+```
+
+Luego seleccionamos la versión de R para el sistema operativo que estamos utilizando
+
+```{r eval = TRUE, echo = FALSE, fig.align="center", fig.cap = "Figura 3. Descargar R"}
+knitr::include_graphics("./R_download.png") 
+```
+
+### Instalar R en Windows
+
+Al hacer clic sobre "Download R for Windows" iremos a la página que se reproduce más abajo. Hacer clic sobre install R for the first time.
+
+```{r eval = TRUE, echo = FALSE, message = FALSE, fig.align="center", fig.cap = "Figura 4.  Instalar R en Windows"}
+knitr::include_graphics("./R_download_Windows.png") 
+```
+
+En la siguiente ventana, hacer clic sobre Download R 3.6.3 for Windows y guardar el archivo de instalación.
+
+```{r eval = TRUE, echo = FALSE, fig.align="center", fig.cap = "Figura 4.  Instalar la versión 3.6.3 de R para Windows"}
+knitr::include_graphics("./R_download_Windows_version.png") 
+```
+
+Ejecutar el archivo descargado para proceder a la instalación de R.
+
+### Instalar R en Mac
+
+Al hacer clic sobre "Download R for (Mac) OS X " iremos a la página que se reproduce más abajo. Hacer clic sobre la versi'n de R en función de la versión del OS
+
+```{r eval = TRUE, echo = FALSE, fig.align="center", fig.cap = "Figura 5.  Instalar la versión 3.6.3 de R para Mac OS Catalina"}
+knitr::include_graphics("./R_download_Mac_OS.png") 
+```
+
+Hacer clic sobre R-3.6.3.pkg y guardar el archivo de instalación. Ejecutar el archivo descargado para proceder a la instalación de R.
+
+## Instalar RStudio
+
+Descargamos la aplicación desde la página web de RStudio (https://rstudio.com/products/rstudio/download/) Allí seleccionamos la versión gratuita de RStudio Desktop y comenzará la descarga del intalador. Una vez guardado el archivo, lo ejecutamos para instalar RStudio.
+
+
+## Entorno de trabajo de RStudio
+
+En general trabajamos con la interfaz de RStudio antes que con la de R porque la primera es “más amigable”.
+
+Si abrimos RStudio vamos a ver algo parecido a lo que se muestra en la siguiente imagen:
+
+
+```{r eval = TRUE, echo = FALSE, fig.align="center", fig.cap = "Figura 6.  Aspecto general de RStudio"}
+knitr::include_graphics("./R_Studio_entorno.png") 
+```
+
+Una vez estamos en RStudio, podemos escribir y ejecutar las órdenes de varias formas:
+
+directamente en la consola
+a través de un script (.R)
+con ficheros Rmarkdown (.Rmd)
+Como podemos ver, RStudio está (normalmente) dividido en 4 paneles.
+
+### Crear proyecto de R
+
+Al crear un proyecto todos los ficheros quedan vinculados directamente al proyecto. Para crear un proyecto selección File > New project... 
+
+```{r eval = TRUE, echo = FALSE, fig.align="center", fig.cap = "Figura 7.  Creación de nuevo proyecto"}
+knitr::include_graphics("./RStudio_new_project.png") 
+```
+
+Se abrirá la siguiente ventana:
+
+```{r eval = TRUE, echo = FALSE, fig.align="center", fig.cap = "Figura 8.  Creación de nuevo proyecto"}
+knitr::include_graphics("./RStudio_new_project_window.png") 
+```
+
+Para crear un proyecto en un nuevo directorio, hacemos clic en el botón **New Directory**. Seguidamente, seleccionamos el tipo de proyecto, en nuestro caso _Empty Project_. Ahora, asignamos un nombre al directorio (carpeta) que se va a crear y que al mismo tiempo será el nombre del proyecto de R. Para terminar, hacemos clic en el botón _Create Project_. Al seguir este proceso se habrá creado una carpeta en la ruta que definimos y un fichero nombre_carpeta.Rproj.
+
+Para crear un proyecto en una carpeta que ya existe, hacemos clic en el botón **Existing Directory** y después seleccionamos la carpeta ayudándonos del Browse.. si fuera necesario. Una vez elegida la carpeta, clicamos en _Create Project_.
+
+Para abrir un proyecto hacemos doble clic sobre el archivo con extensión .Rproj o lo abrimos desde el menú de RStudio: File > Open Project…
+
+**Ventaja de los proyectos**: cualquier fichero que creemos (script de R, documento de Rmarkdown, etc.) y guardemos se guardará en la carpeta del proyecto.
+
+
+# Introducción a los Modelos Aditivos Generalizados
+
+## Por qué usar GAMS 
+
+### Interpretabilidad vs Complejidad
+
+```{r eval = TRUE, echo = FALSE, fig.align="center", fig.cap = "Figura 9.  Tipos de modelos"}
+knitr::include_graphics("./modelos.png") 
+```
+
+Es posible crear modelos ajustados a los datos que son lineales y relativamente fáciles de interpretar y explicar. Existe una línea recta que representa la relación entre dos variables y atraviesa la nube de puntos. Es posible graficar la relación y hacer predicciones a partir del modelo ajustado. Pero lo modelos lineales no siempre representan bien las relaciones entre variables ya que las relaciones no siempre son lineales. Las predicciones no serían buenas a partir de estos modelos. 
+
+En el otro extremo del espectro hay toda una serie de modelos de tipo "caja negra" como las redes neuronales, random forest, árboles de regresión. Estos modelos son muy buenos para predicir pero son muy díficil de interpretar y de entender que está sucediendo en el sistema. Son muy útiles para clasificar pero no sirven para entender como una variable se relaciona con el producto del modelo. 
+
+Los GAMs proveen un interesante punto intermedio ya que se oueden ajustar relaciones complejas y no lineales e interacciones pero estos modelos son explicitos y se pueden observar las relaciones entre variables y porque se produce un resultado determinado.
+
+### Cuándo usar GAMs?
+
+- Para hacer de un sistema complejo: relaciones no lineales
+- Para entender e inferir relaciones entre vairbales, sobre cuál es la variable más importante. 
+- Controlar las relaciones: cuando las variables son complejas y se requiere controlar la estacionalidad. 
+
+
+## Resumen
+
+- Qué es un GAM?
+- Qué es el suavizado?
+- Cómo trabajan los GAMs? (*Roughly*)
+- Ajuste de modelos simples. Gráficos
+
+```{r, include=FALSE}
+library(knitr)
+library(viridis)
+library(ggplot2)
+library(reshape2)
+library(animation)
+library(mgcv)
+```
+
+### Qué es un GAM?
+
+#### Modelos Aditivos Generalizados (GAMs)
+
+- Generalizados: varias distribuciones para la variable respuesta
+  - Lineales: sólo distribución gaussiana
+- Aditivos: Los términos del modelo se **suman** entre sí
+- Modelo: 
+
+##### De LMs y GLMs a GAMs
+
+Creamos un dataset de ejemplo 
+```{r}
+x <- seq(0, pi * 2, 0.1)
+sin_x <- sin(x)
+y <- sin_x + rnorm(n = length(x), mean = 0, sd = sd(sin_x / 2))
+sample_data <- data.frame(y,x)
+```
+
+```{r}
+ggplot2::ggplot(sample_data, ggplot2::aes(x, y)) + 
+  ggplot2::geom_point() +
+  ggplot2::geom_smooth(method = 'lm', se = FALSE, aes(colour = "Lineal")) +
+  ggplot2::geom_smooth(method = 'lm', formula = y ~ poly(x, 2), se = FALSE, aes(colour = "Cuadrática")) +
+  ggplot2::geom_smooth(method = 'lm', formula = y ~ poly(x, 3), se = FALSE, aes(colour = "Cúbica")) +
+  ggplot2::geom_smooth(method = 'gam', formula = y ~ s(x), se = FALSE, aes(colour = "GAM")) +
+  ggplot2::scale_colour_manual(name = "Leyenda", values = c("blue",'DarkOrange', 'Steelblue', "red")) +
+  ggplot2::theme_bw()
+
+
+
+```
+###### Modelo lineal 
+ 
+```{r}
+modelo_lineal <- lm(y ~ x, data = sample_data)
+```
+
+Gráfico de residuos
+```{r}
+residuals <- fortify(modelo_lineal)
+ggplot2::ggplot(residuals, aes(x = .fitted, y = .resid)) + 
+  ggplot2::geom_point() +
+  ggplot2::geom_smooth(se = FALSE) +
+  ggplot2::geom_hline(yintercept = 0, linetype = 'dashed') +
+  ggplot2::theme_bw() +
+  ggplot2::xlab('Ajustados') + ggplot2::ylab('Residuos')
+```
+Claramente los residuos tienen una tendencia y no están distribuidos aleatoriamente. 
+
+###### Modelo no lineal
+
+```{r}
+modelo_gam <- gam(y ~ s(x), data = sample_data)
+```
+
+
+###### Modelos Lineales (Generalizados)
+
+GLM: termino lineales
+GAM: terminos no necesariamente lineales
+
+Considerando $n$ observaciones, $x_{i}$, $y_{i}$, donde $y_{i}$ es una observación de una variable aleatoria, $Y_{i}$, con una esperanza de $\mu_{i}$ ≡ $E(Y)$. Un modelo apropiado para expresar la relación entre $x$ e $y$ es el siguiente:
+
+$$
+y_i = \mu_i  + \epsilon_i
+$$
+donde, $\mu_i$ = $x_{i}\beta$
+
+$\beta$, parámetro desconocido, y $\epsilon_i$ son variables aleatorias con media cero y cada una con variancia $\sigma^2$. Por lo que el modelo establece que $Y$ está dado por $x$ multiplicada por una constante más un termino aleatorio. $Y$ es un ejemplode _variable respuesta_ mientras que $x$ es un ejemplo de un _predictor_. 
+
+
+El modelo lineal se describe mediante la siguiente ecuación:
+
+$$
+y_i = \beta_0 + x_{1i}\beta_1 + x_{2i}\beta_2 + \ldots + \epsilon_i
+$$
+$y_i$ corresponde a la respuesta como una combinación lineal de covariables, $x_{ji}$, con un offset.
+
+La variable $y_i\sim$  puede ser de cualquier distribución de la familia exponencial (Normal, Poisson, etc.) 
+
+El termino de error $\epsilon_i$ está linealmente distribuido
+
+
+
+
+Is this linear?
+=============================
+
+```{r islinear, fig.width=12, fig.height=6}
+set.seed(2) ## simulate some data...
+dat <- gamSim(1, n = 400, dist = "normal", scale = 0.5, verbose=FALSE)
+dat <- dat[,c("y", "x0", "x1", "x2", "x3")]
+p <- ggplot(dat,aes(y=y,x=x1)) +
+      geom_point() +
+      theme_minimal()
+print(p)
+```
+
+
+
+
+
+
+
+# Getting started
+
+## Instalación de paquetes necesarios 
+
+Se comprueba que estén instalados los paquetes necesarios. De no ser así, 
+se instalarán automáticamente. 
+
+```{r, echo = FALSE, include = FALSE}
+# Instalar el paquete pacman que permite instalar y/o cargar los paquetes necesarios
+if (!require("pacman")) install.packages("pacman", repos = 'http://cran.us.r-project.org')
+
+# Instalar o cargar los paquetes necesarios
+pacman::p_load("dplyr", "here", "fs", "devtools", "glue", "readr", "sf", "progress", "ggfortify")
+
+# Instalar el paquete del generador de datos
+if (!require("gamwgen")) devtools::install_github("danielbonhaure/glmwgen", ref = 'gamwgen')
+
+# Instalar el paquete para graficar GAMs
+if (!require("gratia"))  devtools::install_github('gavinsimpson/gratia')
+
+```
+
+## Creación de directorios
+
+En este paso nos aseguramos de crear los directorios que contendrán los datos 
+de entrara para el ajuste del modelo y los resultados.
+
+i. /input_data: aquí se guardarán los datos meteorológicos y los metadatos de las estaciones
+ii. /output_data: aquí se guardarán los resultados de la simulación
+
+Si estos directorios no existen, se crearán. 
+
+
+```{r, echo = FALSE}
+# Comprobar que existe el directorio con datos de entrada
+fs::dir_create(here::here('input_data'))
+# Comprobar que existe el directorio con datos de salida
+fs::dir_create(here::here('output_data'))
+
+```
+
+
+## Paso 3: Crear archivos de entrada
+
+En este paso se crean los datasets de entrada para el ajuste del modelo. Si el
+usuario posee un set de datos propios debe colocarlos en la carpeta input_data. 
+Los archivos necesario son:
+
+i. stations.csv
+ii. climate.csv
+
+```{r, echo = FALSE}
+if (!fs::file_exists(here::here('input_data/stations.csv'))) {
+  write.csv(readr::read_csv(system.file("autorun/local", "stations.csv",  package = "gamwgen")), here::here('input_data/stations.csv'), row.names = FALSE)
+}
+
+if (!fs::file_exists(here::here('input_data/climate.csv'))) {
+  write.csv(readr::read_csv(system.file("autorun/local", "climate.csv",  package = "gamwgen"), col_types = "Diddd"), here::here('input_data/climate.csv'), row.names = FALSE)
+}
+```
+
+## Paso 4: Leer archivos de datos de base local
+
+### Metadatos de estaciones meteorológicas
+
+Este archivo contiene los metadatos de las estaciones meteorológicas que serán usadas 
+en el ajuste del modelo. Las variables que deben ser incluidas en la tabla son:
+
+i. station_id: número unívoco para cada estación meteorológica. La variable debe ser de tipo _integer_
+ii. latitude: latitud en grados decimlaes. La variable debe ser de tipo _double_
+iii. longitude: longitud en grados decimlaes. La variable debe ser de tipo _double_
+
+La tabla puede tener más variables pero sólo se necesitan las anteriores. 
+
+```{r, echo = FALSE, message = FALSE}
+stations <- readr::read_csv(here::here('input_data/stations.csv')) %>%
+  dplyr::mutate(station_id = as.integer(station_id))
+
+```
+
+```{r}
+head(stations)
+
+# Vista de las primeras 6 estaciones en una tabla
+knitr::kable(stations[1:6,])
+```
+
+El objeto **stations** debe ser convertido de _tibble_ a _sf_. El sistema de referencia espacial debe ser planar. 
+
+```{r}
+stations %<>% 
+  sf::st_as_sf(coords = c("longitude", "latitude"), crs =  4326) %>%
+  sf::st_transform(crs = 22185)
+```
+
+### Datos climáticos
+
+Este archivo contiene los datos de las estaciones meteorológicas que serán usadas 
+en el ajuste del modelo. Las variables que deben ser incluidas en la tabla son:
+
+i. date: fecha del dato. La variable debe ser de tipo _date_
+ii. station_id: número unívoco para cada estación meteorológica. La variable debe ser de tipo _integer_
+iii. prcp: datos diarios de precipitación La variable debe ser de tipo _double_
+iv. tmax: datos diarios de temperatura máxima. La variable debe ser de tipo _double_
+v. tmin: datos diarios de temperatura mínima. La variable debe ser de tipo _double_
+
+```{r, echo = FALSE, message = FALSE}
+climate <- readr::read_csv(here::here('input_data/climate.csv')) %>% tibble::as_tibble() %>%
+  dplyr::mutate(station_id = as.integer(station_id))
+
+```
+
+```{r}
+head(climate)
+```
+
+## Paso 5: Ajuste del modelo
+
+### Paso 5.a.: Control del ajuste
+
+Se crea un objeto con el control para el ajuste del simulador. Los argumentos son: 
+
+i.  prcp_occurrence_threshold: al umbral de precipitación para 
+    un día lluvioso. La OMM recomienda un umbral de 0.1 mm para considerar 
+    un día como lluvioso.
+ii. planar_crs_in_metric_coords: sistema de coordenadas
+
+```{r, echo = FALSE}
+control_fit <- gamwgen::local_fit_control(prcp_occurrence_threshold = 0.1,
+                                          planar_crs_in_metric_coords = 22185)
+```
+
+### Paso 5.b.a: Ajuste del modelo local
+
+Se corre el ajuste para la localidad. Los argumentos de la función son:
+
+i. climate: datos meteorológicos para la estación
+ii. stations: metadatos de las estaciones meteorológicas
+iii. seasonal_covariates: datos agregados trimestrales. Si es NULL el ajuste será sin  covariables y las series generadas serán estacionarias. 
+iv. control: objeto de control
+v. verbose: controla la impresión de mensajes en la consola. FALSE por defecto.
+
+```{r}
+gamgen_fit <- gamwgen::local_calibrate(climate = climate,
+                                  stations = stations,
+                                  seasonal_covariates = NULL,
+                                  control = control_fit,
+                                  verbose = FALSE)
+```
+
+```{r}
+summary(gamgen_fit$fitted_models$`87544`$tmax_fit)
+
+gratia::draw(gamgen_fit$fitted_models$`87544`$tmax_fit)
+
+gratia::appraise(gamgen_fit$fitted_models$`87544`$prcp_occ_fit)
+
+mgcv::gam.check(gamgen_fit$fitted_models$`87544`$tmax_fit)
+```
+
+
+Referencias
+
+http://environmentalcomputing.net/intro-to-gams/
+
+https://github.com/noamross/gams-in-r-course/blob/master/slides/chapter1_01_introduction.md
+
+https://noamross.github.io/gams-in-r-course/chapter1
+
+https://m-clark.github.io/generalized-additive-models/introduction.html#ref-venables_modern_2002
+
+https://nyhackr.blob.core.windows.net/presentations/Nonlinear-Modeling-in-R-with-GAMs_Noam-Ross.pdf
+
+https://www.datasurg.net/2018/05/16/elegant-regression-results-tables-and-plots-the-finalfit-package/
+
+https://petolau.github.io/Analyzing-double-seasonal-time-series-with-GAM-in-R/
+
+https://www.fromthebottomoftheheap.net/2018/10/23/introducing-gratia/
