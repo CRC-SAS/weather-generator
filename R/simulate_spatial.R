@@ -965,7 +965,14 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
                 # Español: Ya no se agrega la climatología inicial (la del día previo al primer día a simular),
                 # sino que, como climatología previa se usan los resultados del día en curso
                 # English: Start climatology is no longer added bu replaced by the simulated values of the previous day
-                dplyr::inner_join(current_sim_results, by = c("point_id")) %>%
+                dplyr::inner_join(current_sim_results, by =
+                                      if (all(c("station_id", "point_id") %in% colnames(current_sim_results))) {
+                                          c("station_id", "point_id")
+                                      } else if("station_id" %in% colnames(current_sim_results)) {
+                                          c("station_id")
+                                      } else if("point_id" %in% colnames(current_sim_results)) {
+                                          c("point_id")
+                                      } ) %>%
                 # Español: Se hacen las actualizaciones necesarias para que simulation_matrix.d
                 # pueda ser utilizada en la siguiente iteración, es decir para el siguiente día a simular
                 # English: Necessary updates are performed to simulation_matriz.d so it can be used
