@@ -532,8 +532,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
 
             # Español: Simulación de la ocurrencia de lluvia
             # English: Simulation of precipitation occurrence
-            prcp_occ_sim <- foreach::foreach(station = unique_stations, .multicombine = T, .combine = dplyr::bind_rows,
-                                             .packages = c("dplyr")) %dopar% {
+            prcp_occ_sim <- purrr::map_dfr(unique_stations, function(station) {
                 #
                 prcp_occ_fit <- model$fitted_models[[as.character(station)]]$prcp_occ_fit # Extraction of the GAM model
                 stn_sim_mtrx <- simulation_matrix.d %>% dplyr::filter(station_id == as.integer(station)) # Creation of the data input for the model
@@ -549,7 +548,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
                 # occurrence is mgcv::predict.gam(prcp_occ_fit) + rnorm(mean=0, sd=1)
                 return (tibble::tibble(station_id = station, date = simulation_dates$date[d],
                                        prcp_occ = as.integer(result_predict + result_rnorm > 0)))
-            }
+            })
 
             # Population of simulation_matrix.d with the simulated precpitation occurrence data,
             # because this data wil be used later in the simulations of tmax, tmin and prcp_amt
@@ -601,8 +600,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
             # de la temperatura máxima
             # English: Simulation of the climatic component of
             #  maximum temperature
-            tmax_sim <- foreach::foreach(station = unique_stations, .multicombine = T, .combine = dplyr::bind_rows,
-                                         .packages = c("dplyr")) %dopar% {
+            tmax_sim <- purrr::map_dfr(unique_stations, function(station) {
                  #
                  tmax_sim_fit <- model$fitted_models[[as.character(station)]]$tmax_fit # Extraction of the GAM model
                  stn_sim_mtrx <- simulation_matrix.d %>% dplyr::filter(station_id == as.integer(station)) # Creation of the data input for the model
@@ -616,7 +614,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
                  #
                  return (tibble::tibble(station_id = station, date = simulation_dates$date[d],
                                         tmax = result_predict + ruido_aleatorio))
-             }
+             })
 
             # Population of the simulation matrix with the simulated maximum temperature data
             simulation_matrix.d <- simulation_matrix.d %>%
@@ -633,8 +631,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
             # de la temperatura mínima
             # English: Simulation of the climatic component of
             #  minimum temperature
-            tmin_sim <- foreach::foreach(station = unique_stations, .multicombine = T, .combine = dplyr::bind_rows,
-                                         .packages = c("dplyr")) %dopar% {
+            tmin_sim <- purrr::map_dfr(unique_stations, function(station) {
                 #
                 tmin_sim_fit <- model$fitted_models[[as.character(station)]]$tmin_fit # Extraction of the GAM model
                 stn_sim_mtrx <- simulation_matrix.d %>% dplyr::filter(station_id == as.integer(station)) # Creation of the data input for the model
@@ -648,7 +645,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
                 #
                 return (tibble::tibble(station_id = station, date = simulation_dates$date[d],
                                        tmin = result_predict + ruido_aleatorio))
-            }
+            })
 
             # Population of the simulation matrix with the simulated minimum temperature data
             simulation_matrix.d <- simulation_matrix.d %>%
@@ -760,8 +757,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
             ########################################
 
             # Simulation of daily precipitation amounts in mm (prcp_amt) for those weather stations where precipitatio occurrs
-            prcp_amt_sim <- foreach::foreach(station = unique_stations, .multicombine = T, .combine = dplyr::bind_rows,
-                                             .packages = c("dplyr")) %dopar% {
+            prcp_amt_sim <- purrr::map_dfr(unique_stations, function(station) {
                 #
                 if (prcp_occ_sim %>% dplyr::filter(station_id == as.integer(station)) %>% dplyr::pull(prcp_occ) %>% magrittr::not())
                     return (tibble::tibble(station_id = station, date = simulation_dates$date[d], prcp_amt = 0))
@@ -786,7 +782,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
                 #
                 return (tibble::tibble(station_id = station, date = simulation_dates$date[d],
                                        prcp_amt = stats::qgamma(result_pnorm, shape = alpha_amt, scale = beta_amt)))
-            }
+            })
 
             # Population of simulation_matrix.d with the simulated precpitation amounts data. If a
             # precipitation occurred, the simulated daily precipitation amount (mm) will be used otherwise,
