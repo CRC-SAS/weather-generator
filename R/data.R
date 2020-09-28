@@ -22,7 +22,7 @@ exclude_incomplete_years <- function(climate_data) {
     result <- climate_data %>%
         dplyr::group_by(year = lubridate::year(date)) %>%
         dplyr::mutate(ndays = n()) %>%
-        dplyr::ungroup(-year) %>%
+        dplyr::ungroup() %>%
         dplyr::filter(ndays >= 365) %>%
         dplyr::select(-year, -ndays)
     return(result)
