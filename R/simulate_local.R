@@ -263,6 +263,8 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
     ## Español: Carpeta de destino y nombre del archivo
     ## English: Process output_folder and output_filename
     output_folder <- sub('/$', '', output_folder)
+    if (!fs::dir_exists(output_folder))
+        fs::dir_create(output_folder)
     output_filename <- sub('\\.([^.]*)$', '', output_filename)
 
 
