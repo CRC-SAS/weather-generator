@@ -298,8 +298,7 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
 
     # Español: Crear formula
     # English: Create formula
-    prcp_occ_fm <- prcp_occ ~ s(time, bs = "gp", k = 1000) +
-        te(type_day_prev, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations)) +
+    prcp_occ_fm <- prcp_occ ~ te(type_day_prev, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations)) +
         te(longitude, latitude, doy, d = c(2, 1), bs = c("tp", "cc"), k = length(unique_stations))
 
     # Español: Si es necesario, agregar covariables a la formula
@@ -436,8 +435,7 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
 
     # Español: Crear formula
     # English: Create formula
-    tmax_fm <- tmax ~ s(time, bs = 'gp', k = 1000) +
-        te(tmax_prev, tmin_prev, longitude, latitude, d = c(2, 2), k = length(unique_stations)) +
+    tmax_fm <- tmax ~ te(tmax_prev, tmin_prev, longitude, latitude, d = c(2, 2), k = length(unique_stations)) +
         te(type_day, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations)) +
         te(type_day_prev, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations)) +
         te(doy, longitude, latitude, d = c(1, 2), bs = c('cc', 'tp'), k = length(unique_stations))
@@ -509,8 +507,7 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
 
     # Español: Crear formula
     # English: Create formula
-    tmin_fm <- tmin ~ s(time, bs = 'gp', k = 1000) +
-        te(tmax_prev, tmin_prev, longitude, latitude, d = c(2, 2), k = length(unique_stations)) +
+    tmin_fm <- tmin ~ te(tmax_prev, tmin_prev, longitude, latitude, d = c(2, 2), k = length(unique_stations)) +
         te(type_day, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations)) +
         te(type_day_prev, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations)) +
         te(doy, longitude, latitude, d = c(1, 2), bs = c('cc', 'tp'), k = length(unique_stations))
