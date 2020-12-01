@@ -223,12 +223,12 @@ generate_month_params <- function(residuals, observed_climate, stations) {
             n_stations <- length(unique(stations))
 
             # Crear matrices de covarianza
-            prcp_cor <- stats::cor(probit_residuals_matrix, use = "pairwise.complete")
-            prcp_vario <- stats::var(probit_residuals_matrix, use = "pairwise.complete") * (1 - prcp_cor)
-            tmax_vario_dry <- stats::cov(tmax_residuals_matrix_dry_days, use = "pairwise.complete")
-            tmax_vario_wet <- stats::cov(tmax_residuals_matrix_wet_days, use = "pairwise.complete")
-            tmin_vario_dry <- stats::cov(tmin_residuals_matrix_dry_days, use = "pairwise.complete")
-            tmin_vario_wet <- stats::cov(tmin_residuals_matrix_wet_days, use = "pairwise.complete")
+            prcp_cor <- stats::cor(probit_residuals_matrix, use = "pairwise.complete.obs")
+            prcp_vario <- stats::var(probit_residuals_matrix, use = "pairwise.complete.obs") * (1 - prcp_cor)
+            tmax_vario_dry <- stats::cov(tmax_residuals_matrix_dry_days, use = "pairwise.complete.obs")
+            tmax_vario_wet <- stats::cov(tmax_residuals_matrix_wet_days, use = "pairwise.complete.obs")
+            tmin_vario_dry <- stats::cov(tmin_residuals_matrix_dry_days, use = "pairwise.complete.obs")
+            tmin_vario_wet <- stats::cov(tmin_residuals_matrix_wet_days, use = "pairwise.complete.obs")
 
             # Assert that the column and row names of the variograms equal the ones of the distance matrix.
             stopifnot(all(colnames(tmax_vario_dry) == colnames(distance_matrix)), all(rownames(tmax_vario_dry) == rownames(distance_matrix)))
@@ -242,20 +242,20 @@ generate_month_params <- function(residuals, observed_climate, stations) {
             prcp_params <- c(0, 1, prcp_params[3])
 
             # Variograma de temperatura máxima para los días secos
-            sill_initial_value_dry <- mean(var(tmax_matrix_dry_days, na.rm = T))
+            sill_initial_value_dry <- mean(stats::var(tmax_matrix_dry_days, na.rm = T, use = 'pairwise.complete.obs'))
             tmax_params_dry <- stats::optim(par = c(sill_initial_value_dry, max(distance_matrix)), fn = gamwgen:::partially_apply_LS(tmax_vario_dry, distance_matrix, base_p = c(0)))$par
             tmax_params_dry <- c(0, tmax_params_dry)
             # Variograma de temperatura máxima para los días lluviosos
-            sill_initial_value_wet <- mean(var(tmax_matrix_wet_days, na.rm = T, use = 'pairwise.complete.obs'))
+            sill_initial_value_wet <- mean(stats::var(tmax_matrix_wet_days, na.rm = T, use = 'pairwise.complete.obs'))
             tmax_params_wet <- stats::optim(par = c(sill_initial_value_wet, max(distance_matrix)), fn = gamwgen:::partially_apply_LS(tmax_vario_wet, distance_matrix, base_p = c(0)))$par
             tmax_params_wet <- c(0, tmax_params_wet)
 
             # Variograma de temperatura mínima para los días secos
-            sill_initial_value_dry <- mean(var(tmin_matrix_dry_days))
+            sill_initial_value_dry <- mean(stats::var(tmin_matrix_dry_days, na.rm = T, use = 'pairwise.complete.obs'))
             tmin_params_dry <- stats::optim(par = c(sill_initial_value_dry, max(distance_matrix)), fn = gamwgen:::partially_apply_LS(tmin_vario_dry, distance_matrix, base_p = c(0)))$par
             tmin_params_dry <- c(0, tmin_params_dry)
             # Variograma de temperatura mínima para los días lluviosos
-            sill_initial_value_wet <- mean(var(tmin_matrix_wet_days, na.rm = T, use = 'pairwise.complete.obs'))
+            sill_initial_value_wet <- mean(stats::var(tmin_matrix_wet_days, na.rm = T, use = 'pairwise.complete.obs'))
             tmin_params_wet <- stats::optim(par = c(sill_initial_value_wet, max(distance_matrix)), fn = gamwgen:::partially_apply_LS(tmin_vario_wet, distance_matrix, base_p = c(0)))$par
             tmin_params_wet <- c(0, tmin_params_wet)
 
