@@ -25,7 +25,13 @@ setting_variograms_for_initial_values <- function(simulation_matrix, distance_ma
         dplyr::filter(month == init_values_month, day == init_values_day) %>%
         dplyr::select(station_id, date, prcp_occ) %>%
         tidyr::spread(key = station_id, value = prcp_occ) %>%
-        dplyr::select(colnames(distance_matrix))
+        dplyr::select(colnames(distance_matrix)) %>%
+        dplyr::mutate_if(is.numeric, as.factor)
+
+    prcp_intial_values_interpolation <- missMDA::imputeMCA(
+        don = prcp_intial_values_interpolation, ncp = 5)$completeObs %>%
+        dplyr::mutate_if( is.factor, as.character) %>%
+        dplyr::mutate_if( is.character, as.numeric)
 
     tmax_intial_values_interpolation <- simulation_matrix %>%
         dplyr::filter(month == init_values_month, day == init_values_day) %>%
@@ -33,11 +39,17 @@ setting_variograms_for_initial_values <- function(simulation_matrix, distance_ma
         tidyr::spread(key = station_id, value = tmax) %>%
         dplyr::select(colnames(distance_matrix))
 
+    tmax_intial_values_interpolation <- missMDA::imputePCA(
+        X = tmax_intial_values_interpolation)$completeObs
+
     tmin_intial_values_interpolation <- simulation_matrix %>%
         dplyr::filter(month == init_values_month, day == init_values_day) %>%
         dplyr::select(station_id, date, tmin) %>%
         tidyr::spread(key = station_id, value = tmin) %>%
         dplyr::select(colnames(distance_matrix))
+
+    tmin_intial_values_interpolation <- missMDA::imputePCA(
+        X = tmin_intial_values_interpolation)$completeObs
 
 
     prcp_cor   <- stats::cor(prcp_intial_values_interpolation, use = "pairwise.complete")

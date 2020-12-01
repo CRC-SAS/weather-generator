@@ -337,7 +337,8 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
         # Español: Crear formula
         # English: Create formula
         prcp_occ_fm <- prcp_occ ~ s(type_day_prev, bs = 're') +
-            s(time, bs = 'gp', k = 100) + s(doy, bs = 'cc', k = 20)
+            #s(time, bs = 'gp', k = 100) +
+            s(doy, bs = 'cc', k = 20)
 
         # Español: Si es necesario, agregar covariables a la formula
         # English: If necesary, add covariates to the formula
@@ -479,7 +480,7 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
         tmax_fm <- tmax ~ s(tmax_prev, tmin_prev, k = 50) +
             s(prcp_occ, bs = "re") +
             s(prcp_occ_prev, bs = "re") +
-            s(time, bs = 'gp', k = 100) +
+            #s(time, bs = 'gp', k = 100) +
             s(doy, bs = "cc", k = 30)
 
         # Español: Si es necesario, agregar covariables a la formula
@@ -551,7 +552,7 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
         tmin_fm <- tmin ~ s(tmax_prev, tmin_prev, k = 50) +
             s(prcp_occ, bs = "re") +
             s(prcp_occ_prev, bs = "re") +
-            s(time, bs = 'gp', k = 100) +
+            #s(time, bs = 'gp', k = 100) +
             s(doy, bs = "cc", k = 30)
 
         # Español: Si es necesario, agregar covariables a la formula

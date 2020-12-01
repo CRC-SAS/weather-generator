@@ -141,11 +141,18 @@ generate_month_params <- function(residuals, observed_climate, stations) {
                 dplyr::select(., station_id, date, tmax_residuals) %>%
                 tidyr::spread(., key = station_id, value = tmax_residuals) %>%
                 dplyr::select(., colnames(distance_matrix))
+
+            tmax_residuals_matrix_dry_days <- missMDA::imputePCA(
+                X = tmax_residuals_matrix_dry_days)$completeObs
+
             tmax_residuals_matrix_wet_days <- month_residuals %>%
                 dplyr::filter(., type_day == 'Wet') %>%
                 dplyr::select(., station_id, date, tmax_residuals) %>%
                 tidyr::spread(., key = station_id, value = tmax_residuals) %>%
                 dplyr::select(., colnames(distance_matrix))
+
+            tmax_residuals_matrix_wet_days <- missMDA::imputePCA(
+                X = tmax_residuals_matrix_wet_days)$completeObs
 
             # Crear matriz de residuos de temperatura minima en formato ancho
             tmin_residuals_matrix_dry_days <- month_residuals %>%
@@ -153,11 +160,18 @@ generate_month_params <- function(residuals, observed_climate, stations) {
                 dplyr::select(., station_id, date, tmin_residuals) %>%
                 tidyr::spread(., key = station_id, value = tmin_residuals) %>%
                 dplyr::select(., colnames(distance_matrix))
+
+            tmin_residuals_matrix_dry_days <- missMDA::imputePCA(
+                X = tmin_residuals_matrix_dry_days)$completeObs
+
             tmin_residuals_matrix_wet_days <- month_residuals %>%
                 dplyr::filter(., type_day == 'Wet') %>%
                 dplyr::select(., station_id, date, tmin_residuals) %>%
                 tidyr::spread(., key = station_id, value = tmin_residuals) %>%
                 dplyr::select(., colnames(distance_matrix))
+
+            tmin_residuals_matrix_wet_days <- missMDA::imputePCA(
+                X = tmin_residuals_matrix_wet_days)$completeObs
 
             # Crear matriz de residuos de ocurrencia de lluvia en formato ancho
             probit_residuals_matrix <- month_residuals %>%
@@ -165,17 +179,27 @@ generate_month_params <- function(residuals, observed_climate, stations) {
                 tidyr::spread(., key = station_id, value = prcp_occ_residuals) %>%
                 dplyr::select(., colnames(distance_matrix))
 
+            probit_residuals_matrix <- missMDA::imputePCA(
+                X = probit_residuals_matrix)$completeObs
+
             # Matrix de datos observados de temperatura maxima en formato ancho
             tmax_matrix_dry_days <- month_climate %>%
                 dplyr::filter(., type_day == 'Dry') %>%
                 dplyr::select(., station_id, date, tmax) %>%
                 tidyr::spread(., key = station_id, value = tmax) %>%
                 dplyr::select(., colnames(distance_matrix))
+
+            tmax_matrix_dry_days <- missMDA::imputePCA(
+                X = tmax_matrix_dry_days)$completeObs
+
             tmax_matrix_wet_days <- month_climate %>%
                 dplyr::filter(., type_day == 'Wet') %>%
                 dplyr::select(., station_id, date, tmax) %>%
                 tidyr::spread(., key = station_id, value = tmax) %>%
                 dplyr::select(., colnames(distance_matrix))
+
+            tmax_matrix_wet_days <- missMDA::imputePCA(
+                X = tmax_matrix_wet_days)$completeObs
 
             # Matrix de datos observados de temperatura minima en formato ancho
             tmin_matrix_dry_days <- month_climate %>%
@@ -183,21 +207,28 @@ generate_month_params <- function(residuals, observed_climate, stations) {
                 dplyr::select(., station_id, date, tmin) %>%
                 tidyr::spread(., key = station_id, value = tmin) %>%
                 dplyr::select(., colnames(distance_matrix))
+
+            tmin_matrix_dry_days <- missMDA::imputePCA(
+                X = tmin_matrix_dry_days)$completeObs
+
             tmin_matrix_wet_days <- month_climate %>%
                 dplyr::filter(., type_day == 'Wet') %>%
                 dplyr::select(., station_id, date, tmin) %>%
                 tidyr::spread(., key = station_id, value = tmin) %>%
                 dplyr::select(., colnames(distance_matrix))
 
+            tmin_matrix_wet_days <- missMDA::imputePCA(
+                X = tmin_matrix_wet_days)$completeObs
+
             n_stations <- length(unique(stations))
 
             # Crear matrices de covarianza
             prcp_cor <- stats::cor(probit_residuals_matrix, use = "pairwise.complete")
             prcp_vario <- stats::var(probit_residuals_matrix, use = "pairwise.complete") * (1 - prcp_cor)
-            tmax_vario_dry <- stats::cov(tmax_residuals_matrix_dry_days, use = "pairwise.complete.obs")
-            tmax_vario_wet <- stats::cov(tmax_residuals_matrix_wet_days, use = "pairwise.complete.obs")
-            tmin_vario_dry <- stats::cov(tmin_residuals_matrix_dry_days, use = "pairwise.complete.obs")
-            tmin_vario_wet <- stats::cov(tmin_residuals_matrix_wet_days, use = "pairwise.complete.obs")
+            tmax_vario_dry <- stats::cov(tmax_residuals_matrix_dry_days, use = "pairwise.complete")
+            tmax_vario_wet <- stats::cov(tmax_residuals_matrix_wet_days, use = "pairwise.complete")
+            tmin_vario_dry <- stats::cov(tmin_residuals_matrix_dry_days, use = "pairwise.complete")
+            tmin_vario_wet <- stats::cov(tmin_residuals_matrix_wet_days, use = "pairwise.complete")
 
             # Assert that the column and row names of the variograms equal the ones of the distance matrix.
             stopifnot(all(colnames(tmax_vario_dry) == colnames(distance_matrix)), all(rownames(tmax_vario_dry) == rownames(distance_matrix)))
@@ -220,7 +251,7 @@ generate_month_params <- function(residuals, observed_climate, stations) {
             tmax_params_wet <- c(0, tmax_params_wet)
 
             # Variograma de temperatura mínima para los días secos
-            sill_initial_value_dry <- mean(var(tmin_matrix_dry_days, na.rm = T, use = 'pairwise.complete.obs'))
+            sill_initial_value_dry <- mean(var(tmin_matrix_dry_days))
             tmin_params_dry <- stats::optim(par = c(sill_initial_value_dry, max(distance_matrix)), fn = gamwgen:::partially_apply_LS(tmin_vario_dry, distance_matrix, base_p = c(0)))$par
             tmin_params_dry <- c(0, tmin_params_dry)
             # Variograma de temperatura mínima para los días lluviosos
