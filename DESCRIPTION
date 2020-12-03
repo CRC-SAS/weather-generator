@@ -38,7 +38,7 @@ Imports:
     snow,
     sp,
     stats,
-    table,
+    data.table,
     tibble,
     tidync,
     tidyr,
