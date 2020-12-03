@@ -13,6 +13,7 @@ LazyData: true
 Imports:
     automap,
     broom,
+    data.table,
     doSNOW,
     dplyr,
     foreach,
@@ -38,7 +39,6 @@ Imports:
     snow,
     sp,
     stats,
-    data.table,
     tibble,
     tidync,
     tidyr,
