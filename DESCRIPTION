@@ -1,5 +1,5 @@
 Package: gamwgen
-Title: Weather Generator
+Title: Weather Generator (GAM version)
 Version: 1.0.0.0000
 Authors@R: person("CRC-SAS", 
                   email = "crc-sas@crc-sas.org", 
