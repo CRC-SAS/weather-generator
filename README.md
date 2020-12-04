@@ -19,10 +19,10 @@ before install the *Weather Generator* executing this command:
 devtools::install_version("pbkrtest", version = "0.4.7")
 ```
 
-Also note that, depending on your OS, R packages that will be installed as 
-dependencies of the *Weather Generator* may require the installation of additional 
-software. For example, in a Debian 10 OS, you must run this commands to install 
-all required OS packages:
+Also note that, depending on your OS, R packages that will be installed as dependencies 
+of the *Weather Generator* may require the installation of additional OS packages. 
+Generally the installation process indicates which OS packages are required. For example, 
+in a Debian 10 OS, you must run this commands to install all required OS packages:
 
 ```shell
 sudo apt install libssl-dev
