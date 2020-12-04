@@ -128,7 +128,7 @@ Los GAMs proveen un interesante punto intermedio ya que se oueden ajustar relaci
 ### Cuándo usar GAMs?
 
 - Para hacer de un sistema complejo: relaciones no lineales
-- Para entender e inferir relaciones entre vairbales, sobre cuál es la variable más importante. 
+- Para entender e inferir relaciones entre variables, sobre cuál es la variable más importante. 
 - Controlar las relaciones: cuando las variables son complejas y se requiere controlar la estacionalidad. 
 
 
@@ -268,7 +268,7 @@ if (!require("pacman")) install.packages("pacman", repos = 'http://cran.us.r-pro
 pacman::p_load("dplyr", "here", "fs", "devtools", "glue", "readr", "sf", "progress", "ggfortify")
 
 # Instalar el paquete del generador de datos
-if (!require("gamwgen")) devtools::install_github("danielbonhaure/glmwgen", ref = 'gamwgen')
+if (!require("gamwgen")) devtools::install_github("CRC-SAS/weather-generator", ref = 'gamwgen')
 
 # Instalar el paquete para graficar GAMs
 if (!require("gratia"))  devtools::install_github('gavinsimpson/gratia')
