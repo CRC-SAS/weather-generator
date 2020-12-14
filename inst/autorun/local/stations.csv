@@ -1,2 +1,2 @@
-station_id,nombre,elev,nivel_adm1,nivel_adm2,pais_id,siglas,longitude,latitude
-87544,Pehuajó Aero,87,Buenos Aires,Pehuajó,AR,SMN,-61.859783,-35.840703
+"","x","y","station_id","nombre","elev","tipo","pais_id","geometry"
+"1",5712389.83758128,6198749.97282702,90000002,"La Estanzuela",72,"C","UY",c(-57.6922, -34.3372)
