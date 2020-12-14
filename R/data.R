@@ -17,7 +17,6 @@ repeat_seasonal_covariates <- function(seasonal_covariates) {
 
 #' @title Exclude incomplete years
 #' @description Exclude incomplete years.
-#' @export
 exclude_incomplete_years <- function(climate_data) {
     result <- climate_data %>%
         dplyr::group_by(year = lubridate::year(date)) %>%
@@ -31,7 +30,6 @@ exclude_incomplete_years <- function(climate_data) {
 
 #' @title Create climate tibble
 #' @description Create climate tibble.
-#' @export
 climate.tibble <- function(date, station_id, tmax, tmin, prcp, ...) {
     return (tibble::tibble(date = as.Date(date),
                            station_id = as.integer(station_id),
@@ -42,7 +40,6 @@ climate.tibble <- function(date, station_id, tmax, tmin, prcp, ...) {
 
 #' @title Transform object to climate tibble
 #' @description Transform object to climate tibble
-#' @export
 as.climate.tibble <- function(object, map_cols = list(date = "date", station_id = "station_id",
                                                       tmax = "tmax", tmin = "tmin", prcp = "prcp")) {
     req_cols <- list(date = "date", station_id = "station_id",
@@ -69,7 +66,6 @@ as.climate.tibble <- function(object, map_cols = list(date = "date", station_id 
 
 #' @title Create stations simple feature (sf)
 #' @description Create stations simple feature (sf).
-#' @export
 stations.sf <- function(station_id, longitude, latitude, crs, ...) {
     stations <- tibble::tibble(station_id = as.integer(station_id),
                                longitude = as.numeric(longitude),
@@ -80,7 +76,6 @@ stations.sf <- function(station_id, longitude, latitude, crs, ...) {
 
 #' @title Transform object to stations simple feature (sf)
 #' @description Transform object to stations simple feature (sf).
-#' @export
 as.stations.sf <- function(object, crs, map_cols = list(station_id = "station_id",
                                                         longitude = "lon_dec", latitude = "lat_dec")) {
     req_cols <- list(station_id = "station_id", longitude = "lon_dec", latitude = "lat_dec")
@@ -101,7 +96,6 @@ as.stations.sf <- function(object, crs, map_cols = list(station_id = "station_id
 
 #' @title Create simulation locations simple feature (sf)
 #' @description Create simulation locations simple feature (sf).
-#' @export
 sim_loc.sf <- function(station_id, longitude, latitude, crs, ...) {
     stations <- tibble::tibble(station_id = as.integer(station_id),
                                longitude = as.numeric(longitude),
@@ -112,7 +106,6 @@ sim_loc.sf <- function(station_id, longitude, latitude, crs, ...) {
 
 #' @title Transform object to simulation locations simple feature (sf)
 #' @description Transform object to simulation locations simple feature (sf).
-#' @export
 as.sim_loc.sf <- function(object, crs, map_cols = list(station_id = "station_id",
                                                        longitude = "longitude", latitude = "latitude")) {
     req_cols <- list(station_id = "station_id", longitude = "longitude", latitude = "latitude")
@@ -243,7 +236,6 @@ check.points.to.extract <- function(points_to_extract) {
 #' @description Extract specific points from a netcdf4 file, as a tibble object.
 #' @import dplyr
 #' @import magrittr
-#' @export
 netcdf.extract.points.as.tibble <- function(netcdf_filename, points_to_extract) {
 
     # Se carga el paquete magrittr para poder usar %T>% y apagar el warning lanzado por dplyr::one_of
@@ -310,7 +302,6 @@ netcdf.extract.points.as.tibble <- function(netcdf_filename, points_to_extract) 
 
 #' @title Transform netcdf4 file to tibble object
 #' @description Transform netcdf4 file to tibble object.
-#' @export
 netcdf.as.tibble <- function(netcdf_filename, na.rm = T, add.id = F, id.column = "point_id") {
 
     netcdf_as_tibble <- tidync::tidync(netcdf_filename) %>%
@@ -340,7 +331,6 @@ netcdf.as.tibble <- function(netcdf_filename, na.rm = T, add.id = F, id.column =
 
 #' @title Transform netcdf4 file to sf object
 #' @description Transform netcdf4 file to sf object.
-#' @export
 netcdf.as.sf <- function(netcdf_filename, na.rm = T, add.id = F, id.column = "point_id") {
 
     nc_proj4string <- ncmeta::nc_att(netcdf_filename, "NC_GLOBAL", "CRS")$value$CRS
@@ -377,7 +367,6 @@ netcdf.as.sf <- function(netcdf_filename, na.rm = T, add.id = F, id.column = "po
 #' @description Extract specific points from a netcdf4 file, as a sf object.
 #' @import dplyr
 #' @import magrittr
-#' @export
 netcdf.extract.points.as.sf <- function(netcdf_filename, points_to_extract) {
 
     # Se carga el paquete magrittr para poder usar %T>% y apagar el warning lanzado por dplyr::one_of
