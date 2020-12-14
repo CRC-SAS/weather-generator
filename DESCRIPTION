@@ -1,22 +1,51 @@
 Package: gamwgen
-Title: What the Package Does (one line, title case)
-Version: 0.0.0.9000
-Authors@R: person("First", "Last", email = "first.last@example.com", role = c("aut", "cre"))
+Title: Weather Generator (GAM version)
+Version: 1.0.0.0000
+Authors@R: person("CRC-SAS", 
+                  email = "crc-sas@crc-sas.org", 
+                  role = c("cre"),
+                  comment = "CRC-SAS URL: https://www.crc-sas.org/")
 Description: What the package does (one paragraph).
 Depends:
     R (>= 3.3.0)
 License: What license is it under?
 LazyData: true
 Imports:
+    automap,
+    broom,
+    data.table,
+    doSNOW,
     dplyr,
-    lubridate,
-    sp,
     foreach,
+    fs,
+    ggplot2,
+    glue,
+    gridExtra,
+    lubridate,
+    magrittr,
     MASS,
+    mgcv,
+    missMDA,
+    ncmeta,
+    parallel,
+    progress,
     proto,
-    RandomFields
+    purrr,
+    RandomFields,
+    raster,
+    readr,
+    rlang,
+    sf,
+    snow,
+    sp,
+    stats,
+    tibble,
+    tidync,
+    tidyr,
+    tidyselect,
+    utils,
+    yaml
 Suggests:
-    testthat,
-    automap
+    testthat
 RoxygenNote: 7.0.1
 Encoding: UTF-8
