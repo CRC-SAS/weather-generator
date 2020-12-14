@@ -1,25 +1,53 @@
 Package: glmwgen
-Title: What the Package Does (one line, title case)
+Title: Weather Generator (GLM version)
 Version: 0.0.0.9000
-Authors@R: person("First", "Last", email = "first.last@example.com", role = c("aut", "cre"))
+Authors@R: person("CRC-SAS", 
+                  email = "crc-sas@crc-sas.org", 
+                  role = c("cre"),
+                  comment = "CRC-SAS URL: https://www.crc-sas.org/")
 Description: What the package does (one paragraph).
 Depends:
     R (>= 3.3.0)
 License: What license is it under?
 LazyData: true
 Imports:
-    dplyr,
-    lubridate,
-    sp,
-    foreach,
-    MASS,
     abind,
-    proto,
-    reshape2,
-    RandomFields
-Suggests:
-    testthat,
     automap,
-    ROCR
-RoxygenNote: 6.1.1
+    base,
+    broom,
+    DBI,
+    dbplyr,
+    doMC,
+    dplyr,
+    fields,
+    foreach,
+    ggplot2,
+    glue,
+    gridExtra,
+    hydroGOF,
+    lubridate,
+    magrittr,
+    MASS,
+    microbenchmark,
+    proto,
+    purrr,
+    RandomFields,
+    R6,
+    raster,
+    RColorBrewer,
+    rgdal,
+    rlang,
+    robust,
+    robustbase,
+    RPostgres,
+    sf,
+    sp,
+    stats,
+    stringr,
+    tibble,
+    tidyr,
+    utils,
+Suggests:
+    testthat
+RoxygenNote: 7.0.1
 Encoding: UTF-8
