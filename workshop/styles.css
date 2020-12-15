@@ -1,0 +1,24 @@
+.main-content {
+  max-width: 80rem;
+}
+
+section.page-header a.email {
+  color: white;
+  text-decoration: underline;
+}
+
+.main-content h2 {
+  font-size: 18px;
+  margin-top: 60px;
+  padding: 20px;
+  background-color: rgb(21, 153, 87);
+  color: white;
+}
+
+.main-content h3 {
+  font-size: 18px;
+  margin-top: 60px;
+  padding: 20px;
+  background-color: rgb(55, 126, 184);
+  color: white;
+}

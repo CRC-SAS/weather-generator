@@ -1,0 +1,194 @@
+---
+title: "Manual para la instalación de R y RStudio"
+subtitle: "Complemento de Introducción a uso de API para SISSA"
+author:
+  - Alessio Bocco (boccoalessio@gmail.com)
+  - Santiago Rovere (srovere@gmail.com)
+  - Daniel Bonhaure (danielbonhaure@gmail.com)
+  - Guillermo Podestá (gpodesta@rsmas.miami.edu)
+date: '`r format(as.Date("2020-10-09"), "%d de %B de %Y")`'
+output:
+  prettydoc::html_pretty:
+    css: styles.css
+    theme: cayman
+    toc: true
+    toc_depth: 3
+---
+
+# Introducción 
+
+El objetivo de esta guía es detallar el proceso de instalación de R y su IDE, RStudio, y familiarizar al usuario con el entorno de trabajo que proporciona RStudio. Al finalizarla debería tener instalado el software necesario ye instalados los paquetes requeridos para el webinario "Introducción a uso de API para SISSA"
+
+## Instalar R
+
+Para instalar R nos dirigiremos a la página web de R project. Para ello haremos click en el siguiente enlace: http://www.r-project.org.
+
+```{r eval = TRUE, echo = FALSE, out.width = "70%", fig.align = "center", fig.cap = "Figura 1. Página principal de R project"}
+knitr::include_graphics("./Figuras/R_webpage.png")  
+```
+
+Para descargar el software haremos click en **CRAN** y luego sobre el enlace del “espejo” (mirror) más próximo a nuestra ubicación. A modo de ejemplo, la __url__ de la Universidad Nacional de La Plata (Argentina) (http://mirror.fcaglp.unlp.edu.ar/CRAN/).
+
+```{r eval = TRUE, echo = FALSE, out.width = "70%", fig.align = "center", fig.cap = "Figura 2. Espejos para cada país del R project"}
+knitr::include_graphics("./Figuras/R_mirror.png") 
+```
+
+Luego debemos seleccionar la versión de R para el sistema operativo que esté utilizando, Windows o Mac OS
+
+```{r eval = TRUE, echo = FALSE, out.width = "70%", fig.align="center", fig.cap = "Figura 3. Descargar R"}
+knitr::include_graphics("./Figuras/R_download.png") 
+```
+
+### Instalar R en Windows
+
+Al hacer clic sobre "Download R for Windows" sremos dirigidos a la página que se reproduce a continuación. Allí haremos clic sobre **install R for the first time**.
+
+```{r eval = TRUE, echo = FALSE, out.width = "70%", fig.align="center", fig.cap = "Figura 4.  Instalar R en Windows"}
+knitr::include_graphics("./Figuras/R_download_Windows.png") 
+```
+
+En la siguiente ventana, haremos clic sobre **Download R 4.0.3 for Windows** y guardar el archivo de instalación.
+
+```{r eval = TRUE, echo = FALSE, out.width = "70%", fig.align="center", fig.cap = "Figura 4.  Instalar la versión 4.0.3 de R para Windows"}
+knitr::include_graphics("./Figuras/R_download_Windows_version.png") 
+```
+
+Luego, ejecutaremos el archivo descargado para proceder a la instalación de R y seguiremos las instrucciones del ejecutable. 
+
+### Instalar R en Mac
+
+Lo primero es descargar el fostware, para ello haremos clic sobre **Download R for (Mac) OS X** y  se nos dirigirá a la página que se reproduce más abajo. Luego, haremos clic sobre la versión de R en función de la versión del OS de cada uno. 
+
+```{r eval = TRUE, echo = FALSE, out.width = "70%", fig.align="center", fig.cap = "Figura 5.  Instalar la versión 4.0.3 de R para Mac OS Catalina"}
+knitr::include_graphics("./Figuras/R_download_Mac_OS_version.png") 
+```
+
+Para descargar haremos click sobre **R-4.0.3.pkg** y guardaremos el archivo de instalación para luego ejecutarlo e instalar R. 
+
+## Instalar RStudio
+
+Primero, debemos descargar RStudio desde su página web  (https://rstudio.com/products/rstudio/download/) Allí seleccionamos la versión gratuita de RStudio Desktop 
+
+```{r eval = TRUE, echo = FALSE, out.width = "70%", fig.align="center", fig.cap = "Figura 7.  Selección de la versión de RStudio"}
+knitr::include_graphics("./Figuras/RStudio_download.png") 
+```
+
+### Instalar RStudio en Windows
+
+Luego, haremos click en el botón de descarga. Automáticamente se decargará un ejecutable para instalar RStudio. Se requiere de Windows 7 o superior.
+
+```{r eval = TRUE, echo = FALSE, out.width = "50%", fig.align="center", fig.cap = "Figura 7.  Descargar RStudio para Windows"}
+knitr::include_graphics("./Figuras/RStudio_download_Windows.png") 
+```
+
+### Instalar RStudio en Mac OS
+
+Luego, haremos click en el botón de descarga. Automáticamente se decargará un ejecutable para instalar RStudio. Se requiere de Mac OS High Sierra o superior.
+
+```{r eval = TRUE, echo = FALSE, out.width = "50%", fig.align="center", fig.cap = "Figura 8.  Descargar RStudio para Mac OS"}
+knitr::include_graphics("./Figuras/RStudio_download_Mac_OS.png") 
+```
+
+## Entorno de trabajo de RStudio
+
+Al abrir RStudio deberíamos ver una pantalla similar a lo que se muestra en la siguiente imagen:
+
+```{r eval = TRUE, echo = FALSE, out.width = "90%", fig.align="center", fig.cap = "Figura 9.  Aspecto general de RStudio"}
+knitr::include_graphics("./Figuras/R_Studio_entorno.png") 
+```
+
+Una vez en RStudio, podemos escribir y ejecutar las órdenes de varias formas:
+
+- directamente en la consola
+- a través de un script (.R)
+- con archivos Rmarkdown (.Rmd)
+
+Como podemos ver, RStudio está (normalmente) dividido en 4 paneles.
+
+### Crear proyecto de R
+
+Al crear un proyecto todos los archivos quedan vinculados directamente al proyecto. Para crear un proyecto nos dirigiremos a **File > New project... **
+
+```{r eval = TRUE, echo = FALSE, out.width = "90%", fig.align="center", fig.cap = "Figura 10.  Creación de nuevo proyecto"}
+knitr::include_graphics("./Figuras/RStudio_new_project.png") 
+```
+
+Se abrirá la siguiente ventana:
+
+```{r eval = TRUE, echo = FALSE, out.width = "50%", fig.align="center", fig.cap = "Figura 11.  Creación de nuevo proyecto"}
+knitr::include_graphics("./Figuras/RStudio_new_project_window.png") 
+```
+
+Para crear un proyecto en un nuevo directorio, haremos click en el botón **New Directory**. Seguidamente, seleccionaremos el tipo de proyecto, en nuestro caso _Empty Project_. Ahora, asignaremos un nombre al directorio (carpeta) que se creará y que al mismo tiempo será el nombre del proyecto de R. Para terminar, haremos clic en el botón _Create Project_. Al seguir este proceso se habrá creado una carpeta en la ruta definida y un archivos _nombre_carpeta.Rproj_.
+
+Para crear un proyecto en una carpeta que ya existe, haremos click en el botón **Existing Directory** y después seleccionaremos la carpeta escogida con la ayuda de _Browse.._ si fuera necesario. Una vez definida la carpeta, haremos click en _Create Project_.
+
+Para abrir un proyecto existente haremos doble click sobre el archivo con extensión _.Rproj_ o abrirlo desde el menú de RStudio: File > Open Project…
+
+**Ventaja de los proyectos**: cualquier archivo que produzca (script de R, documento de Rmarkdown, etc.) se guardará en la carpeta del proyecto.
+
+### Instalación de paquetes en R
+
+Al instalar R, por defecto se incluyen una serie de paquetes (base), que poseen las funciones básicas para realizar análisis estadísticos estándar y visualizaciones sencillas.
+
+Sin embargo, a veces es necesario instalar paquetes de terceros que aumentan las capacidades del software. Para ello existen dos maneras diferentes: escribiendo y ejectudando líneas de código o a través de la interfaz que brinda RStudio. 
+
+#### Instalación de paquetes necesarios 
+
+Para este webinario se requerirán los siguientes paquetes: 
+
+```
+- Cairo 
+- dplyr
+- geojsonsf
+- ggplot2
+- glue
+- gridExtra
+- httr
+- jsonlite
+- knitr
+- lubridate
+- ncdf4
+- prettydoc
+- raster
+- rgdal
+- tidyr
+- sf
+```
+
+##### Instalación de paquetes con código
+
+Para hacerlo escribiremos lo siguiente en un script. Es muy importante siempre escribir los nombres de los paquetes **entre comillas** ya que de otra forma no podrán ser instalados. 
+
+```{r eval = FALSE}
+# Instalar paquete
+install.packages("<nombre del paquete>")
+
+# Por ejemplo, 
+install.packages("dplyr")
+```
+También podemos instalar más de un paquete a la vez:
+
+``` {r eval = FALSE}
+# Instalar paquete2
+install.packages(c("<nombre del paquete 1>", "<nombre del paquete 2>"))
+
+# Por ejemplo, 
+install.packages(c("dplyr", "ggplot2"))
+```
+
+##### Instalación de paquetes con interfaz gráfico de RStudio
+
+Para instalar paquetes con la ayuda de RStudio deberemos hacer click en la pestaña **Packages** (1) y luego en el botón **Install** (2).
+
+```{r eval = TRUE, echo = FALSE, out.width = "50%", fig.align="center", fig.cap = "Figura 12.  Instalar paquetes desde RStudio"}
+knitr::include_graphics("./Figuras/RStudio_Instalar_paquetes.png") 
+```
+
+Al hacerlo, aparecerá una vetana donde escribiremos el nombre del paquete que deseamos instalar. 
+
+```{r eval = TRUE, echo = FALSE, out.width = "50%", fig.align="center", fig.cap = "Figura 13.  Instalar paquetes desde RStudio"}
+knitr::include_graphics("./Figuras/RStudio_Instalar_paquetes_nombres.png") 
+```
+
+Es posible instalar múltiples paquetes al separarlos por **comas**. Aqui no debemos escribir el nombre del paquete **entre comillas**.

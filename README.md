@@ -27,7 +27,7 @@ your R installation. For example, if your R version is 3.5, you must install *pb
 before install the *Weather Generator* executing this command:
 
 ```r
-devtools::install_version("pbkrtest", version = "0.4.7")
+devtools::install_version("pbkrtest", version = "0.4-7")
 ```
 
 Also note that, depending on your OS, R packages that will be installed as dependencies 
