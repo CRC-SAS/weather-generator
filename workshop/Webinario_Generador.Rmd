@@ -1,0 +1,1090 @@
+---
+title: "Introducción al uso del Generador Estocástico de series sintéticas"
+author:
+  - Alessio Bocco (boccoalessio@gmail.com)
+  - Daniel Bonhaure (danielbonhaure@gmail.com)
+  - Guillermo Podestá (gpodesta@rsmas.miami.edu)
+date: '`r format(as.Date("2020-12-159"), "%d de %B de %Y")`'
+output:
+  prettydoc::html_pretty:
+    css: styles.css
+    theme: cayman
+---
+
+# Introducción
+
+El presente documento tiene como propósito proveer ejemplos de aplicación del
+Generador Estocástico de datos climáticos desarrollado por el SISSA. Este software nació como una herramienta clave para el análisis probabilista del riesgo de sequías pero por su flexibilidad puede ser aplicado a una multitud de aplicaciones. 
+
+Esta guía contiene solamente ejemplos de *algunas* de las posibilidades y productos derivados del generador. Es un complemento de la presentación en donde se desarrollarán y replicarán algunos de los productos mostrados durante la misma. 
+
+
+# Instalación de paquetes necesarios 
+
+Se comprueba que estén instalados los paquetes necesarios. De no ser así, 
+se instalarán automáticamente. 
+
+```{r, echo = FALSE, include = FALSE}
+# Instalar el paquete pacman que permite instalar y/o cargar los paquetes necesarios
+if (!require("pacman")) install.packages("pacman", repos = 'http://cran.us.r-project.org')
+
+# Instalar o cargar los paquetes necesarios
+pacman::p_load("dplyr", "here", "fs", "devtools", "glue", "readr", "sf", "progress", "ggfortify", "xts", "ggplot2", "lubridate", "xts")
+
+# Instalar el paquete del generador de datos
+if (!require("gamwgen")) devtools::install_github("CRC-SAS/weather-generator",
+                                                  ref = 'gamwgen')
+
+# Instalar el paquete para graficar GAMs
+if (!require("gratia"))  devtools::install_github('gavinsimpson/gratia')
+
+```
+
+# Creación de directorios
+
+En este paso nos aseguramos de crear los directorios que contendrán los datos 
+de entrara para el ajuste del modelo y los resultados.
+
+* /input_data: aquí se guardarán los datos meteorológicos y los metadatos de las estaciones
+* /output_data: aquí se guardarán los resultados de la simulación
+
+Si estos directorios no existen, se crearán. 
+
+
+```{r, echo = FALSE}
+# Comprobar que existe el directorio con datos de entrada
+fs::dir_create(here::here('input_data'))
+# Comprobar que existe el directorio con datos de salida
+fs::dir_create(here::here('output_data'))
+
+```
+
+# Generación de series sintéticas para una sola estación meteorológica 
+
+En este ejemplo veremos como se generan series sintéticas para una sola estación meteorológica condicionada por variables trimestrales. Esta configuración permite que las series generadas copien las variaciones observadas en el registro histórico. 
+
+## Crear archivos de entrada
+
+El primer paso consiste en generar los dataset de entrada que se instalaron junto al paquete del generador estocástico. Este set de datos es sólo a título demostrativo, si el usuario desea correr el modelo con sus propios datos deberá cambiar los objetos que se generarán en esta sección por los suyos y colocarlos en la carpeta input_data. 
+
+Los archivos necesarios son:
+
+* stations.csv
+* climate.csv
+
+```{r, echo = FALSE}
+if (!fs::file_exists('input_data/stations.csv')) {
+  write.csv(readr::read_csv(system.file('/autorun/local', "stations.csv",  package = "gamwgen")), here::here('input_data/stations.csv'), row.names = FALSE)
+}
+
+if (!fs::file_exists('input_data/local/climate.csv')) {
+  write.csv(readr::read_csv(system.file('/autorun/local', "climate.csv",  package = "gamwgen"), col_types = "Diddd"), here::here('input_data/climate.csv'), row.names = FALSE)
+}
+```
+
+El primer paso para la generación de las series sintéticas es el ajuste de los modelos estadísticos: dos para temperaturas máxima y mínima y dos para precipitación. Estos modelos necesitan de datos observados diarios de variables meteorológicas. Si bien se toleran una cierta cantidad de faltantes es conveniente que las series tengan una longitud no menor a 30 años para así capturar la variabilidad climática observada.  
+
+Los datos meteorológicos se dividen en dos archivos separados: `stations.csv` y `climate.csv`. Los nombres de los mismos no deben ser iguales a los usados aquí.
+
+Los metadatos de las estaciones se alojan en el archivo `stations.csv`. Este archivo contiene la información indispensable de las estaciones meteorológicas que serán usadas 
+en el ajuste del modelo. Las variables que deben ser incluidas en la tabla son:
+
+* station_id: número unívoco para cada estación meteorológica. La variable debe ser de tipo _integer_
+* latitude: latitud en grados decimales. La variable debe ser de tipo _double_
+* longitude: longitud en grados decimales. La variable debe ser de tipo _double_
+
+La tabla puede tener más variables pero sólo se necesitan las anteriores. 
+
+```{r, echo = FALSE, message = FALSE}
+stations <- readr::read_csv(here::here('input_data/stations.csv')) %>%
+  dplyr::rename(station_id = omm_id) %>%
+  dplyr::mutate(station_id = as.integer(station_id))
+
+```
+A continuación se muestran las primeras cinco filas del dataset y los tipo de dato de cada una de las variables. 
+
+```{r}
+head(stations)
+
+# Vista de los metadatos de la estación
+knitr::kable(stations[1,])
+```
+
+El objeto **stations** debe ser convertido de _tibble_ a _sf_. El sistema de referencia espacial debe ser planar. No es necesario un sistema de referencia 
+espacial en particular, solamente las coordenadas deben estar expresadas en metros. 
+
+```{r}
+# Convertimos el objeto stations a sf y se convierte su proyección de WGS 1984 a
+# POSGAR Argentina Faja 5.
+stations %<>% 
+  sf::st_as_sf(coords = c("lon_dec", "lat_dec"), crs =  4326) %>%
+  sf::st_transform(crs = 22185)
+```
+
+La información climática se aloja en el archivo `climate.csv`. Este archivo contiene los datos de las estaciones meteorológicas que serán usadas en el ajuste del modelo. Las variables que deben ser incluidas en la tabla son:
+
+* date: fecha del dato. La variable debe ser de tipo _date_
+* station_id: número unívoco para cada estación meteorológica. La variable debe ser de tipo _integer_
+* prcp: datos diarios de precipitación La variable debe ser de tipo _double_
+* tmax: datos diarios de temperatura máxima. La variable debe ser de tipo _double_
+* tmin: datos diarios de temperatura mínima. La variable debe ser de tipo _double_
+
+```{r, echo = FALSE, message = FALSE}
+climate <- readr::read_csv(here::here('input_data/climate.csv')) %>% tibble::as_tibble() %>%
+  dplyr::mutate(station_id = as.integer(station_id))
+
+```
+A continuación se muestran las primeras cinco filas del dataset y los tipo de dato de cada una de las variables. 
+```{r}
+head(climate)
+```
+
+Los nombres de las variables son importantes y deben ser siempre los mismos ya que se seleccionarán las variables en función de los mismos. Los nombres deben ser los siguientes:
+
+* `date` : corresponde a la fecha del día en formato `Date`. El formato de la fecha para facilitar el reconocimiento por parte de R es "YYYY-MM-DD", es decir, el año expresado con cuatro dígitos y luego dos dígitos para el mes y día. 
+* `station_id`: Identificador unívoco de cada una de las estaciones. Debe ser un número **entero**. 
+* `tmax`: Temperatura máxima diaria expresada en °C.
+* `tmin`: Temperatura mínima diaria expresada en °C.
+* `prcp`: Precipitación diaria expresada en mm. 
+
+El orden de las variables no es importante pero, como se mencionó, si se deben respetar los nombres de cada una. En el caso de faltantes, no se utiliza ningún valor específico para los NAs, sólo se debe dejar ese valor vacío. 
+Este archivo tiene un formato largo, es decir, las estaciones se deben colocar una debajo de la otra. 
+
+A continuación veremos una visualización de las temperaturas máxima y mínima de la estación elegida para el ajuste. 
+
+```{r, echo = FALSE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+
+# Serie temporal de temperaturas
+serie.temperaturas <- dplyr::filter(climate) %>%
+  dplyr::select(station_id, date, tmax, tmin) %>%
+  tidyr::gather(variable_id, valor, -c('date', 'station_id')) %>%
+  dplyr::filter(variable_id %in% c('tmax', 'tmin'), date < as.Date('1961-01-31'))
+ggplot2::ggplot(data = serie.temperaturas) +
+  ggplot2::geom_line(mapping = ggplot2::aes(x = as.Date(date), y = valor, group = variable_id, col = variable_id)) +
+  ggplot2::labs(x = 'Fecha', y = 'Temperatura (ºC)', 
+                title = 'Temperaturas observadas en Villa Reynolds Aero (87544)',
+                subtitle = 'Enero de 1961', col = 'Temperatura') +
+  ggplot2::scale_x_date(date_breaks = '5 day', date_labels = '%d') +
+  ggplot2::scale_color_manual(values = c("tmax" = "#a50026", "tmin" = "#4575b4"),
+                              labels = c("tmax" = "Máxima", "tmin" = "Mínima")) +
+  ggplot2::theme_bw() + 
+  ggplot2::theme(
+    legend.position = 'bottom', 
+    plot.title = ggplot2::element_text(hjust = 0.5),
+    plot.subtitle = ggplot2::element_text(hjust = 0.5)
+  )
+```
+
+```{r, echo = FALSE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
+highcharter::highchart() %>%
+  highcharter::hc_add_series(data = climate %>% 
+                               dplyr::filter(date < as.Date('1965-12-31')), type = "line", visible = TRUE, 
+                             showInLegend = TRUE, name = "Temperatura máxima", zIndex = 2, 
+                             tooltip = list(valueSuffix = " [°C]", valueDecimals = 1),
+                             mapping = highcharter::hcaes(x = date, y = tmax)) %>%
+  highcharter::hc_add_series(data = climate %>% 
+                               dplyr::filter(date < as.Date('1965-12-31')), type = "line", visible = TRUE, zIndex = 1,
+                             tooltip = list(valueSuffix = " [°C]", valueDecimals = 1),
+                             showInLegend = TRUE, name = "Temperatura mínima",
+                             mapping = highcharter::hcaes(x = date, y = tmin)) %>%
+  highcharter::hc_xAxis(type = 'datetime', title = list(text = "Fecha")) %>%
+  highcharter::hc_yAxis_multiples(
+    list(title = list(text = "Temperatura [°C]"), min = -10, max = 50),
+    list(opposite = FALSE, title = list(text = " "))
+  ) %>%
+  highcharter::hc_chart(type = 'line', zoomType = 'x', panning = TRUE, panKey = 'shift') %>%
+  highcharter::hc_legend(enabled = TRUE, layout = "horizontal") %>%
+  highcharter::hc_tooltip(shared = TRUE) %>%
+  highcharter::hc_colors(c("#fc8d62", "#a6cee3")) %>%
+  highcharter::hc_title(text = "Temperaturas máxima y mínima de Villa Reynolds (San Luis, Argentina)") %>%
+  highcharter::hc_add_theme(highcharter::hc_theme_elementary()) %>%
+  highcharter::hc_plotOptions(
+    series = list(
+      marker = list(
+        enabled = TRUE,
+        symbol = 'diamond',
+        radius = 5,
+        lineWidth = 0,
+        states = list(
+          hover = list(
+            enabled = F
+          )
+        )
+      )
+    ),
+    column = list(
+      borderWidth = 0
+    )
+  )
+```
+
+Al tratarse de un modelo que ajusta condicionado por la variabilidad de baja frecuencia preexistente en los datos observados es necesario la agregación de las variables diarias en totales trimestrales de precipitación y medias trimestrales de temperaturas máxima y mínima. Esta operación puede realizarse con la función `summarise_seasonal_climate` incluida en el paquete. 
+Esta función, además de agregar los datos, permite la imputación de faltantes. Se toleran una cierta cantidad que puede ser determinada por el usuario. El método de imputación utilizado es el `imputePCA()` de la librería `missMDA` .
+
+```{r}
+# Agregación de valores diarios 
+seasonal_variates <- gamwgen::summarise_seasonal_climate(climate, umbral_faltantes = 0.2)
+
+# Se muestran las primeras cinco filas
+head(seasonal_variates)
+```
+
+Cabe mencionar que con esta función las valores se agregan por trimestre. Los trimestres comprenden a los siguientes meses: 
+
+* Verano: Diciembre, Enero y Febrero
+* Otoño: Marzo, Abril y Mayo
+* Invierno: Junio, Julio y Agosto
+* Primavera: Septiembre, Octubre y Noviembre
+
+Los valores también se podrían agregar siguiendo otra definición de estaciones pero en ese caso, el usuario debería hacerlo por su cuenta. Algunas funciones útiles para hacerlo son las disponibles en el paquete `lubridate`. 
+Para estas variables los nombres también son importantes por lo que deben respetarse los mostrados anteriormente. 
+
+## Ajuste de los modelos estadísticos
+
+A continuación se mostrará como ajustar los cuatro modelos estadísticos para una sola estación meteorológica condicionados por la variabilidad de baja frecuencia. El anterior es sólo uno de las configuraciones posibles y para ver más detalles se sugiere consultar el manual completo del generador. 
+ 
+El ajuste del modelo local (en un punto) necesita de dos funciones:en una se define la configuración general del modelo y con la segunda se corre el modelo propiamente dicho.
+
+Primero se crea un objeto con el control para el ajuste del simulador. Los argumentos son: 
+
+*  `prcp_occurrence_threshold`: el umbral de precipitación para 
+un día lluvioso. La OMM recomienda un umbral de 0.1 mm para considerar 
+un día como lluvioso.
+* `avbl_cores`: Cantidad de núcleos disponibles para la paralelización.
+* `planar_crs_in_metric_coords`: sistema de coordenadas planar
+
+
+```{r}
+control_fit <-gamwgen::local_fit_control(
+  prcp_occurrence_threshold = 0.1, # Umbral para la definición de días húmedos
+  avbl_cores = 1, # Cantidad de núcleos disponibles
+  planar_crs_in_metric_coords = 22185) # Sistema de referencia espacial (en metros)
+```
+
+
+Se corre el ajuste para la estación meteorológica. Los argumentos de la función son:
+
+* `climate`: datos meteorológicos observados para la estación
+* `stations`: metadatos de las estaciones meteorológicas
+* `seasonal_covariates`: datos agregados trimestrales. Si es NULL el ajuste será sin  covariables y las series generadas serán estacionarias. 
+* `control`: objeto de control
+* `verbose`: controla la impresión de mensajes en la consola. FALSE por defecto.
+
+```{r, eval=FALSE}
+# Al correr la función se realizar el ajuste de los cuatro modelos para cada una de las estaciones. En este caso, por cuestiones de tiempo a cargar un objeto ya precalculado. SI el usuario desea correrlo deberá correr este paso.
+gamgen_fit <- gamwgen::local_calibrate(climate = climate,
+                                       stations = stations,
+                                       seasonal_covariates = NULL,
+                                       control = control_fit,
+                                       verbose = FALSE)
+
+```
+
+Para esta demostración, cargamos el objeto con el ajuste del modelo ya realizado.
+
+```{r}
+# Copiamos el archivo preajustado a nuestro directorio de trabajo
+if (!fs::file_exists('input_data/fit_local.RData')) {
+  fs::file_copy(system.file('/autorun/local', "fit_local.RData",  package = "gamwgen"),
+              new_path = 'input_data/fit_local.RData')
+}
+
+# Cargamos el archivo recientemente creado
+load('input_data/fit_local.RData')
+
+# Clase del objeto con el ajuste del generador
+class(gamgen_fit)
+
+# Contenido del modelo 
+names(gamgen_fit)
+```
+
+Dentro del objeto se guardan todo lo necesario para la simulación así como información accesoria.
+
+* `control`: Copia de la configuración usada para calibrar el generador
+* `stations`: Estaciones meteorológicas utilizadas para la calibración
+* `climate`: Datos climáticos de cada uno de las estaciones
+* `seasonal_covariates`: Series temporales de totales trimestrales de precipitación y medias trimestrales de temperaturas máxima y mínima. 
+* `crs_used_to_fit`: Sistema de referencia espacial usado para proyectar
+* `start_climatology`: Climatología diaria de cada una de ;as variables de entrada. 
+* `fitted_models`: Modelos ajustados, uno para cada variable: temperaturas máxima y mínima y ocurrencia y montos de precipitación. 
+* `models_data`: Datos usados efectivamente usados para ajustar los modelos (sin NAs)
+* `models_residuals`: Residuos de cada uno de los modelos. Es decir, la diferencia entre el valor ajustado por el modelo (clima local) y el valor observado en el día __i__
+* `statistics_threshold`: Umbrales de amplitud térmica diaria por mes. Si la amplitud simulada está fuera de este rango, se repetirá la simulación para ese día a los fines de mantener la consistencia entre variables
+* `exec_times`: Tiempo de ejecución de cada una de las etapas del ajuste 
+
+Los umbrales de amplitudes máxima y mínima permitidas son muy importantes para evitar que se produzcan temperaturas máximas inferiores a las mínimas. En la siguiente Figura se puede ver la variabilidad mensual de cada uno de estos umbrales y el efecto del tipo de día (seco o lluvioso) sobre ellos. 
+
+```{r, echo = FALSE, message = FALSE}
+umbrales_temperatura <- gamgen_fit$statistics_threshold %>%
+  tidyr::gather(rango, valor, -c('station_id', 'month', 'prcp_occ'))
+
+
+tipo.dia <- c("Lluvioso", "Seco")
+names(tipo.dia) <- c("1", "0")
+
+ggplot2::ggplot(umbrales_temperatura, ggplot2::aes(x = month, y = valor, color = rango)) +
+  ggplot2::geom_line() +
+  ggplot2::scale_x_continuous(limits = c(1, 12), breaks = seq(1, 12, 1)) +
+  ggplot2::scale_y_continuous(limits = c(0, 40), seq(0, 40, 5), name = 'Amplitud térmica diaria [°C]') +
+  ggplot2::scale_color_manual(values = c("max.range" = "#a50026", "min.range" = "#4575b4"),
+                              labels = c("max.range" = "Máxima", "min.range" = "Mínima")) +
+  ggplot2::facet_wrap(~prcp_occ, ncol = 1, labeller = ggplot2::labeller(prcp_occ = tipo.dia))  +
+  ggplot2::labs(x = 'Meses', 
+                title = 'Rango de la amplitud térmica en Villa Reynolds Aero (87544)',
+                col = 'Amplitud') +
+  ggplot2::theme_bw() +
+  ggplot2::theme(
+    legend.position = 'bottom', 
+    plot.title = ggplot2::element_text(hjust = 0.5),
+    plot.subtitle = ggplot2::element_text(hjust = 0.5)
+  )
+```
+
+Cada uno de los GAMs ajustados se almacenan en el objeto `gamgen_fit` y pueden ser evaluados con la función `summary()`. 
+
+```{r}
+summary(gamgen_fit$fitted_models$`87448`$tmax_fit)
+```
+
+La función `summary` permite analizar los resultados del ajuste de cada uno de los modelos. 
+
+
+Ahora vamos a visualizar los resultados del modelo ajustado de temperatura máxima (clima local) y la temperatura observada de la estación. 
+
+```{r, echo = FALSE, message = FALSE}
+# Extraemos el GAM de temperatura máxima 
+modelo.tmax <- gamgen_fit$fitted_models$`87448`$tmax_fit
+
+# Extraemos del modelo los valores observados y ajustados por el GAM (sin componente aleatoria)
+comparacion.observado.clima <- data.frame(date = modelo.tmax$dates_used_fitting,
+                                          observado = modelo.tmax$model$tmax,
+                                          clima.local = modelo.tmax$fitted.values)
+highcharter::highchart() %>%
+  highcharter::hc_add_series(data = comparacion.observado.clima %>% 
+                               dplyr::filter(date < as.Date('1980-12-31')), type = "line", visible = TRUE, zIndex = 1,
+                             tooltip = list(valueSuffix = " [°C]", valueDecimals = 1),
+                             showInLegend = TRUE, name = "Temperatura máxima ajustada",
+                             mapping = highcharter::hcaes(x = date, y = clima.local)) %>%
+  highcharter::hc_add_series(data = comparacion.observado.clima %>% 
+                               dplyr::filter(date < as.Date('1980-12-31')), type = "line", visible = TRUE, 
+                             showInLegend = TRUE, name = "Temperatura máxima observada", zIndex = 2, 
+                             tooltip = list(valueSuffix = " [°C]", valueDecimals = 1),
+                             mapping = highcharter::hcaes(x = date, y = observado)) %>%
+  highcharter::hc_xAxis(type = 'datetime', title = list(text = "Fecha")) %>%
+  highcharter::hc_yAxis_multiples(
+    list(title = list(text = "Temperatura [°C]"), min = -10, max = 50),
+    list(opposite = FALSE, title = list(text = " "))
+  ) %>%
+  highcharter::hc_chart(type = 'line', zoomType = 'x', panning = TRUE, panKey = 'shift') %>%
+  highcharter::hc_legend(enabled = TRUE, layout = "horizontal") %>%
+  highcharter::hc_tooltip(shared = TRUE) %>%
+  highcharter::hc_colors(c("#fc8d62", "#a6cee3")) %>%
+  highcharter::hc_title(text = "Temperaturas máximas observada y ajustada de Villa Reynolds (San Luis, Argentina)") %>%
+  highcharter::hc_add_theme(highcharter::hc_theme_elementary()) %>%
+  highcharter::hc_plotOptions(
+    series = list(
+      marker = list(
+        enabled = TRUE,
+        symbol = 'diamond',
+        radius = 5,
+        lineWidth = 0,
+        states = list(
+          hover = list(
+            enabled = F
+          )
+        )
+      )
+    ),
+    column = list(
+      borderWidth = 0
+    )
+  )
+```
+
+# Generación de series sintéticas 
+
+La simulación de datos también está compuesta por dos funciones. En una se especifica gran parte de la configuración de la simulación mientras que la otra realiza la simulación propiamente dicha. 
+
+Los argumentos de la función de control son: 
+
+* `nsim`: Cantidad de simulaciones a realizar. Se debe ingresar un valor **entero** mayor o igual a 1.
+* `seed`: Semilla. Se debe ingresar cualquier numero **entero**. No es necesario recordarlo porque se guarda junto a los resultados.
+* `avbl_cores`: Cantidad de núcleos disponibles para la paralelización.
+* `use_spatially_correlated_noise`: Utilizar la generación estocástica espacialmente correlacionada. Esta opción es sólo válida si en el ajusta y en la simulación se usaron más de cinco estaciones meteorológicas diferentes. Con un menor número no es posible calcular los variogramas necesario. Se debe introducir un **boolean** (TRUE or FALSE).
+* `use_temporary_files_to_save_ram`: Si se simulan muchas realizaciones o los recursos informáticos son escasos, esta opción permite guardar los resultados de cada una de las simulaciones en el disco liberando memoria RAM que quedará disponible para generar nuevas simulaciones. Al finalizar la generación todos los archivos se combinan en uno único. Se debe introducir un **boolean** (TRUE or FALSE).
+* `use_temporary_files_to_save_ram`: Esta opción permite eliminar los archivos temporales creados para ahorrar RAM luego de terminar la generación de todas las simulaciones. Se debe introducir un **boolean** (TRUE or FALSE).
+
+```{r}
+control_sim <- gamwgen::local_simulation_control(
+  nsim = 100, # Cantidad de simulaciones a realizar
+  seed = 1234, # Semilla para que los resultados sean reproducirles
+  avbl_cores = 1, # Cantidad de núcleos disponibles a utilizar
+  use_spatially_correlated_noise = FALSE, # Usar modelo de ruido espacialmente correlacionado
+  use_temporary_files_to_save_ram = FALSE, # Guardar resultados intermedios para ahorrar RAM
+  remove_temp_files_used_to_save_ram = TRUE) # Borrar los resultados intermedios creados anteriormente
+```
+
+Luego se procede a la simulación de datos meteorológicos. Los argumentos de la función de simulación son:
+
+* `model`: objeto con el resultado de la función `local_calibrate()`
+* `simulation_locations`: objeto tipo `sf` con la ubicación de las estaciones a simular. Las estaciones usadas deben haber sido incluidas en el proceso de ajuste. No es necesario que todas estén presentes, se pueden generar series solo sobre algunas de ellas.
+* `start_date`: Fecha de comienzo de la generación de series sintéticas. Si no se incluyeron covariables estacionales en el ajuste, la fecha de comienzo es completamente arbitraria. Caso contrario, la fecha de comienzo no puede ser anterior al comienza de la serie de covariables, ni tampoco puede ser posterior. Se debe introducir una fecha en formato **date** 
+* `end_date`: fecha de fin de la generación de series sintéticas. Si no se incluyeron covariables estacionales en el ajuste, la fecha de fin es completamente arbitraria. Caso contrario, la fecha de comienzo no puede ser anterior al comienza de la serie de covariables, ni tampoco puede ser posterior. Se debe introducir una fecha en formato **date** 
+* `control`: objeto de control
+* `output_folder`: ruta al directorio donde se guardarán los resultados, tanto finales como intermedios. 
+* `output_filename`: nombre del archivo de salida. Para facilitar la interoperabilidad, el archivo generado es un archivo de texto en formato separado por comas (.csv)
+* `seasonal_covariates`: datos agregados trimestrales. Si el ajuste se realizó sin covariables, la generación también debe realizarse sin ellas. Caso contrario se producirá un error. Se debe introducir un data frame con los valores agregados para las tres variables (precipitación y temperaturas máxima y mínima) pero no necesariamente deben ser los mismos a los utilizados en el ajuste. Si se desean simular tendencias de algún tipo, ya sea de un modelo de cambio climático o arbitrarias, se deben perturbar estas variables trimestrales e introducirlas aquí.
+* `verbose`: controla la impresión de mensajes en la consola. FALSE por defecto.
+
+```{r, eval = FALSE, message = FALSE}
+# Al correr la función se realiza la generación de series para cada una de las estaciones. 
+# En este caso, por cuestiones de tiempo, vamos a cargar un objeto con los resultados de la simulación 
+simulated_climate <- local_simulation(model = gamgen_fit, # Objeto con los resultados del ajuste
+                                      simulation_locations = stations, # Estaciones para las cuales simular
+                                      start_date = as.Date('1961-01-01'), # Fecha de comienzo de las simulaciones
+                                      end_date = as.Date('2019-01-01'), # Fecha de fin de las simulaciones
+                                      control = control_sim, # Objeto con la configuración
+                                      output_folder = getwd(), # Directorio donde se guardarán los resultados
+                                      output_filename = 'simulations.csv', # Nombre del archivo de salida
+                                      seasonal_covariates = seasonal_covariates, # Covariables estacionales
+                                      verbose = FALSE) # Impresión de mensajes en la consola
+```
+
+Esta función produce dos tipos de resultados: una lista que permanece en el ambiente de R y los datos generados que son guardados como csv en el directorio indicado precedentemente. 
+
+```{r}
+if (!fs::file_exists('input_data/simulated_local.csv')) {
+  write.csv(readr::read_csv(system.file('/autorun/local', "simulated_local.csv",  package = "gamwgen")), here::here('output_data/simulated_local.csv'), row.names = FALSE)
+}
+```
+
+Resultados de la generación 
+
+```{r}
+# Se carga el set de datos simulados
+simulated_climate <- readr::read_csv(here::here('output_data/simulated_local.csv')) 
+```
+
+
+Diagnósticos 
+
+
+```{r}
+
+```
+
+A continuación se mostraran algunos de los diagnósticos
+
+```{r, echo = FALSE, message = FALSE}
+
+```
+
+```{r}
+
+source("./src/funciones_validacion.R", local = knitr::knit_global())
+
+# Se definen las variables a validar
+variables <- c('tmax', 'tmin', 'prcp')
+
+# Se agrega la latitud como una variable más en el data frame con los metadatos de las estaciones
+stations <- stations %>%
+    dplyr::mutate(lat_dec = sf::st_coordinates(geometry)[,'Y'])
+# Estaciones usadas en el ajuste. En este ejemplo son las mismas porque solo se ajustó una estación
+fit_stations <- stations
+# Se debe definir el umbral de lluvia
+umbral.precipitacion <- 0.1
+
+```
+
+El objetivo de las distintas pruebas diagnósticas es comprobar si los datos observados pueden ser considerados una realización más del generador. En otras palabras, que las series observadas no pueden distinguirse de las sintéticas. Esto no implica que tengan exactamente la misma media o desvío estándar, etc. 
+
+```{r, echo = FALSE, message = FALSE}
+
+# Del resultado de la generación se extraen las distintas realizaciones
+realizaciones   <- BuscarRealizaciones(simulated_climate = simulated_climate, stations)
+simulaciones  <- realizaciones$simulaciones
+periodo       <- realizaciones$periodo
+estaciones    <- as.character(realizaciones$estaciones)
+plots         <- list()
+for (station.id in estaciones) {
+  cat(paste0("Procesando estacion ", station.id, "\n"))
+  station.data      <- stations %>% dplyr::filter(station_id == station.id)
+  plots.estacion    <- list()
+  xts.observacion   <- list()
+  xts.realizaciones <- list()
+  subtitle          <- paste0("Station ", station.id, 
+                             ifelse(station.id %in% fit_stations$station_id,
+                                    " (used in model fitting)",
+                                    " (not used in model fitting)"))
+
+  # Búsqueda de datos por variables para la estación  
+  for (variable in variables) {
+    xts.realizaciones[[variable]] <- simulaciones[[station.id]][[variable]]
+    indices.realizaciones         <- index(xts.realizaciones[[variable]])
+    xts.observacion[[variable]]   <- CompletarSerieXTS(BuscarSerieTemporalObservada(climate, station.id, variable, periodo$desde, periodo$hasta), indices.realizaciones[1], indices.realizaciones[length(indices.realizaciones)])
+    indices.na                    <- which(is.na(xts.observacion[[variable]]))
+    xts.realizaciones[[variable]][indices.na,] <- NA # Para evitar bias, pongo NA en las fechas donde no hay observación
+  }
+    
+  # Plots por variable
+  for (variable in variables) {
+    cat(paste0("... variable ", variable, "\n"))
+    plots.variable <- list()
+    
+    # Para el caso de precipitación, se ponen primero los gráficos de ocurrencia y luego los de montos
+    if (variable == "prcp") {
+      # a. Probabilidad de día lluvioso
+      plots.variable[[length(plots.variable)+1]] <- GenerarBoxplotPorMes(xts.observacion[[variable]], 
+                                                                         xts.realizaciones[[variable]], 
+                                                                         station.id = station.id, 
+                                                                         variable = variable, 
+                                                                         group.by.func.name = ".GlobalEnv$WetDayProbability",
+                                                                         title = paste0("Probability of a wet day by month"),
+                                                                         y.title = "Probability of a wet day",
+                                                                         subtitle = subtitle)
+
+      # b. Días lluviosos por trimestre/ano
+      plots.variable[[length(plots.variable)+1]] <- GenerarBoxplotPorTrimestreAno(xts.observacion[[variable]], 
+                                                                                  xts.realizaciones[[variable]], 
+                                                                                  station.id = station.id, 
+                                                                                  variable = variable, 
+                                                                                  group.by.func.name = ".GlobalEnv$WetDays",
+                                                                                  title = "Wet days by quarter/year",
+                                                                                  subtitle = subtitle)
+    
+      # c. Rachas de días lluviosos y secos
+      plots.variable[[length(plots.variable)+1]] <- GenerarCDFEventosLluvia(xts.observacion[[variable]], 
+                                                                            xts.realizaciones[[variable]], 
+                                                                            station.id = station.id, 
+                                                                            tipo.evento.id = 1, 
+                                                                            title = "Wet days spells CDF",
+                                                                            subtitle = subtitle)
+      plots.variable[[length(plots.variable)+1]] <- GenerarCDFEventosLluvia(xts.observacion[[variable]], 
+                                                                            xts.realizaciones[[variable]], 
+                                                                            station.id = station.id, 
+                                                                            tipo.evento.id = 0, 
+                                                                            title = "Dry days spells CDF",
+                                                                            subtitle = subtitle)
+      # c. Rachas de días lluviosos y secos
+      plots.variable[[length(plots.variable)+1]] <- GenerarPDFEventosLluvia(xts.observacion[[variable]], 
+                                                                            xts.realizaciones[[variable]], 
+                                                                            station.id = station.id, 
+                                                                            tipo.evento.id = 1, 
+                                                                            title = "Wet days spells PDF",
+                                                                            subtitle = subtitle)
+      plots.variable[[length(plots.variable)+1]] <- GenerarPDFEventosLluvia(xts.observacion[[variable]], 
+                                                                            xts.realizaciones[[variable]], 
+                                                                            station.id = station.id, 
+                                                                            tipo.evento.id = 0, 
+                                                                            title = "Dry days spells PDF",
+                                                                            subtitle = subtitle)
+    
+      # d. Boxplot de días húmedos por mes (sin anio y en 1 solo gráfico)
+      plots.variable[[length(plots.variable)+1]] <- GenerarBoxplotPorMes(xts.observacion[[variable]], 
+                                                                         xts.realizaciones[[variable]], 
+                                                                         station.id = station.id, 
+                                                                         variable = variable, 
+                                                                         group.by.func.name = ".GlobalEnv$WetDays",
+                                                                         title = paste0("Total wet days by month"),
+                                                                         subtitle = subtitle,
+                                                                         y.title = "Total wet days in sequence")
+    }
+    
+    # e. QQPLOT observado vs simulado
+    plots.variable[[length(plots.variable)+1]] <- GenerarQQPlotPorPeriodo(xts.observacion[[variable]], 
+                                                                          xts.realizaciones[[variable]], 
+                                                                          station.id = station.id, 
+                                                                          variable = variable, 
+                                                                          percentile.threshold.extreme = 0.99,
+                                                                          periodo.mapping.func.name = "quarter",
+                                                                          title = paste0("Quantile-Quantile plot of daily ", tolower(GetVariableName(variable, FALSE)), " by quarter"),
+                                                                          subtitle = subtitle)
+    if (variable == "prcp") {
+      plots.variable[[length(plots.variable)+1]] <- GenerarPDFPrecipitacionesDiasHumedos(xts.observacion[[variable]], 
+                                                                                         xts.realizaciones[[variable]], 
+                                                                                         title = paste0("PDF of daily rainfall in wet days by quarter"),
+                                                                                         subtitle = subtitle)
+    }
+      
+    # f. Histograma de media temporal
+    if (variable != "prcp") {
+      plots.variable[[length(plots.variable)+1]] <- GenerarHistogramaMediaTemporal(xts.observacion[[variable]], 
+                                                                                   xts.realizaciones[[variable]], 
+                                                                                   station.id = station.id, 
+                                                                                   variable = variable,
+                                                                                   title = paste0(GetVariableName(variable, FALSE), " temporal mean"),
+                                                                                   subtitle = subtitle)
+    }
+  
+    # g. CDF de realizaciones vs. CDF de observaciones
+    if (variable != "prcp") {
+      plots.variable[[length(plots.variable)+1]] <- GenerarCDFPorPeriodo(xts.observacion[[variable]], 
+                                                                         xts.realizaciones[[variable]], 
+                                                                         station.id = station.id, 
+                                                                         variable = variable,
+                                                                         periodo.mapping.func.name =  "quarter",
+                                                                         title = paste0(GetVariableName(variable, FALSE), " CDF by quarter"),
+                                                                         subtitle = subtitle)
+    }
+  
+    # h. Boxplot de media por trimestre/ano (media para temperaturas y suma/días lluviosos para precipitaciones)
+    plots.variable[[length(plots.variable)+1]] <- GenerarBoxplotPorTrimestreAno(xts.observacion[[variable]], 
+                                                                                xts.realizaciones[[variable]], 
+                                                                                station.id = station.id, 
+                                                                                variable = variable, 
+                                                                                group.by.func.name = ifelse(variable == "prcp", "sum", "mean"),
+                                                                                title = ifelse(variable == "prcp",
+                                                                                               paste0("Accumulated rainfall by quarter/year"),
+                                                                                               paste0("Mean ", tolower(GetVariableName(variable, FALSE)), " by quarter/year")),
+                                                                                subtitle = subtitle)
+                                                                                   
+    
+    
+    # i. Autocorrelacion (Lag-1) por mes de valores simulados (boxplot) vs observados (point)
+    if (variable != "prcp") {
+      plots.variable[[length(plots.variable)+1]] <- GenerarBoxplotAutocorrelaciones(xts.observacion[[variable]], 
+                                                                                    xts.realizaciones[[variable]], 
+                                                                                    station.id = station.id, 
+                                                                                    variable = variable,
+                                                                                    title = paste0("Lag-1 autocorrelation of ", tolower(GetVariableName(variable, FALSE)), " by month"),
+                                                                                    subtitle = subtitle)
+    }
+    
+    # j. PDF de lluvia diaria por mes
+    if (variable == "prcp") {
+      plots.variable[[length(plots.variable)+1]] <- GenerarPDFPorPeriodo(xts.observacion[[variable]], 
+                                                                         xts.realizaciones[[variable]], 
+                                                                         station.id = station.id, 
+                                                                         variable = variable, 
+                                                                         periodo.mapping.func.name = "month", 
+                                                                         valor.umbral = umbral.precipitacion,
+                                                                         title = paste0(GetVariableName(variable, FALSE), " PDF by month"),
+                                                                         subtitle = subtitle)
+    }
+    
+    # k. Boxplot de SD/MAD de días lluviosos por mes
+    if (variable == "prcp") {
+      plots.variable[[length(plots.variable)+1]] <- GenerarBoxplotPorMes(xts.observacion[[variable]], 
+                                                                         xts.realizaciones[[variable]], 
+                                                                         station.id = station.id, 
+                                                                         variable = variable, 
+                                                                         group.by.func.name = "sd",
+                                                                         title = "Standard deviation of accumulated rainfall by month",
+                                                                         subtitle = subtitle, 
+                                                                         acumular.primero.por.mes = TRUE)
+      plots.variable[[length(plots.variable)+1]] <- GenerarBoxplotPorMes(xts.observacion[[variable]], 
+                                                                         xts.realizaciones[[variable]], 
+                                                                         station.id = station.id, 
+                                                                         variable = variable, 
+                                                                         group.by.func.name = "mad",
+                                                                         title = "Median absolute deviation of accumulated rainfall by month",
+                                                                         subtitle = subtitle, 
+                                                                         acumular.primero.por.mes = TRUE)
+    }
+    
+    # l. Días con heladas
+    if (variable == "tmin") {
+      plots.variable[[length(plots.variable)+1]] <- GenerarHistogramaDiasConHeladas(xts.observacion[[variable]],
+                                                                                    xts.realizaciones[[variable]], 
+                                                                                    station.id = station.id, 
+                                                                                    title = "Mean number of freezing days per year",
+                                                                                    subtitle = subtitle)
+      plots.variable[[length(plots.variable)+1]] <- GenerarHistogramaDiasConHeladasPorTrimestre(xts.observacion[[variable]],
+                                                                                                xts.realizaciones[[variable]], 
+                                                                                                station.id = station.id, 
+                                                                                                title = "Mean number of freezing days per year/quarter",
+                                                                                                subtitle = subtitle)
+    }
+    
+    # m. Diferencias entre media mensual de temperatura simulada y observada
+    if (variable != "prcp") {
+      plots.variable[[length(plots.variable)+1]] <- GenerarBoxplotDiferenciasSimuladas(xts.observacion = xts.observacion[[variable]],
+                                                                                       xts.realizaciones = xts.realizaciones[[variable]],
+                                                                                       station.id = station.id,
+                                                                                       variable = variable,
+                                                                                       title = paste0("Differences between simulated and historical monthly mean"), 
+                                                                                       subtitle = subtitle)
+    }
+    
+    # n. Hot/cold spells
+    if (variable == "tmax") {
+      plots.variable[[length(plots.variable)+1]] <- GenerarHistogramaPeriodosCalidosFrios(xts.observacion = xts.observacion[[variable]],
+                                                                                          xts.realizaciones = xts.realizaciones[[variable]],
+                                                                                          station.id = station.id,  
+                                                                                          latitud = station.data$lat_dec,
+                                                                                          variable = variable,
+                                                                                          title = paste0("Histogram of hot spells (3+ days)"), 
+                                                                                          subtitle = subtitle)
+    } else if (variable == "tmin") {
+      plots.variable[[length(plots.variable)+1]] <- GenerarHistogramaPeriodosCalidosFrios(xts.observacion = xts.observacion[[variable]],
+                                                                                          xts.realizaciones = xts.realizaciones[[variable]],
+                                                                                          station.id = station.id,  
+                                                                                          latitud = station.data$lat_dec,
+                                                                                          variable = variable,
+                                                                                          title = paste0("Histogram of cold spells (3+ days)"), 
+                                                                                          subtitle = subtitle)
+    }
+    
+    plots.estacion[[variable]] <- plots.variable
+  }
+  
+  # Plots cruzados de variables
+  cat("... other plots\n")
+  plots.variable <- list()
+  
+  # m. Correlacion cruzada diaria (Lag-0) entre temperatura mínima y máxima
+  plots.variable[[length(plots.variable)+1]] <- GenerarBoxplotCorrelacionCruzadaTemperatura(xts.observacion, 
+                                                                                            xts.realizaciones, 
+                                                                                            station.id = station.id,
+                                                                                            title = "Lag-0 cross-correlation between tmin/tmax by month",
+                                                                                            subtitle = subtitle)
+  
+  # n. Rango de temperatura diaria promedio
+  plots.variable[[length(plots.variable)+1]] <- GenerarBoxplotRangoTemperatura(xts.observacion, 
+                                                                               xts.realizaciones, 
+                                                                               station.id = station.id,
+                                                                               title = "Mean daily temperature range by month",
+                                                                               subtitle = subtitle)
+  
+  
+  plots.estacion$other <- plots.variable
+  plots[[station.id]]      <- plots.estacion
+}
+
+```
+
+### Diagnósticos de precipitación 
+
+A continuación se mostrarán los distintos diagnósticos desarrollados para validar las series diarias de precipitación. 
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.align="center"}
+# Probabilidad de día húmedo por mes
+plots[[station.id]][['prcp']][[1]]
+```
+
+Este diagrama de cajas muestra la probabilidad de ocurrencia de un día húmedo o lluvioso por mes. Las cajas corresponden a las distintas realizaciones y los puntos rojos corresponden al valor observado en la serie histórica. 
+Se observa un claro patrón estacional y como el generador es capaz de capturarlo. En verano, uno de cada tres días es lluvioso mientras que en invierno la probabilidad baja a menos de uno en diez. 
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.align="center"}
+# Cantidad de días lluviosos por trimestre
+plots[[station.id]][['prcp']][[2]]
+```
+
+ Esta Figura muestra la cantidad de días lluviosos por trimestre a lo largo del tiempo. Los puntos rojos corresponden a la cantidad de días lluviosos observados mientras que las cajas corresponden a las distintas realizaciones. Se observa que los puntos se encuentran dentro del rango de las distintas cajas a excepción de un trimestre excepcionalmente húmedo a principios de los 2000. 
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Probabilidad acumulada de rachas secas por trimestre
+plots[[station.id]][['prcp']][[3]]
+```
+
+Esta figura muestra la probabilidad acumulada de ocurrencia de rachas secas por trimestre. La línea roja corresponde a la probabilidad acumulada observada mientras que la envolvente gris corresponde a cada una de las realizaciones.
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Probabilidad acumulada de rachas lluviosas por trimestre
+plots[[station.id]][['prcp']][[4]]
+```
+
+Esta Figura es muy similar a la anterior con la diferencia que considera las rachas lluviosas en lugar de las secas. La línea roja corresponde a los datos observados y la envolvente gris a las distintas realizaciones. Se observa que para los cuatro trimestres la línea roja se pierde entre las realizaciones. 
+
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Probabilidad de rachas lluviosas por trimestre
+plots[[station.id]][['prcp']][[5]]
+```
+
+Esta Figura muestra la probabilidad de ocurrencia de rachas lluviosas de una determinada longitud de días por trimestre. En otras palabras, permite saber cuán frecuente es una racha lluviosa en esta estación meteorológica para cada trimestre. Las líneas rojas corresponden a la serie observada mientras que la envolvente gris a las distintas realizaciones. 
+
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Probabilidad de rachas secas por trimestre
+plots[[station.id]][['prcp']][[6]]
+```
+
+Esta Figura es análoga a la anterior solo que considera las rachas secas. Las líneas rojas corresponden a la serie observada y la envolvente gris a las distintas realizaciones. Se observa que las realizaciones tienen el mismo comportamiento que las series observadas y que se captura de manera correcta la variación en las rachas para los distintos trimestres. Para estudios de impacto de sequía este diagnóstico es particularmente importante ya que será uno de los determinantes principales de los déficit acumulados. 
+
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Cantidad de días lluviosos por mes
+plots[[station.id]][['prcp']][[7]]
+```
+
+Este diagrama de cajas muestra la cantidad de días lluviosos por mes y su variabilidad a lo largo del año. Las cajas corresponden a las distintas realizaciones mientras que los puntos rojos corresponden a los valores observados. La cantidad de días lluviosos por se acumula para todos los años del período, en este caso 57 años, es por esto que en enero los días lluviosos totalizaron aproximadamente 550. A pesar de existir una diferencia de casi 400 días entre los meses estivales e invernales, el generador es capaz de capturar están gran diferencia. 
+
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Q-Q plot de totales diarios de precipitación
+plots[[station.id]][['prcp']][[8]]
+```
+
+Esta Figura compara los cuantiles observados de precipitación diaria y los simulados por el generador por cada trimestre del año. Los puntos azules corresponden a los distintos percentiles hasta el percentil 99 mientras que los rojos corresponden a los montos mayores al percentil 99, es decir, a los extremos. En el eje x se ubican los cuantiles observados mientras que en el y, los simulados. El objetivo de esta prueba es que los puntos estén alineados sobre la recta 1:1 lo que indicaría que ambos cuantiles, observados y simulados, son iguales. Se observa que para casi todos los puntos, a excepción de los más extremos, la concordancia de ambas series es muy buena. 
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Probabilidad de los montos de precipitación diaria por trimestre
+plots[[station.id]][['prcp']][[9]]
+```
+
+Esta Figura muestra la probabilidad de los montos diarios de precipitación diaria por trimestre. El área roja corresponde a los montos observados mientras que la azul, a los simulados. Cabe mencionar que la escala en el eje x es logarítmica por lo que pequeños desplazamientos sobre el eje implican grandes cambios en los montos. Se observa un buen acuerdo para las cuatro estaciones del año a excepción de los pequeños montos cercanos a un 1 mm. 
+
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Probabilidad de rachas lluviosas por trimestre
+plots[[station.id]][['prcp']][[10]]
+```
+
+Este diagnóstico compara la precipitación agregada por trimestre. Las cajas corresponden a las distintas realizaciones mientras que los puntos rojos corresponden al valor observado. Al utilizar totales trimestrales en el ajuste y la generación se producen series que copian las variaciones observadas en el registro histórico. Es decir, si el año observado tuvo precipitaciones por debajo del promedio, las distintas realizaciones tenderán a ser menores al promedio y viceversa.
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Probabilidad de los totales mensuales de precipitación 
+plots[[station.id]][['prcp']][[11]]
+```
+
+Esta Figura muestra la distribución de los totales mensuales de precipitación. La línea roja corresponde a los acumulados mensuales observados mientras que las grises a las distintas realizaciones. Cabe mencionar que la escala del eje x es logarítmica por lo que pequeños desplazamientos sobre el eje implican grandes cambios en los montos. Se observa un buen acuerdo para todos los meses. 
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Desviación estándar de los totales mensuales 
+plots[[station.id]][['prcp']][[12]]
+```
+
+Esta Figura muestra la marcha mensual de los desvíos estándar de precipitación mensual. Es decir, la variabilidad de los acumulados mensuales a lo largo del año. Los puntos rojos corresponden a los valores calculados a partir de los datos observados y las cajas a las distintas realizaciones. Se observa que el generador es capaz de capturar la variabilidad intranual ya que la mediana de las cajas siguen el mismo patrón que los datos observados. Además, las cajas en los meses estivales son mas grandes lo que implica una mayor variabilidad en comparación con los meses invernales. 
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE,  warning = FALSE, fig.align="center"}
+# Desvío mediano absoluto de los totales de precipitación
+plots[[station.id]][['prcp']][[13]]
+```
+
+Esta Figura muestra otra medida de dispersión, en este caso, el desvío absoluto mediano (MAD, por sus siglas en inglés). Al igual que en el caso anterior, las cajas corresponden al MAD calculado a partir de los datos observados y las cajas a las distintas realizaciones. El buen acuerdo entre las cajas y los puntos confirma que el generador captura la variabilidad en los totales mensuales de lluvia.
+
+### Diagnósticos de temperatura máxima 
+
+A continuación se mostrarán los distintos diagnósticos desarrollados para validar las series diarias de temperatura máxima. 
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Q-Q Plots de temperatura máxima diaria
+plots[[station.id]][['tmax']][[1]]
+```
+
+En esta Figura se muestra una comparación de los cuantiles observados y generados de temperatura máxima diaria por trimestre. En el eje x se encuentran los cuantiles observados mientras que en el y, los generados. Los puntos azules corresponden a los puntos cuyo valor se encuentra entre el percentil 1 y 99 y los rojos a los menores y superiores de los percentiles 1 y 99, respectivamente. El objetivo de esta prueba es verificar que todos los puntos se encuentren sobre la recta 1:1. Se observa una muy buena concordancia para los cuatros trimestres incluso en los extremos de la distribución. 
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Temperatura máxima media de la serie
+plots[[station.id]][['tmax']][[2]]
+```
+
+Esta Figura compara la temperatura máxima media de la serie observada con la de las distintas realizaciones. La línea vertical roja corresponde al valor observado mientras que las barras a las distintas realizaciones. Se observa que la medias máximas de todos las realizaciones se encuentran en un rango muy estrecho del orden de décimas de grado centígrado.
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Probabilidad acumulada de la temperatura máxima diaria
+plots[[station.id]][['tmax']][[3]]
+```
+
+Esta Figura muestra la probabilidad acumulada de la temperatura máxima por trimestre del año. La línea roja corresponde a la probabilidad observada mientras que las azules, a las distintas realizaciones. Se observa que las líneas azules envuelven perfectamente a la línea roja por lo que la distribución probabilística es casi idéntica.
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Temperatura máxima por trimestre
+plots[[station.id]][['tmax']][[4]]
+```
+
+Esta Figura compara la variabilidad de la temperatura máxima media por trimestre a lo largo del tiempo. Los puntos rojos corresponden a las medias observadas mientras que las cajas a las distintas realizaciones. Se observa que las cajas siguen el comportamiento de los datos observados. 
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Atucorrelación de la temperatura máxima diaria en el día t con el día t-1. 
+plots[[station.id]][['tmax']][[5]]
+```
+
+Esta Figura compara la autocorrelación de los valores con el lag -1. Es decir, compara la temperatura máxima diaria del día __t__ con la temperatura máxima del día __t-1__. Los puntos rojos corresponden a la autocorrelación observada mientras que las cajas a las distintas realizaciones. Se observa un patrón anual muy marcado con autocorrelaciones más altas en invierno que en verano. Este diagnóstico es muy importante para verificar si las potenciales rachas cálidas serán bien reflejadas o no. 
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Diferencia entre la media histórica y la generada
+plots[[station.id]][['tmax']][[6]]
+```
+
+Esta Figura compara la media mensual calculada a partir de la series histórica con las distintas realizaciones para cada mes del año. La línea roja corresponde a una diferencia de 0 lo que quiere decir que la media observada y generada son iguales. Se observa que para casi todos los meses las cajas se encuentran sobre la línea roja a excepción de los meses de junio y agosto donde se observa un leve sesgo frío de menos de 0.25 °C. 
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Histograma de rachas cálidas 
+plots[[station.id]][['tmax']][[7]]
+```
+
+Esta Figura compara la distribución de la cantidad de rachas cálidas generadas con las observadas en el registro histórico. La línea roja corresponde a la cantidad de períodos cálidos totales en el registro mientras que las barras a las distintas realizaciones. Se observa que hay una subestimación en la cantidad total de rachas cálidas para esta estación.
+
+### Diagnósticos de temperatura mínima 
+
+A continuación se mostrarán los distintos diagnósticos desarrollados para validar las series diarias de temperatura mínima 
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Q-Q Plots de temperatura mínima diaria
+plots[[station.id]][['tmin']][[1]]
+```
+
+En esta Figura se muestra una compararon de los cuantiles observados y generados de temperatura mínima diaria por trimestre. En el eje x se encuentran los cuantiles observados mientras que en el y, los generados. Los puntos azules corresponden a los puntos cuyo valor se encuentra entre el percentil 1 y 99 y los rojos a los menores y superiores de los percentiles 1 y 99, respectivamente. El objetivo de esta prueba es verificar que todos los puntos se encuentren sobre la recta 1:1. Se observa una muy buena concordancia para los cuatros trimestres incluso en los extremos de la distribución. Solo algunos puntos son subestimados en el extremo inferior de la distribución.
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Temperatura mínima media de la serie
+plots[[station.id]][['tmin']][[2]]
+```
+
+Esta Figura compara la temperatura mínima media de la serie observada con la de las distintas realizaciones. La línea vertical roja corresponde al valor observado mientras que las barras a las distintas realizaciones. Se observa que la medias mínimas de todos las realizaciones se encuentran en un rango muy estrecho del orden de dos décimas de grado centígrado. La diferencia entre la media observada el centro de la distribución de las medias mínimas generadas es de menos de 0.2 °C.
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Probabilidad acumulada de la temperatura mínima diaria
+plots[[station.id]][['tmin']][[3]]
+```
+
+Esta Figura muestra la probabilidad acumulada de la temperatura mínima por trimestre del año. La línea roja corresponde a la probabilidad observada mientras que las azules, a las distintas realizaciones. Se observa que las líneas azules envuelven perfectamente a la línea roja por lo que la distribución probabilística es casi idéntica.
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Temperatura mínima por trimestre
+plots[[station.id]][['tmin']][[4]]
+```
+
+Esta Figura compara la variabilidad de la temperatura mínima media por trimestre a lo largo del tiempo. Los puntos rojos corresponden a las medias observadas mientras que las cajas a las distintas realizaciones. Se observa que las cajas siguen el comportamiento de los datos observados incluso en años con grandes variaciones frente a la media.
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Atucorrelación de la temperatura mínima diaria en el día t con el día t-1. 
+plots[[station.id]][['tmin']][[5]]
+```
+
+Esta Figura compara la autocorrelación de los valores con el lag -1. Es decir, compara la temperatura mínima diaria del día __t__ con la temperatura mínima del día __t-1__. Los puntos rojos corresponden a la autocorrelación observada mientras que las cajas a las distintas realizaciones. Se observa un patrón anual muy marcado con autocorrelaciones más altas en otoño e invierno que en verano. 
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Cantidad media de días con heladas por año
+plots[[station.id]][['tmin']][[6]]
+```
+
+Esta Figura compara la cantidad de días con heladas durante un año. La línea vertical roja corresponde a la cantidad media de heladas por año calculada a partir de los registros históricos mientras que las barras corresponden a las distintas realizaciones. EL generador es capaz de simular muy bien los días con heladas ya que que la diferencia entre el valor observado y la media de la distribución de las series sintéticas es menor a un día.
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Cantidad media de días con heladas por trimestre
+plots[[station.id]][['tmin']][[7]]
+```
+
+Esta Figura es similar a la anterior con la diferencia en que se divide el año en los distintos trimestres. Al igual que en el caso anterior, la cantidad de días con heladas generados es prácticamente idéntica a lo observado.
+
+```{r, echo = FALSE, message = FALSE,  warning = FALSE, fig.align="center"}
+# Diferencia entre la media mínima histórica y la generada
+plots[[station.id]][['tmin']][[8]]
+```
+
+Esta Figura compara la media mensual calculada a partir de la series histórica con las distintas realizaciones para cada mes del año. La línea roja corresponde a una diferencia de 0 lo que quiere decir que la media observada y generada son iguales. Se observa que para durante los meses invernales hay un ligero sesgo cálido de 0.5 °C aproximadamente.
+
+```{r, echo = FALSE, message = FALSE, warning = FALSE, fig.align="center"}
+# Histograma de rachas frías 
+plots[[station.id]][['tmin']][[9]]
+```
+
+Esta Figura compara la distribución de la cantidad de rachas frías generadas con las observadas en el registro histórico. La línea roja corresponde a la cantidad de períodos fríos totales en el registro mientras que las barras a las distintas realizaciones. Se observa que hay una subestimación en la cantidad total de rachas cálidas para esta estación.
+
+### Diagnósticos de auxiliares
+
+En esta sección se muestran de diagnósticos auxiliares centrados en la consistencia entre variables.
+
+
+```{r,  message = FALSE, warning = FALSE, fig.align="center"}
+# Correlación cruzada entre las temperaturas máximas y mínimas por mes
+plots[[station.id]][['other']][[1]]
+```
+
+Esta Figura compara la variación mensual de la correlación cruzada entre las temperaturas máximas y mínimas. La autocorrelación curzada evalúa si ambas variables varían al mismo tiempo y con que magnitud. Los puntos rojos corresponden a la correlación cruzada calculada a partir de los datos observados y las cajas a las distintas realizaciones. Se observa que se captura el patrón general aunque con una subestimación durante el invierno. Una baja autocorrelación implica grandes amplitudes témicas ya que no varían conjuntamente.
+
+```{r,  message = FALSE, warning = FALSE, fig.align="center"}
+# Temperatura media diaria mensual por tipo de día (seco o lluvioso)
+plots[[station.id]][['other']][[2]]
+```
+
+Esta Figura compara la temperatura media para los distintos meses del año considerando el tipo de día, es dcir, si llovió o no. Los puntos rojos corresponden al valor observado mienstras que las cajas a las distintas realizaciones. Se observa que cuando se consideran todos los días o sólo los días secos la concordancia es muy buena. Para los días lluviosos, en cambio, ésta sigue siendo buena para los meses estivales pero existe un marcado sesgo cálido en el invierno. Esto podría debeerse a que en esta estación hay muy poco días lluviosos en invierno por lo que no son suficientes para que el modelo los capture. 
+
+
+# Generación de series sintéticas para una grilla regular
+
+En esta sección solo se presentarán brevemente las funciones necesarias para realizar la generación de series sobre una grilla regular. 
+
+## Crear archivos de entrada
+
+El primer paso consiste en generar los dataset de entrada que se instalaron junto al paquete del generador estocástico. Este set de datos es sólo a título demostrativo, si el usuario desea correr el modelo con sus propios datos deberá cambiar los objetos que se generarán en esta sección por los suyos y colocarlos en la carpeta input_data. 
+
+Los archivos necesarios son:
+
+* stations.csv
+* climate.csv
+
+```{r, echo = FALSE}
+if (!fs::file_exists('input_data/stations_spatial.csv')) {
+  write.csv(readr::read_csv(system.file('/autorun/spatial', "stations.csv",  package = "gamwgen")), here::here('input_data/stations_spatial.csv'), row.names = FALSE)
+}
+
+if (!fs::file_exists('input_data/local/climate_spatial.csv')) {
+  write.csv(readr::read_csv(system.file('/autorun/local', "climate.csv",  package = "gamwgen"), col_types = "Diddd"), here::here('input_data/climate_spatial.csv'), row.names = FALSE)
+}
+```
+
+El primer paso para la generación de las series sintéticas es el ajuste de los modelos estadísticos: dos para temperaturas máxima y mínima y dos para precipitación. Estos modelos necesitan de datos observados diarios de variables meteorológicas. A diferencia del ajuste de los modelos para un punto son necesarias al menos cinco estaciones para que los distintos modelos estadístico converjan. Además, debe existir un solapamiento entre las series temporales de las distintas estaciones involucradas de al menos 30 años.
+
+Los datos meteorológicos se dividen en dos archivos separados: `stations_spatial.csv` y `climate_spatial.csv`. Los nombres de los mismos no deben ser iguales a los usados aquí.
+
+Los metadatos de las estaciones se alojan en el archivo `stations_spatial.csv`. Este archivo contiene la información indispensable de las estaciones meteorológicas que serán usadas 
+en el ajuste del modelo. Las variables que deben ser incluidas en la tabla son:
+
+* station_id: número unívoco para cada estación meteorológica. La variable debe ser de tipo _integer_
+* latitude: latitud en grados decimales. La variable debe ser de tipo _double_
+* longitude: longitud en grados decimales. La variable debe ser de tipo _double_
+
+La tabla puede tener más variables pero sólo se necesitan las anteriores. 
+
+```{r, echo = FALSE, message = FALSE}
+stations <- readr::read_csv(here::here('input_data/stations_spatial.csv')) %>%
+  dplyr::rename(station_id = omm_id) %>%
+  dplyr::mutate(station_id = as.integer(station_id))
+
+```
+A continuación se muestran las primeras cinco filas del dataset y los tipos de dato de cada una de las variables. En este caso se muestra la información de 15 estaciones meteorológicas de Uruguay.
+
+```{r}
+head(stations)
+
+# Vista de los metadatos de la estación
+knitr::kable(stations)
+```
+
+El objeto **stations** debe ser convertido de _tibble_ a _sf_. El sistema de referencia espacial debe ser planar. No es necesario un sistema de referencia 
+espacial en particular, solamente las coordenadas deben estar expresadas en metros. 
+
+```{r}
+# Convertimos el objeto stations a sf y se convierte su proyección de WGS 1984 a
+# Gauss-Krugger.
+stations %<>% 
+  sf::st_as_sf(coords = c("lon_dec", "lat_dec"), crs =  4326) %>%
+  sf::st_transform(crs = 22185)
+```
+
+La información climática se aloja en el archivo `climate.csv`. Este archivo contiene los datos de las estaciones meteorológicas que serán usadas en el ajuste del modelo. Las variables que deben ser incluidas en la tabla son:
+
+* date: fecha del dato. La variable debe ser de tipo _date_
+* station_id: número unívoco para cada estación meteorológica. La variable debe ser de tipo _integer_
+* prcp: datos diarios de precipitación La variable debe ser de tipo _double_
+* tmax: datos diarios de temperatura máxima. La variable debe ser de tipo _double_
+* tmin: datos diarios de temperatura mínima. La variable debe ser de tipo _double_
+
+```{r, echo = FALSE, message = FALSE}
+climate <- readr::read_csv(here::here('input_data/climate_spatial.csv')) %>% tibble::as_tibble() %>%
+  dplyr::mutate(station_id = as.integer(station_id))
+
+```
+A continuación se muestran las primeras cinco filas del dataset y los tipo de dato de cada una de las variables. 
+```{r}
+head(climate)
+```
+
+Los nombres de las variables son importantes y deben ser siempre los mismos ya que se seleccionarán las variables en función de los mismos. Los nombres deben ser los siguientes:
+
+* `date` : corresponde a la fecha del día en formato `Date`. El formato de la fecha para facilitar el reconocimiento por parte de R es "YYYY-MM-DD", es decir, el año expresado con cuatro dígitos y luego dos dígitos para el mes y día. 
+* `station_id`: Identificador unívoco de cada una de las estaciones. Debe ser un número **entero**. 
+* `tmax`: Temperatura máxima diaria expresada en °C.
+* `tmin`: Temperatura mínima diaria expresada en °C.
+* `prcp`: Precipitación diaria expresada en mm. 
+
+El orden de las variables no es importante pero, como se mencionó, si se deben respetar los nombres de cada una. En el caso de faltantes, no se utiliza ningún valor específico para los NAs, sólo se debe dejar ese valor vacío. 
+Este archivo tiene un formato largo, es decir, las estaciones se deben colocar una debajo de la otra. 
+ 
+
+
