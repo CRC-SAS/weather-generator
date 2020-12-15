@@ -13,10 +13,9 @@ output:
 
 # Introducción
 
-El presente documento tiene como propósito proveer ejemplos de aplicación del
-Generador Estocástico de datos climáticos desarrollado por el SISSA. Este software nació como una herramienta clave para el análisis probabilista del riesgo de sequías pero por su flexibilidad puede ser aplicado a una multitud de aplicaciones. 
+El presente documento tiene como propósito proveer ejemplos de aplicación del Generador Estocástico de datos climáticos desarrollado por el SISSA. Este software nació como una herramienta clave para el análisis probabilista del riesgo de sequías pero por su flexibilidad puede ser aplicado a una multitud de aplicaciones. 
 
-Esta guía contiene solamente ejemplos de *algunas* de las posibilidades y productos derivados del generador. Es un complemento de la presentación en donde se desarrollarán y replicarán algunos de los productos mostrados durante la misma. 
+Esta guía contiene solamente ejemplos de *algunas* de las posibilidades y productos derivados del generador. Es un complemento de la presentación en donde se desarrollarán y replicarán algunos de los contenidos mostrados durante la misma. 
 
 
 # Instalación de paquetes necesarios 
@@ -43,13 +42,12 @@ if (!require("gratia"))  devtools::install_github('gavinsimpson/gratia')
 # Creación de directorios
 
 En este paso nos aseguramos de crear los directorios que contendrán los datos 
-de entrara para el ajuste del modelo y los resultados.
+de entrada para el ajuste del modelo y los resultados.
 
 * /input_data: aquí se guardarán los datos meteorológicos y los metadatos de las estaciones
 * /output_data: aquí se guardarán los resultados de la simulación
 
 Si estos directorios no existen, se crearán. 
-
 
 ```{r, echo = FALSE}
 # Comprobar que existe el directorio con datos de entrada
@@ -65,7 +63,7 @@ En este ejemplo veremos como se generan series sintéticas para una sola estaci�
 
 ## Crear archivos de entrada
 
-El primer paso consiste en generar los dataset de entrada que se instalaron junto al paquete del generador estocástico. Este set de datos es sólo a título demostrativo, si el usuario desea correr el modelo con sus propios datos deberá cambiar los objetos que se generarán en esta sección por los suyos y colocarlos en la carpeta input_data. 
+El primer paso consiste en generar los dataset de entrada que se descargaron al momento de instalar el paquete del generador estocástico. Este set de datos es sólo a título demostrativo, si el usuario desea correr el modelo con sus propios datos deberá cambiar los objetos que se generarán en esta sección por los suyos y colocarlos en la carpeta `input_data`. 
 
 Los archivos necesarios son:
 
@@ -84,10 +82,9 @@ if (!fs::file_exists('input_data/local/climate.csv')) {
 
 El primer paso para la generación de las series sintéticas es el ajuste de los modelos estadísticos: dos para temperaturas máxima y mínima y dos para precipitación. Estos modelos necesitan de datos observados diarios de variables meteorológicas. Si bien se toleran una cierta cantidad de faltantes es conveniente que las series tengan una longitud no menor a 30 años para así capturar la variabilidad climática observada.  
 
-Los datos meteorológicos se dividen en dos archivos separados: `stations.csv` y `climate.csv`. Los nombres de los mismos no deben ser iguales a los usados aquí.
+Los datos meteorológicos se dividen en dos archivos separados: `stations.csv` y `climate.csv`. Los nombres de los mismos no deben ser necesariamente iguales a los usados aquí.
 
-Los metadatos de las estaciones se alojan en el archivo `stations.csv`. Este archivo contiene la información indispensable de las estaciones meteorológicas que serán usadas 
-en el ajuste del modelo. Las variables que deben ser incluidas en la tabla son:
+Los metadatos de las estaciones se alojan en el archivo `stations.csv`. Este archivo contiene la información indispensable de las estaciones meteorológicas que serán usadas en el ajuste del modelo. Las variables que deben ser incluidas en la tabla son:
 
 * station_id: número unívoco para cada estación meteorológica. La variable debe ser de tipo _integer_
 * latitude: latitud en grados decimales. La variable debe ser de tipo _double_
@@ -101,7 +98,7 @@ stations <- readr::read_csv(here::here('input_data/stations.csv')) %>%
   dplyr::mutate(station_id = as.integer(station_id))
 
 ```
-A continuación se muestran las primeras cinco filas del dataset y los tipo de dato de cada una de las variables. 
+A continuación se muestran la primera fila del dataset y los tipo de dato de cada una de las variables. 
 
 ```{r}
 head(stations)
@@ -110,8 +107,7 @@ head(stations)
 knitr::kable(stations[1,])
 ```
 
-El objeto **stations** debe ser convertido de _tibble_ a _sf_. El sistema de referencia espacial debe ser planar. No es necesario un sistema de referencia 
-espacial en particular, solamente las coordenadas deben estar expresadas en metros. 
+El objeto **stations** debe ser convertido de _tibble_ a _sf_. El sistema de referencia espacial debe ser planar. No es necesario un sistema de referencia espacial en particular, solamente las coordenadas deben estar expresadas en metros. 
 
 ```{r}
 # Convertimos el objeto stations a sf y se convierte su proyección de WGS 1984 a
@@ -123,23 +119,23 @@ stations %<>%
 
 La información climática se aloja en el archivo `climate.csv`. Este archivo contiene los datos de las estaciones meteorológicas que serán usadas en el ajuste del modelo. Las variables que deben ser incluidas en la tabla son:
 
-* date: fecha del dato. La variable debe ser de tipo _date_
-* station_id: número unívoco para cada estación meteorológica. La variable debe ser de tipo _integer_
-* prcp: datos diarios de precipitación La variable debe ser de tipo _double_
-* tmax: datos diarios de temperatura máxima. La variable debe ser de tipo _double_
-* tmin: datos diarios de temperatura mínima. La variable debe ser de tipo _double_
+* `date`: fecha del dato. La variable debe ser de tipo _date_
+* `station_id`: número unívoco para cada estación meteorológica. La variable debe ser de tipo _integer_
+* `prcp`: datos diarios de precipitación La variable debe ser de tipo _double_
+* `tmax`: datos diarios de temperatura máxima. La variable debe ser de tipo _double_
+* `tmin`: datos diarios de temperatura mínima. La variable debe ser de tipo _double_
 
 ```{r, echo = FALSE, message = FALSE}
 climate <- readr::read_csv(here::here('input_data/climate.csv')) %>% tibble::as_tibble() %>%
   dplyr::mutate(station_id = as.integer(station_id))
 
 ```
-A continuación se muestran las primeras cinco filas del dataset y los tipo de dato de cada una de las variables. 
+A continuación se muestran las primeras cinco filas del dataset y los tipos de datos de cada una de las variables. 
 ```{r}
 head(climate)
 ```
 
-Los nombres de las variables son importantes y deben ser siempre los mismos ya que se seleccionarán las variables en función de los mismos. Los nombres deben ser los siguientes:
+Los nombres de las variables son importantes y deben ser siempre los mismos ya que  el modelo las reconocerá a partir de los mismos. Los nombres deben ser los siguientes:
 
 * `date` : corresponde a la fecha del día en formato `Date`. El formato de la fecha para facilitar el reconocimiento por parte de R es "YYYY-MM-DD", es decir, el año expresado con cuatro dígitos y luego dos dígitos para el mes y día. 
 * `station_id`: Identificador unívoco de cada una de las estaciones. Debe ser un número **entero**. 
@@ -151,29 +147,6 @@ El orden de las variables no es importante pero, como se mencionó, si se deben 
 Este archivo tiene un formato largo, es decir, las estaciones se deben colocar una debajo de la otra. 
 
 A continuación veremos una visualización de las temperaturas máxima y mínima de la estación elegida para el ajuste. 
-
-```{r, echo = FALSE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
-
-# Serie temporal de temperaturas
-serie.temperaturas <- dplyr::filter(climate) %>%
-  dplyr::select(station_id, date, tmax, tmin) %>%
-  tidyr::gather(variable_id, valor, -c('date', 'station_id')) %>%
-  dplyr::filter(variable_id %in% c('tmax', 'tmin'), date < as.Date('1961-01-31'))
-ggplot2::ggplot(data = serie.temperaturas) +
-  ggplot2::geom_line(mapping = ggplot2::aes(x = as.Date(date), y = valor, group = variable_id, col = variable_id)) +
-  ggplot2::labs(x = 'Fecha', y = 'Temperatura (ºC)', 
-                title = 'Temperaturas observadas en Villa Reynolds Aero (87544)',
-                subtitle = 'Enero de 1961', col = 'Temperatura') +
-  ggplot2::scale_x_date(date_breaks = '5 day', date_labels = '%d') +
-  ggplot2::scale_color_manual(values = c("tmax" = "#a50026", "tmin" = "#4575b4"),
-                              labels = c("tmax" = "Máxima", "tmin" = "Mínima")) +
-  ggplot2::theme_bw() + 
-  ggplot2::theme(
-    legend.position = 'bottom', 
-    plot.title = ggplot2::element_text(hjust = 0.5),
-    plot.subtitle = ggplot2::element_text(hjust = 0.5)
-  )
-```
 
 ```{r, echo = FALSE, warnings = FALSE, message = FALSE, results='asis', fig.align='center'}
 highcharter::highchart() %>%
@@ -229,29 +202,27 @@ seasonal_variates <- gamwgen::summarise_seasonal_climate(climate, umbral_faltant
 head(seasonal_variates)
 ```
 
-Cabe mencionar que con esta función las valores se agregan por trimestre. Los trimestres comprenden a los siguientes meses: 
+Cabe mencionar que con esta función las valores se agregan por trimestre considerando la siguiente definición:
 
 * Verano: Diciembre, Enero y Febrero
 * Otoño: Marzo, Abril y Mayo
 * Invierno: Junio, Julio y Agosto
 * Primavera: Septiembre, Octubre y Noviembre
 
-Los valores también se podrían agregar siguiendo otra definición de estaciones pero en ese caso, el usuario debería hacerlo por su cuenta. Algunas funciones útiles para hacerlo son las disponibles en el paquete `lubridate`. 
+Los valores también se podrían agregar siguiendo otra definición de estaciones pero en ese caso, el usuario debería hacerlo por su cuenta. Algunas funciones útiles para hacerlo son las disponibles en el paquete `lubridate` como `quarter()` que permite definir el mes de comienzo de los trimestres. 
 Para estas variables los nombres también son importantes por lo que deben respetarse los mostrados anteriormente. 
 
 ## Ajuste de los modelos estadísticos
 
-A continuación se mostrará como ajustar los cuatro modelos estadísticos para una sola estación meteorológica condicionados por la variabilidad de baja frecuencia. El anterior es sólo uno de las configuraciones posibles y para ver más detalles se sugiere consultar el manual completo del generador. 
+A continuación se mostrará como ajustar los cuatro modelos estadísticos para una sola estación meteorológica condicionados por la variabilidad de baja frecuencia. El anterior es sólo uno de las configuraciones posibles y para ver más detalles de las demás posibilidades se sugiere consultar el manual completo del generador. 
  
 El ajuste del modelo local (en un punto) necesita de dos funciones:en una se define la configuración general del modelo y con la segunda se corre el modelo propiamente dicho.
 
 Primero se crea un objeto con el control para el ajuste del simulador. Los argumentos son: 
 
-*  `prcp_occurrence_threshold`: el umbral de precipitación para 
-un día lluvioso. La OMM recomienda un umbral de 0.1 mm para considerar 
-un día como lluvioso.
-* `avbl_cores`: Cantidad de núcleos disponibles para la paralelización.
-* `planar_crs_in_metric_coords`: sistema de coordenadas planar
+*  `prcp_occurrence_threshold`: el umbral de precipitación para  un día lluvioso. La OMM recomienda un umbral de 0.1 mm para considerar un día como lluvioso.
+* `avbl_cores`: cantidad de núcleos disponibles para la paralelización.
+* `planar_crs_in_metric_coords`: sistema de coordenadas planar.
 
 
 ```{r}
@@ -261,8 +232,7 @@ control_fit <-gamwgen::local_fit_control(
   planar_crs_in_metric_coords = 22185) # Sistema de referencia espacial (en metros)
 ```
 
-
-Se corre el ajuste para la estación meteorológica. Los argumentos de la función son:
+Luego se corre el ajuste para la estación meteorológica con la función `local_calibrate`. Los argumentos de la función son:
 
 * `climate`: datos meteorológicos observados para la estación
 * `stations`: metadatos de las estaciones meteorológicas
@@ -270,8 +240,15 @@ Se corre el ajuste para la estación meteorológica. Los argumentos de la funci�
 * `control`: objeto de control
 * `verbose`: controla la impresión de mensajes en la consola. FALSE por defecto.
 
-```{r, eval=FALSE}
-# Al correr la función se realizar el ajuste de los cuatro modelos para cada una de las estaciones. En este caso, por cuestiones de tiempo a cargar un objeto ya precalculado. SI el usuario desea correrlo deberá correr este paso.
+Nota: Si luego de leer este documento desean correr el generador con sus propios datos deben incluirlos en la carpeta `input_data` y asignarle al objeto `correr.generador` el valor TRUE. Ahora a esta variable se le ha asignado el valor FALSE porque los resultados del ajuste ya han sido precalculados. 
+
+```{r}
+correr.generador <- FALSE
+```
+
+
+```{r, eval = correr.generador}
+# Al correr la función se realizar el ajuste de los cuatro modelos para cada una de las estaciones. En este caso, por cuestiones de tiempo a cargar un objeto ya precalculado. Si el usuario desea correrlo deberá correr este paso.
 gamgen_fit <- gamwgen::local_calibrate(climate = climate,
                                        stations = stations,
                                        seasonal_covariates = NULL,
@@ -315,7 +292,7 @@ Dentro del objeto se guardan todo lo necesario para la simulación así como inf
 
 Los umbrales de amplitudes máxima y mínima permitidas son muy importantes para evitar que se produzcan temperaturas máximas inferiores a las mínimas. En la siguiente Figura se puede ver la variabilidad mensual de cada uno de estos umbrales y el efecto del tipo de día (seco o lluvioso) sobre ellos. 
 
-```{r, echo = FALSE, message = FALSE}
+```{r, echo = FALSE, message = FALSE, fig.align = "center"}
 umbrales_temperatura <- gamgen_fit$statistics_threshold %>%
   tidyr::gather(rango, valor, -c('station_id', 'month', 'prcp_occ'))
 
@@ -347,12 +324,11 @@ Cada uno de los GAMs ajustados se almacenan en el objeto `gamgen_fit` y pueden s
 summary(gamgen_fit$fitted_models$`87448`$tmax_fit)
 ```
 
-La función `summary` permite analizar los resultados del ajuste de cada uno de los modelos. 
-
+La función `summary` permite analizar los resultados del ajuste de cada uno de los modelos. Para el caso del modelo de temperatura máxima podemos ver la fórmula del GAM en la parte superior bajo el apartado `Formula` y la significancia de cada uno de los términos del modelo en la tabla inmediatamente inferior. Se puede observar que todos los términos son altamente significativos. También se incluyen como pruebas de bondad del ajuste el porcentaje de la varianza explicada por el modelo y el valor de R-ajustado. 
 
 Ahora vamos a visualizar los resultados del modelo ajustado de temperatura máxima (clima local) y la temperatura observada de la estación. 
 
-```{r, echo = FALSE, message = FALSE}
+```{r, echo = FALSE, message = FALSE, fig.align = "center"}
 # Extraemos el GAM de temperatura máxima 
 modelo.tmax <- gamgen_fit$fitted_models$`87448`$tmax_fit
 
@@ -402,6 +378,9 @@ highcharter::highchart() %>%
   )
 ```
 
+Recordemos que las diferencias entre ambas curvas, los residuos del modelo, nos permitirán modelar el tiempo local que era la componente estocástica del generador. 
+Una vez que el los distintos modelos estadísticos de temperaturas y precipitación están ajustados podemos proseguir a la generación de las series sintéticas. 
+
 # Generación de series sintéticas 
 
 La simulación de datos también está compuesta por dos funciones. En una se especifica gran parte de la configuración de la simulación mientras que la otra realiza la simulación propiamente dicha. 
@@ -411,11 +390,11 @@ Los argumentos de la función de control son:
 * `nsim`: Cantidad de simulaciones a realizar. Se debe ingresar un valor **entero** mayor o igual a 1.
 * `seed`: Semilla. Se debe ingresar cualquier numero **entero**. No es necesario recordarlo porque se guarda junto a los resultados.
 * `avbl_cores`: Cantidad de núcleos disponibles para la paralelización.
-* `use_spatially_correlated_noise`: Utilizar la generación estocástica espacialmente correlacionada. Esta opción es sólo válida si en el ajusta y en la simulación se usaron más de cinco estaciones meteorológicas diferentes. Con un menor número no es posible calcular los variogramas necesario. Se debe introducir un **boolean** (TRUE or FALSE).
+* `use_spatially_correlated_noise`: Utilizar la generación estocástica espacialmente correlacionada. Esta opción sólo es  válida si en el ajuste y en la simulación se usaron más de cinco estaciones meteorológicas diferentes. Con un menor número no es posible calcular los variogramas necesarios. Se debe introducir un **boolean** (TRUE or FALSE).
 * `use_temporary_files_to_save_ram`: Si se simulan muchas realizaciones o los recursos informáticos son escasos, esta opción permite guardar los resultados de cada una de las simulaciones en el disco liberando memoria RAM que quedará disponible para generar nuevas simulaciones. Al finalizar la generación todos los archivos se combinan en uno único. Se debe introducir un **boolean** (TRUE or FALSE).
 * `use_temporary_files_to_save_ram`: Esta opción permite eliminar los archivos temporales creados para ahorrar RAM luego de terminar la generación de todas las simulaciones. Se debe introducir un **boolean** (TRUE or FALSE).
 
-```{r}
+```{r, eval = FALSE}
 control_sim <- gamwgen::local_simulation_control(
   nsim = 100, # Cantidad de simulaciones a realizar
   seed = 1234, # Semilla para que los resultados sean reproducirles
@@ -429,15 +408,21 @@ Luego se procede a la simulación de datos meteorológicos. Los argumentos de la
 
 * `model`: objeto con el resultado de la función `local_calibrate()`
 * `simulation_locations`: objeto tipo `sf` con la ubicación de las estaciones a simular. Las estaciones usadas deben haber sido incluidas en el proceso de ajuste. No es necesario que todas estén presentes, se pueden generar series solo sobre algunas de ellas.
-* `start_date`: Fecha de comienzo de la generación de series sintéticas. Si no se incluyeron covariables estacionales en el ajuste, la fecha de comienzo es completamente arbitraria. Caso contrario, la fecha de comienzo no puede ser anterior al comienza de la serie de covariables, ni tampoco puede ser posterior. Se debe introducir una fecha en formato **date** 
-* `end_date`: fecha de fin de la generación de series sintéticas. Si no se incluyeron covariables estacionales en el ajuste, la fecha de fin es completamente arbitraria. Caso contrario, la fecha de comienzo no puede ser anterior al comienza de la serie de covariables, ni tampoco puede ser posterior. Se debe introducir una fecha en formato **date** 
-* `control`: objeto de control
+* `start_date`: Fecha de comienzo de la generación de series sintéticas. Si no se incluyeron covariables estacionales en el ajuste, la fecha de comienzo es completamente arbitraria. Caso contrario, la fecha de comienzo no puede ser anterior al comienza de la serie de covariables, ni tampoco posterior. Se debe introducir una fecha en formato **date** 
+* `end_date`: fecha de fin de la generación de series sintéticas. Si no se incluyeron covariables estacionales en el ajuste, la fecha de fin es completamente arbitraria. Caso contrario, la fecha de comienzo no puede ser anterior al comienza de la serie de covariables, tampoco puede ser posterior. Se debe introducir una fecha en formato **date** 
+* `control`: objeto de control creado con la función `control_sim`.
 * `output_folder`: ruta al directorio donde se guardarán los resultados, tanto finales como intermedios. 
 * `output_filename`: nombre del archivo de salida. Para facilitar la interoperabilidad, el archivo generado es un archivo de texto en formato separado por comas (.csv)
-* `seasonal_covariates`: datos agregados trimestrales. Si el ajuste se realizó sin covariables, la generación también debe realizarse sin ellas. Caso contrario se producirá un error. Se debe introducir un data frame con los valores agregados para las tres variables (precipitación y temperaturas máxima y mínima) pero no necesariamente deben ser los mismos a los utilizados en el ajuste. Si se desean simular tendencias de algún tipo, ya sea de un modelo de cambio climático o arbitrarias, se deben perturbar estas variables trimestrales e introducirlas aquí.
+* `seasonal_covariates`: datos agregados trimestrales. Si el ajuste se realizó sin covariables, la generación también debe realizarse sin ellas. Caso contrario se producirá un error. Se debe introducir un data frame con los valores agregados para las tres variables (precipitación y temperaturas máxima y mínima) pero no necesariamente deben ser los mismos a los utilizados en el ajuste. Si se desean simular tendencias de algún tipo, ya sea de un modelo de cambio climático o arbitrarias, se deben perturbar estas variables trimestrales e introducirlas aquí. Estas series si deben tener la misma longitud que el período a simular. 
 * `verbose`: controla la impresión de mensajes en la consola. FALSE por defecto.
 
-```{r, eval = FALSE, message = FALSE}
+Nota: Si luego de leer este documento desean correr el generador con sus propios datos deben incluirlos en la carpeta `input_data` y asignarle al objeto `correr.generador` el valor TRUE. Ahora a esta variable se le ha asignado el valor FALSE porque los resultados del ajuste ya han sido precalculados. 
+
+```{r}
+correr.generador <- FALSE
+```
+
+```{r, eval = correr.generador, message = FALSE}
 # Al correr la función se realiza la generación de series para cada una de las estaciones. 
 # En este caso, por cuestiones de tiempo, vamos a cargar un objeto con los resultados de la simulación 
 simulated_climate <- local_simulation(model = gamgen_fit, # Objeto con los resultados del ajuste
@@ -454,31 +439,67 @@ simulated_climate <- local_simulation(model = gamgen_fit, # Objeto con los resul
 Esta función produce dos tipos de resultados: una lista que permanece en el ambiente de R y los datos generados que son guardados como csv en el directorio indicado precedentemente. 
 
 ```{r}
+# Copiamos el archivo preajustado a nuestro directorio de trabajo
+if (!fs::file_exists('output_data/simulated_climate_local.RData')) {
+  fs::file_copy(system.file('/autorun/local', "simulated_climate_local.RData",  package = "gamwgen"),
+              new_path = 'output_data/simulated_climate_local.RData')
+  
+# Cargamos el archivo recientemente creado
+load('output_data/simulated_climate_local.RData')
+
+# Clase del objeto con el ajuste del generador
+class(simulated_climate)
+
+# Contenido del modelo 
+names(simulated_climate)
+}
+```
+
+La lista contiene los siguientes objetos: 
+
+* `nsim`: Cantidad de realizaciones. 
+* `seed`: Semilla general para toda la generación. Corresponde a la que se incluye en la función de control. 
+* `realization_seeds`: semillas para cada una de las realizaciones. Esto permite replicar los resultados.
+* `simulation_points`: Puntos donde se generaron las series sintéticas. 
+* `output_fil_with_results`: Nombre del archivo con los resultados. 
+* `output_file_format`: Tipo de archivo de salida, en este caso .csv.
+* `rdata_file_with_fitted_stations_and_climate`: Archivo `.RData` con los datos meteorológicos observados que fueron utilizados en el ajuste. También se incluyen los metadatos de cada uno de esos puntos. 
+* `exec_times`: Tiempo de ejecución del la generación. 
+
+Ahora veremos el formato del archivo de salidas que contiene las series sintéticas. 
+
+```{r, warnings = FALSE, echo = FALSE}
 if (!fs::file_exists('input_data/simulated_local.csv')) {
   write.csv(readr::read_csv(system.file('/autorun/local', "simulated_local.csv",  package = "gamwgen")), here::here('output_data/simulated_local.csv'), row.names = FALSE)
 }
 ```
 
-Resultados de la generación 
+## Resultado de la generación 
 
 ```{r}
 # Se carga el set de datos simulados
 simulated_climate <- readr::read_csv(here::here('output_data/simulated_local.csv')) 
+
+# Primeras filas del objeto de salidas
+head(simulated_climate)
 ```
 
+El resultado de la generación es un archivo `.csv` que contiene la siguiente información: 
 
-Diagnósticos 
+* `realization`: Número de realización. Es un valor entero entre 1 y la cantidad de realizaciones definida por el usuario. 
+* `station_id`: Código unívoco de identificación de la estación meteorológica o del punto arbitrario.
+* `date`: Fechas de cada uno de los días de la simulación.
+* `tmax`: Valores de temperatura máxima generada expresada en °C.
+* `tmin`: Valores de temperatura mínima generada expresada en °C.
+* `prcp`: Valores de precipitación diaria generada expresada en mm.
 
-
-```{r}
-
-```
-
-A continuación se mostraran algunos de los diagnósticos
+## Diagnósticos 
 
 ```{r, echo = FALSE, message = FALSE}
 
 ```
+
+A continuación se cargan las funciones necesarias para la elaboración de los diagnósticos y se definen las variables que serán evaluadas. 
 
 ```{r}
 
@@ -494,7 +515,6 @@ stations <- stations %>%
 fit_stations <- stations
 # Se debe definir el umbral de lluvia
 umbral.precipitacion <- 0.1
-
 ```
 
 El objetivo de las distintas pruebas diagnósticas es comprobar si los datos observados pueden ser considerados una realización más del generador. En otras palabras, que las series observadas no pueden distinguirse de las sintéticas. Esto no implica que tengan exactamente la misma media o desvío estándar, etc. 
@@ -985,106 +1005,14 @@ En esta sección se muestran de diagnósticos auxiliares centrados en la consist
 plots[[station.id]][['other']][[1]]
 ```
 
-Esta Figura compara la variación mensual de la correlación cruzada entre las temperaturas máximas y mínimas. La autocorrelación curzada evalúa si ambas variables varían al mismo tiempo y con que magnitud. Los puntos rojos corresponden a la correlación cruzada calculada a partir de los datos observados y las cajas a las distintas realizaciones. Se observa que se captura el patrón general aunque con una subestimación durante el invierno. Una baja autocorrelación implica grandes amplitudes témicas ya que no varían conjuntamente.
+Esta Figura compara la variación mensual de la correlación cruzada entre las temperaturas máximas y mínimas. La autocorrelación cruzada evalúa si ambas variables varían al mismo tiempo y con que magnitud. Los puntos rojos corresponden a la correlación cruzada calculada a partir de los datos observados y las cajas a las distintas realizaciones. Se observa que se captura el patrón general aunque con una subestimación durante el invierno. Una baja autocorrelación implica grandes amplitudes térmicas ya que no varían conjuntamente.
 
 ```{r,  message = FALSE, warning = FALSE, fig.align="center"}
 # Temperatura media diaria mensual por tipo de día (seco o lluvioso)
 plots[[station.id]][['other']][[2]]
 ```
 
-Esta Figura compara la temperatura media para los distintos meses del año considerando el tipo de día, es dcir, si llovió o no. Los puntos rojos corresponden al valor observado mienstras que las cajas a las distintas realizaciones. Se observa que cuando se consideran todos los días o sólo los días secos la concordancia es muy buena. Para los días lluviosos, en cambio, ésta sigue siendo buena para los meses estivales pero existe un marcado sesgo cálido en el invierno. Esto podría debeerse a que en esta estación hay muy poco días lluviosos en invierno por lo que no son suficientes para que el modelo los capture. 
+Esta Figura compara la temperatura media para los distintos meses del año considerando el tipo de día, es decir, si llovió o no. Los puntos rojos corresponden al valor observado mientras que las cajas a las distintas realizaciones. Se observa que cuando se consideran todos los días o sólo los días secos la concordancia es muy buena. Para los días lluviosos, en cambio, ésta sigue siendo buena para los meses estivales pero existe un marcado sesgo cálido en el invierno. Esto podría deberse a que en esta estación hay muy poco días lluviosos en invierno por lo que no son suficientes para que el modelo los capture. 
 
-
-# Generación de series sintéticas para una grilla regular
-
-En esta sección solo se presentarán brevemente las funciones necesarias para realizar la generación de series sobre una grilla regular. 
-
-## Crear archivos de entrada
-
-El primer paso consiste en generar los dataset de entrada que se instalaron junto al paquete del generador estocástico. Este set de datos es sólo a título demostrativo, si el usuario desea correr el modelo con sus propios datos deberá cambiar los objetos que se generarán en esta sección por los suyos y colocarlos en la carpeta input_data. 
-
-Los archivos necesarios son:
-
-* stations.csv
-* climate.csv
-
-```{r, echo = FALSE}
-if (!fs::file_exists('input_data/stations_spatial.csv')) {
-  write.csv(readr::read_csv(system.file('/autorun/spatial', "stations.csv",  package = "gamwgen")), here::here('input_data/stations_spatial.csv'), row.names = FALSE)
-}
-
-if (!fs::file_exists('input_data/local/climate_spatial.csv')) {
-  write.csv(readr::read_csv(system.file('/autorun/local', "climate.csv",  package = "gamwgen"), col_types = "Diddd"), here::here('input_data/climate_spatial.csv'), row.names = FALSE)
-}
-```
-
-El primer paso para la generación de las series sintéticas es el ajuste de los modelos estadísticos: dos para temperaturas máxima y mínima y dos para precipitación. Estos modelos necesitan de datos observados diarios de variables meteorológicas. A diferencia del ajuste de los modelos para un punto son necesarias al menos cinco estaciones para que los distintos modelos estadístico converjan. Además, debe existir un solapamiento entre las series temporales de las distintas estaciones involucradas de al menos 30 años.
-
-Los datos meteorológicos se dividen en dos archivos separados: `stations_spatial.csv` y `climate_spatial.csv`. Los nombres de los mismos no deben ser iguales a los usados aquí.
-
-Los metadatos de las estaciones se alojan en el archivo `stations_spatial.csv`. Este archivo contiene la información indispensable de las estaciones meteorológicas que serán usadas 
-en el ajuste del modelo. Las variables que deben ser incluidas en la tabla son:
-
-* station_id: número unívoco para cada estación meteorológica. La variable debe ser de tipo _integer_
-* latitude: latitud en grados decimales. La variable debe ser de tipo _double_
-* longitude: longitud en grados decimales. La variable debe ser de tipo _double_
-
-La tabla puede tener más variables pero sólo se necesitan las anteriores. 
-
-```{r, echo = FALSE, message = FALSE}
-stations <- readr::read_csv(here::here('input_data/stations_spatial.csv')) %>%
-  dplyr::rename(station_id = omm_id) %>%
-  dplyr::mutate(station_id = as.integer(station_id))
-
-```
-A continuación se muestran las primeras cinco filas del dataset y los tipos de dato de cada una de las variables. En este caso se muestra la información de 15 estaciones meteorológicas de Uruguay.
-
-```{r}
-head(stations)
-
-# Vista de los metadatos de la estación
-knitr::kable(stations)
-```
-
-El objeto **stations** debe ser convertido de _tibble_ a _sf_. El sistema de referencia espacial debe ser planar. No es necesario un sistema de referencia 
-espacial en particular, solamente las coordenadas deben estar expresadas en metros. 
-
-```{r}
-# Convertimos el objeto stations a sf y se convierte su proyección de WGS 1984 a
-# Gauss-Krugger.
-stations %<>% 
-  sf::st_as_sf(coords = c("lon_dec", "lat_dec"), crs =  4326) %>%
-  sf::st_transform(crs = 22185)
-```
-
-La información climática se aloja en el archivo `climate.csv`. Este archivo contiene los datos de las estaciones meteorológicas que serán usadas en el ajuste del modelo. Las variables que deben ser incluidas en la tabla son:
-
-* date: fecha del dato. La variable debe ser de tipo _date_
-* station_id: número unívoco para cada estación meteorológica. La variable debe ser de tipo _integer_
-* prcp: datos diarios de precipitación La variable debe ser de tipo _double_
-* tmax: datos diarios de temperatura máxima. La variable debe ser de tipo _double_
-* tmin: datos diarios de temperatura mínima. La variable debe ser de tipo _double_
-
-```{r, echo = FALSE, message = FALSE}
-climate <- readr::read_csv(here::here('input_data/climate_spatial.csv')) %>% tibble::as_tibble() %>%
-  dplyr::mutate(station_id = as.integer(station_id))
-
-```
-A continuación se muestran las primeras cinco filas del dataset y los tipo de dato de cada una de las variables. 
-```{r}
-head(climate)
-```
-
-Los nombres de las variables son importantes y deben ser siempre los mismos ya que se seleccionarán las variables en función de los mismos. Los nombres deben ser los siguientes:
-
-* `date` : corresponde a la fecha del día en formato `Date`. El formato de la fecha para facilitar el reconocimiento por parte de R es "YYYY-MM-DD", es decir, el año expresado con cuatro dígitos y luego dos dígitos para el mes y día. 
-* `station_id`: Identificador unívoco de cada una de las estaciones. Debe ser un número **entero**. 
-* `tmax`: Temperatura máxima diaria expresada en °C.
-* `tmin`: Temperatura mínima diaria expresada en °C.
-* `prcp`: Precipitación diaria expresada en mm. 
-
-El orden de las variables no es importante pero, como se mencionó, si se deben respetar los nombres de cada una. En el caso de faltantes, no se utiliza ningún valor específico para los NAs, sólo se debe dejar ese valor vacío. 
-Este archivo tiene un formato largo, es decir, las estaciones se deben colocar una debajo de la otra. 
- 
 
 
