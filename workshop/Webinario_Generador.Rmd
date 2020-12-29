@@ -5,14 +5,15 @@ author:
   - Daniel Bonhaure (danielbonhaure@gmail.com)
   - Guillermo Podestá (gpodesta@rsmas.miami.edu)
 date: '`r format(as.Date("2020-12-159"), "%d de %B de %Y")`'
-output:
-    prettydoc::html_pretty:
-      css: styles.css
-      theme: cayman
-      toc: true
-      toc_depth: 3
-      fig_width: 7
-      fig_height: 6
+output: 
+  bookdown::pdf_book:
+    highlight: pygments
+    latex_engine: xelatex
+    toc: true
+    toc_depth: 3
+    fig_width: 7
+    fig_height: 6
+always_allow_html: true
 ---
 
 # Introducción
@@ -482,7 +483,7 @@ if (!fs::file_exists('input_data/local/simulated_local_conditional.csv')) {
 
 ```{r}
 # Se carga el set de datos simulados
-simulated_climate <- readr::read_csv(here::here('output_data/local/simulated_local_conditional.csv')) 
+simulated_climate <- readr::read_csv(here::here('output_data/local/simulated_local.csv')) 
 
 # Primeras filas del objeto de salidas
 knitr::kable(simulated_climate[1:10,])
