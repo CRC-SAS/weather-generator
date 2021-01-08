@@ -1,4 +1,4 @@
-This is XeTeX, Version 3.14159265-2.6-0.999992 (TeX Live 2020) (preloaded format=xelatex 2021.1.6)  6 JAN 2021 11:02
+This is XeTeX, Version 3.14159265-2.6-0.999992 (TeX Live 2020) (preloaded format=xelatex 2021.1.6)  8 JAN 2021 02:08
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -1054,260 +1054,242 @@ os.png Graphic file (type bmp)
 g>
 [8]
 LaTeX Font Info:    Font shape `TU/lmtt/bx/n' in size <12> not available
-(Font)              Font shape `TU/lmtt/b/n' tried instead on input line 283.
+(Font)              Font shape `TU/lmtt/b/n' tried instead on input line 273.
 [9]
-File: Manual_Generador_files/figure-latex/unnamed-chunk-9-1.pdf Graphic file (t
-ype pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-9-1.pdf>
-File: Manual_Generador_files/figure-latex/unnamed-chunk-10-1.pdf Graphic file (
-type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-10-1.pdf>
+File: Manual_Generador_files/figure-latex/relaciones-no-lineales-1.pdf Graphic 
+file (type pdf)
+<use Manual_Generador_files/figure-latex/relaciones-no-lineales-1.pdf>
 [10]
-File: Manual_Generador_files/figure-latex/unnamed-chunk-12-1.pdf Graphic file (
-type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-12-1.pdf>
-File: Manual_Generador_files/figure-latex/unnamed-chunk-13-1.pdf Graphic file (
-type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-13-1.pdf>
+File: Manual_Generador_files/figure-latex/ajuste-lineal-1.pdf Graphic file (typ
+e pdf)
+<use Manual_Generador_files/figure-latex/ajuste-lineal-1.pdf>
 [11] [12]
-File: Manual_Generador_files/figure-latex/unnamed-chunk-15-1.pdf Graphic file (
-type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-15-1.pdf>
+File: Manual_Generador_files/figure-latex/residuos-lineal-1.pdf Graphic file (t
+ype pdf)
+<use Manual_Generador_files/figure-latex/residuos-lineal-1.pdf>
 [13]
+File: Manual_Generador_files/figure-latex/ajuste-gam-1.pdf Graphic file (type p
+df)
+<use Manual_Generador_files/figure-latex/ajuste-gam-1.pdf>
+[14] [15] [16]
+File: Manual_Generador_files/figure-latex/residuos-gam-1.pdf Graphic file (type
+ pdf)
+<use Manual_Generador_files/figure-latex/residuos-gam-1.pdf>
+[17]
 File: ./docs/figures/modelos.png Graphic file (type bmp)
 <./docs/figures/modelos.png>
-[14] [15] [16] [17]
+[18] [19] [20] [21]
 File: ./docs/figures/ruido_precipitacion.png Graphic file (type bmp)
 <./docs/figures/ruido_precipitacion.png>
-[18]
+[22]
 File: ./docs/figures/ruido_temperatura.png Graphic file (type bmp)
 <./docs/figures/ruido_temperatura.png>
-[19]
+[23]
 File: ./docs/figures/random_field_precipitacion.png Graphic file (type bmp)
 <./docs/figures/random_field_precipitacion.png>
-[20]
 File: ./docs/figures/random_field_temperature.png Graphic file (type bmp)
 <./docs/figures/random_field_temperature.png>
-[21] [22]
-Underfull \hbox (badness 1931) in paragraph at lines 587--588
+[24] [25]
+File: ./docs/figures/diagrama-flujo.png Graphic file (type bmp)
+<./docs/figures/diagrama-flujo.png>
+[26] [27] [28]
+Underfull \hbox (badness 1931) in paragraph at lines 700--701
 []\TU/lmr/m/n/12 Los datos meteorológicos se dividen en dos archivos separados:
  \TU/lmtt/m/n/12 stations.csv \TU/lmr/m/n/12 y
  []
 
-
-Overfull \hbox (9.58504pt too wide) in paragraph at lines 615--622
+[29]
+Overfull \hbox (9.58504pt too wide) in paragraph at lines 728--735
  [][] 
  []
 
-[23] [24] [25] [26] [27] [28] [29]
-File: Manual_Generador_files/figure-latex/unnamed-chunk-33-1.pdf Graphic file (
-type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-33-1.pdf>
-[30] [31] [32] [33] [34] [35] [36] [37] [38]
-File: Manual_Generador_files/figure-latex/unnamed-chunk-39-1.pdf Graphic file (
-type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-39-1.pdf>
-[39] [40]
-File: Manual_Generador_files/figure-latex/unnamed-chunk-41-1.pdf Graphic file (
-type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-41-1.pdf>
-[41] [42] [43] [44]
-File: Manual_Generador_files/figure-latex/unnamed-chunk-44-1.pdf Graphic file (
-type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-44-1.pdf>
-[45] [46] [47] [48] [49]
-File: Manual_Generador_files/figure-latex/unnamed-chunk-48-1.pdf Graphic file (
-type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-48-1.pdf>
-[50] [51] [52] [53] [54] [55] [56] [57]
-Overfull \hbox (18.46489pt too wide) in paragraph at lines 1709--1709
-[]\TU/lmtt/m/n/12 ## `summarise()` regrouping output by 'year' (override with `
-.groups` argument)[] 
- []
-
-File: Manual_Generador_files/figure-latex/unnamed-chunk-54-1.pdf Graphic file (
-type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-54-1.pdf>
-[58]
-Underfull \hbox (badness 1931) in paragraph at lines 1735--1736
-[]\TU/lmr/m/n/12 Los datos meteorológicos se dividen en dos archivos separados:
- \TU/lmtt/m/n/12 stations.csv \TU/lmr/m/n/12 y
- []
-
-[59] [60]
-File: Manual_Generador_files/figure-latex/unnamed-chunk-59-1.pdf Graphic file (
-type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-59-1.pdf>
-[61] [62]
-Overfull \hbox (18.32077pt too wide) in paragraph at lines 1868--1868
+[30] [31] [32] [33] [34] [35] [36]
+File: Manual_Generador_files/figure-latex/diagnostico-modelo-local-ind-1.pdf Gr
+aphic file (type pdf)
+<use Manual_Generador_files/figure-latex/diagnostico-modelo-local-ind-1.pdf>
+[37] [38] [39] [40] [41] [42] [43] [44] [45]
+File: Manual_Generador_files/figure-latex/campo-temp-ind-1.pdf Graphic file (ty
+pe pdf)
+<use Manual_Generador_files/figure-latex/campo-temp-ind-1.pdf>
+[46] [47] [48]
+File: Manual_Generador_files/figure-latex/temp-ind-1.pdf Graphic file (type pdf
+)
+<use Manual_Generador_files/figure-latex/temp-ind-1.pdf>
+[49] [50] [51]
+File: Manual_Generador_files/figure-latex/seasonal-prcp-ind-1.pdf Graphic file 
+(type pdf)
+<use Manual_Generador_files/figure-latex/seasonal-prcp-ind-1.pdf>
+[52] [53] [54] [55] [56]
+File: Manual_Generador_files/figure-latex/diagnostico-modelo-local-seasonal-ind
+-1.pdf Graphic file (type pdf)
+<use Manual_Generador_files/figure-latex/diagnostico-modelo-local-seasonal-ind-
+1.pdf>
+[57] [58] [59] [60] [61] [62] [63]
+File: Manual_Generador_files/figure-latex/temp-seasonal-1.pdf Graphic file (typ
+e pdf)
+<use Manual_Generador_files/figure-latex/temp-seasonal-1.pdf>
+[64] [65] [66]
+File: Manual_Generador_files/figure-latex/mapa-estaciones-1-1.pdf Graphic file 
+(type pdf)
+<use Manual_Generador_files/figure-latex/mapa-estaciones-1-1.pdf>
+[67]
+Overfull \hbox (18.32077pt too wide) in paragraph at lines 2027--2027
 []\TU/lmtt/m/n/12 ##  [1]    86330    86350    86360    86430    86440    86460
     86490    86560[] 
  []
 
-[63] [64]
-File: Manual_Generador_files/figure-latex/unnamed-chunk-65-1.pdf Graphic file (
+[68]
+File: Manual_Generador_files/figure-latex/seasonal-prcp-uy-1.pdf Graphic file (
 type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-65-1.pdf>
-[65] [66] [67] [68] [69]
-File: Manual_Generador_files/figure-latex/unnamed-chunk-70-1.pdf Graphic file (
-type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-70-1.pdf>
-[70] [71] [72] [73] [74] [75] [76] [77] [78]
-File: Manual_Generador_files/figure-latex/unnamed-chunk-76-1.pdf Graphic file (
-type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-76-1.pdf>
-[79]
-Underfull \hbox (badness 1931) in paragraph at lines 2336--2337
-[]\TU/lmr/m/n/12 Los datos meteorológicos se dividen en dos archivos separados:
- \TU/lmtt/m/n/12 stations.csv \TU/lmr/m/n/12 y
- []
+<use Manual_Generador_files/figure-latex/seasonal-prcp-uy-1.pdf>
+[69] [70] [71] [72] [73] [74] [75] [76] [77]
 
+LaTeX Warning: Reference `campo-temp-uy-local' on page 78 undefined on input li
+ne 2367.
+
+[78] [79]
+File: Manual_Generador_files/figure-latex/campo-temp-uy-local-1.pdf Graphic fil
+e (type pdf)
+<use Manual_Generador_files/figure-latex/campo-temp-uy-local-1.pdf>
 [80] [81]
-File: Manual_Generador_files/figure-latex/unnamed-chunk-81-1.pdf Graphic file (
-type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-81-1.pdf>
-[82] [83]
-Overfull \hbox (18.32077pt too wide) in paragraph at lines 2469--2469
-[]\TU/lmtt/m/n/12 ##  [1]    86330    86350    86360    86430    86440    86460
-    86490    86560[] 
+Underfull \hbox (badness 2503) in paragraph at lines 2478--2479
+[]\TU/lmr/m/n/12 Se observa que la función \TU/lmtt/m/n/12 spatial_calibrate \T
+U/lmr/m/n/12 tiene los mismos argumentos que
  []
 
-[84] [85] [86] [87]
-Overfull \hbox (24.64479pt too wide) in paragraph at lines 2648--2648
+[82] [83]
+Overfull \hbox (24.64479pt too wide) in paragraph at lines 2594--2594
 []\TU/lmtt/m/n/12 ##     latitude, d = c(1, 2), bs = c("re", "tp"), k = length(
 unique_stations)) +[] 
  []
 
 
-Overfull \hbox (24.64479pt too wide) in paragraph at lines 2648--2648
+Overfull \hbox (24.64479pt too wide) in paragraph at lines 2594--2594
 []\TU/lmtt/m/n/12 ##     latitude, d = c(1, 2), bs = c("cc", "tp"), k = length(
 unique_stations)) +[] 
  []
 
 
-Overfull \hbox (49.3648pt too wide) in paragraph at lines 2648--2648
+Overfull \hbox (49.3648pt too wide) in paragraph at lines 2594--2594
 []\TU/lmtt/m/n/12 ##     te(SX1, SN1, longitude, latitude, d = c(2, 2), k = len
 gth(unique_stations)) +[] 
  []
 
 
-Overfull \hbox (49.3648pt too wide) in paragraph at lines 2648--2648
+Overfull \hbox (49.3648pt too wide) in paragraph at lines 2594--2594
 []\TU/lmtt/m/n/12 ##     te(SX2, SN2, longitude, latitude, d = c(2, 2), k = len
 gth(unique_stations)) +[] 
  []
 
 
-Overfull \hbox (49.3648pt too wide) in paragraph at lines 2648--2648
+Overfull \hbox (49.3648pt too wide) in paragraph at lines 2594--2594
 []\TU/lmtt/m/n/12 ##     te(SX3, SN3, longitude, latitude, d = c(2, 2), k = len
 gth(unique_stations)) +[] 
  []
 
 
-Overfull \hbox (37.00482pt too wide) in paragraph at lines 2648--2648
+Overfull \hbox (37.00482pt too wide) in paragraph at lines 2594--2594
 []\TU/lmtt/m/n/12 ##     te(SX4, SN4, longitude, latitude, d = c(2, 2), k = len
 gth(unique_stations))[] 
  []
 
-
-Overfull \hbox (24.58496pt too wide) in paragraph at lines 2648--2648
+[84]
+Overfull \hbox (24.58496pt too wide) in paragraph at lines 2594--2594
 []\TU/lmtt/m/n/12 ## te(tmax_prev,tmin_prev,longitude,latitude) 76.902  86.484 
 1267.40  <2e-16 ***[] 
  []
 
 
-Overfull \hbox (24.5969pt too wide) in paragraph at lines 2648--2648
+Overfull \hbox (24.5969pt too wide) in paragraph at lines 2594--2594
 []\TU/lmtt/m/n/12 ## te(type_day,longitude,latitude)            27.680  29.000 
  161.22  <2e-16 ***[] 
  []
 
 
-Overfull \hbox (24.62091pt too wide) in paragraph at lines 2648--2648
+Overfull \hbox (24.62091pt too wide) in paragraph at lines 2594--2594
 []\TU/lmtt/m/n/12 ## te(type_day_prev,longitude,latitude)       14.703  15.000 
  726.24  <2e-16 ***[] 
  []
 
 
-Overfull \hbox (24.60883pt too wide) in paragraph at lines 2648--2648
+Overfull \hbox (24.60883pt too wide) in paragraph at lines 2594--2594
 []\TU/lmtt/m/n/12 ## te(doy,longitude,latitude)                 47.907 195.000 
   77.44  <2e-16 ***[] 
  []
 
 
-Overfull \hbox (24.62085pt too wide) in paragraph at lines 2648--2648
+Overfull \hbox (24.62085pt too wide) in paragraph at lines 2594--2594
 []\TU/lmtt/m/n/12 ## te(SX1,SN1,longitude,latitude)             18.355  23.456 
   75.14  <2e-16 ***[] 
  []
 
-[88]
-Overfull \hbox (24.59685pt too wide) in paragraph at lines 2648--2648
+
+Overfull \hbox (24.59685pt too wide) in paragraph at lines 2594--2594
 []\TU/lmtt/m/n/12 ## te(SX2,SN2,longitude,latitude)              6.005   6.009 
  184.32  <2e-16 ***[] 
  []
 
 
-Overfull \hbox (24.59685pt too wide) in paragraph at lines 2648--2648
+Overfull \hbox (24.59685pt too wide) in paragraph at lines 2594--2594
 []\TU/lmtt/m/n/12 ## te(SX3,SN3,longitude,latitude)             30.642  36.395 
   48.54  <2e-16 ***[] 
  []
 
 
-Overfull \hbox (24.57285pt too wide) in paragraph at lines 2648--2648
+Overfull \hbox (24.57285pt too wide) in paragraph at lines 2594--2594
 []\TU/lmtt/m/n/12 ## te(SX4,SN4,longitude,latitude)              6.002   6.004 
  193.99  <2e-16 ***[] 
  []
 
-[89]
-File: Manual_Generador_files/figure-latex/unnamed-chunk-91-1.pdf Graphic file (
+[85]
+File: Manual_Generador_files/figure-latex/unnamed-chunk-58-1.pdf Graphic file (
 type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-91-1.pdf>
-[90] [91]
-Overfull \hbox (43.1849pt too wide) in paragraph at lines 2730--2730
+<use Manual_Generador_files/figure-latex/unnamed-chunk-58-1.pdf>
+[86] [87]
+
+LaTeX Warning: Reference `fig:cgrilla-regular' on page 88 undefined on input li
+ne 2641.
+
+[88]
+File: Manual_Generador_files/figure-latex/grilla-regular-1.pdf Graphic file (ty
+pe pdf)
+<use Manual_Generador_files/figure-latex/grilla-regular-1.pdf>
+[89] [90] [91]
+File: Manual_Generador_files/figure-latex/grilla-prcp-seasonal-1.pdf Graphic fi
+le (type pdf)
+<use Manual_Generador_files/figure-latex/grilla-prcp-seasonal-1.pdf>
+[92] [93]
+File: Manual_Generador_files/figure-latex/grilla-tmax-seasonal-1.pdf Graphic fi
+le (type pdf)
+<use Manual_Generador_files/figure-latex/grilla-tmax-seasonal-1.pdf>
+[94] [95] [96] [97] [98] [99]
+File: Manual_Generador_files/figure-latex/unnamed-chunk-66-1.pdf Graphic file (
+type pdf)
+<use Manual_Generador_files/figure-latex/unnamed-chunk-66-1.pdf>
+[100] [101] [102]
+Overfull \hbox (43.1849pt too wide) in paragraph at lines 3039--3039
 []\TU/lmtt/m/n/12 ## Warning: attribute variables are assumed to be spatially c
 onstant throughout all[] 
  []
 
-[92]
-File: Manual_Generador_files/figure-latex/unnamed-chunk-94-1.pdf Graphic file (
+[103]
+File: Manual_Generador_files/figure-latex/unnamed-chunk-68-1.pdf Graphic file (
 type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-94-1.pdf>
-[93] [94]
-File: Manual_Generador_files/figure-latex/unnamed-chunk-95-1.pdf Graphic file (
-type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-95-1.pdf>
-[95] [96]
-Overfull \hbox (43.1849pt too wide) in paragraph at lines 2826--2826
-[]\TU/lmtt/m/n/12 ## Warning: attribute variables are assumed to be spatially c
-onstant throughout all[] 
- []
+<use Manual_Generador_files/figure-latex/unnamed-chunk-68-1.pdf>
+[104] [105] (./Manual_Generador.aux)
 
-File: Manual_Generador_files/figure-latex/unnamed-chunk-96-1.pdf Graphic file (
-type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-96-1.pdf>
-[97] [98] [99] [100] [101] [102] [103]
-File: Manual_Generador_files/figure-latex/unnamed-chunk-101-1.pdf Graphic file 
-(type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-101-1.pdf>
-[104] [105] [106]
-Overfull \hbox (43.1849pt too wide) in paragraph at lines 3123--3123
-[]\TU/lmtt/m/n/12 ## Warning: attribute variables are assumed to be spatially c
-onstant throughout all[] 
- []
+LaTeX Warning: There were undefined references.
 
-[107]
-File: Manual_Generador_files/figure-latex/unnamed-chunk-103-1.pdf Graphic file 
-(type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-103-1.pdf>
-[108] [109] (./Manual_Generador.aux)
 Package rerunfilecheck Info: File `Manual_Generador.out' has not changed.
-(rerunfilecheck)             Checksum: 473D0625EDF03F319C38CE597EA73A63;4688.
+(rerunfilecheck)             Checksum: 0FB6E3946681A2CBC9CAA5738A837101;3906.
  ) 
 Here is how much of TeX's memory you used:
- 20294 strings out of 479218
- 365225 string characters out of 5873659
- 820774 words of memory out of 5000000
- 39519 multiletter control sequences out of 15000+600000
+ 20323 strings out of 479218
+ 366087 string characters out of 5873659
+ 821081 words of memory out of 5000000
+ 39549 multiletter control sequences out of 15000+600000
  409997 words of font info for 83 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
  94i,10n,118p,1681b,560s stack positions out of 5000i,500n,10000p,200000b,80000s
 
-Output written on Manual_Generador.pdf (109 pages).
+Output written on Manual_Generador.pdf (105 pages).
