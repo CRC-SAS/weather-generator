@@ -1,11 +1,11 @@
-This is XeTeX, Version 3.14159265-2.6-0.999992 (TeX Live 2020) (preloaded format=xelatex 2021.1.6)  8 JAN 2021 02:08
+This is XeTeX, Version 3.14159265-2.6-0.999992 (TeX Live 2020) (preloaded format=xelatex 2021.1.12)  12 JAN 2021 14:06
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
 **Manual_Generador.tex
 (./Manual_Generador.tex
-LaTeX2e <2020-10-01> patch level 3
-L3 programming layer <2020-12-07> xparse <2020-03-03> (/Users/alessiobocco/Libr
+LaTeX2e <2020-10-01> patch level 4
+L3 programming layer <2021-01-09> xparse <2020-03-03> (/Users/alessiobocco/Libr
 ary/TinyTeX/texmf-dist/tex/latex/base/article.cls
 Document Class: article 2020/04/10 v1.4m Standard LaTeX document class
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/base/size12.clo
@@ -133,15 +133,19 @@ Package: ifluatex 2019/10/25 v1.5 ifluatex legacy package. Use iftex instead.
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/unicode-math/unicode-
 math.sty (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/l3kernel/exp
 l3.sty
-Package: expl3 2020-12-07 L3 programming layer (loader) 
+Package: expl3 2021-01-09 L3 programming layer (loader) 
 
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/l3backend/l3backend-x
 etex.def
-File: l3backend-xetex.def 2020-09-24 L3 backend support: XeTeX
-\g__graphics_track_int=\count193
+File: l3backend-xetex.def 2021-01-09 L3 backend support: XeTeX
+(|extractbb --version)
+\c__kernel_sys_dvipdfmx_version_int=\count193
+\l__kernel_color_stack_int=\count194
+\g__graphics_track_int=\count195
 \l__pdf_internal_box=\box49
-\g__pdf_backend_object_int=\count194
-\g__pdf_backend_annotation_int=\count195
+\g__pdf_backend_object_int=\count196
+\g__pdf_backend_annotation_int=\count197
+\g__pdf_backend_link_int=\count198
 ))
 Package: unicode-math 2020/01/31 v0.8q Unicode maths in XeLaTeX and LuaLaTeX
 
@@ -167,17 +171,17 @@ Package: fontspec 2020/02/21 v2.7i Font selection for XeLaTeX and LuaLaTeX
 ex.sty
 Package: fontspec-xetex 2020/02/21 v2.7i Font selection for XeLaTeX and LuaLaTe
 X
-\l__fontspec_script_int=\count196
-\l__fontspec_language_int=\count197
-\l__fontspec_strnum_int=\count198
-\l__fontspec_tmp_int=\count199
-\l__fontspec_tmpa_int=\count266
-\l__fontspec_tmpb_int=\count267
-\l__fontspec_tmpc_int=\count268
-\l__fontspec_em_int=\count269
-\l__fontspec_emdef_int=\count270
-\l__fontspec_strong_int=\count271
-\l__fontspec_strongdef_int=\count272
+\l__fontspec_script_int=\count199
+\l__fontspec_language_int=\count266
+\l__fontspec_strnum_int=\count267
+\l__fontspec_tmp_int=\count268
+\l__fontspec_tmpa_int=\count269
+\l__fontspec_tmpb_int=\count270
+\l__fontspec_tmpc_int=\count271
+\l__fontspec_em_int=\count272
+\l__fontspec_emdef_int=\count273
+\l__fontspec_strong_int=\count274
+\l__fontspec_strongdef_int=\count275
 \l__fontspec_tmpa_dim=\dimen148
 \l__fontspec_tmpb_dim=\dimen149
 \l__fontspec_tmpc_dim=\dimen150
@@ -191,9 +195,9 @@ Package: fix-cm 2015/01/14 v1.1t fixes to LaTeX
 File: ts1enc.def 2001/06/05 v3.0e (jk/car/fm) Standard LaTeX file
 LaTeX Font Info:    Redeclaring font encoding TS1 on input line 47.
 ))
-\g__um_fam_int=\count273
-\g__um_fonts_used_int=\count274
-\l__um_primecount_int=\count275
+\g__um_fam_int=\count276
+\g__um_fonts_used_int=\count277
+\l__um_primecount_int=\count278
 \g__um_primekern_muskip=\muskip17
 
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/unicode-math/unicode-
@@ -267,8 +271,8 @@ ty
 Package: kvoptions 2020-10-07 v3.14 Key value format for package options (HO)
 )
 \@linkdim=\dimen151
-\Hy@linkcounter=\count276
-\Hy@pagecounter=\count277
+\Hy@linkcounter=\count279
+\Hy@pagecounter=\count280
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/hyperref/pd1enc.def
 File: pd1enc.def 2020-05-15 v7.00e Hyperref: PDFDocEncoding definition (HO)
 )
@@ -279,7 +283,7 @@ Package: intcalc 2019/12/15 v1.3 Expandable calculations with integers (HO)
 ty
 Package: etexcmds 2019/12/15 v1.7 Avoid name clashes with e-TeX commands (HO)
 )
-\Hy@SavedSpaceFactor=\count278
+\Hy@SavedSpaceFactor=\count281
 Package hyperref Info: Option `unicode' set `true' on input line 4338.
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/hyperref/puenc.def
 File: puenc.def 2020-05-15 v7.00e Hyperref: PDF Unicode definition (HO)
@@ -291,7 +295,7 @@ Package hyperref Info: Plain pages OFF on input line 4479.
 Package hyperref Info: Backreferencing OFF on input line 4484.
 Package hyperref Info: Implicit mode ON; LaTeX internals redefined.
 Package hyperref Info: Bookmarks ON on input line 4717.
-\c@Hy@tempcnt=\count279
+\c@Hy@tempcnt=\count282
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/url/url.sty
 \Urlmuskip=\muskip18
 Package: url 2013/09/16  ver 3.4  Verb mode for urls, etc.
@@ -306,7 +310,7 @@ lc.sty
 Package: bigintcalc 2019/12/15 v1.5 Expandable calculations on big integers (HO
 )
 ))
-\Fld@menulength=\count280
+\Fld@menulength=\count283
 \Field@Width=\dimen153
 \Fld@charsize=\dimen154
 Package hyperref Info: Hyper figures OFF on input line 6347.
@@ -324,9 +328,9 @@ Package: atbegshi-ltx 2020/08/17 v1.0a Emulation of the original atbegshi packa
 ge
 with kernel methods
 )
-\Hy@abspage=\count281
-\c@Item=\count282
-\c@Hfootnote=\count283
+\Hy@abspage=\count284
+\c@Item=\count285
+\c@Hfootnote=\count286
 )
 Package hyperref Info: Driver (autodetected): hxetex.
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/hyperref/hxetex.def
@@ -338,10 +342,10 @@ Package: stringenc 2019/11/29 v1.12 Convert strings between diff. encodings (HO
 )
 )
 \pdfm@box=\box50
-\c@Hy@AnnotLevel=\count284
-\HyField@AnnotCount=\count285
-\Fld@listcount=\count286
-\c@bookmark@seq@number=\count287
+\c@Hy@AnnotLevel=\count287
+\HyField@AnnotCount=\count288
+\Fld@listcount=\count289
+\c@bookmark@seq@number=\count290
 
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/rerunfilecheck/rerunf
 ilecheck.sty
@@ -367,9 +371,9 @@ Package: geometry 2020/01/02 v5.9 Page Geometry
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/generic/iftex/ifvtex.sty
 Package: ifvtex 2019/10/25 v1.7 ifvtex legacy package. Use iftex instead.
 )
-\Gm@cnth=\count288
-\Gm@cntv=\count289
-\c@Gm@tempcnt=\count290
+\Gm@cnth=\count291
+\Gm@cntv=\count292
+\c@Gm@tempcnt=\count293
 \Gm@bindingoffset=\dimen155
 \Gm@wd@mp=\dimen156
 \Gm@odd@mp=\dimen157
@@ -382,11 +386,11 @@ Package: ifvtex 2019/10/25 v1.7 ifvtex legacy package. Use iftex instead.
 )
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/fancyvrb/fancyvrb.sty
 Package: fancyvrb 2020/05/03 v3.6 verbatim text (tvz,hv)
-\FV@CodeLineNo=\count291
+\FV@CodeLineNo=\count294
 \FV@InFile=\read2
 \FV@TabBox=\box51
-\c@FancyVerbLine=\count292
-\FV@StepNumber=\count293
+\c@FancyVerbLine=\count295
+\FV@StepNumber=\count296
 \FV@OutFile=\write3
 ) (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/tools/longtable.sty
 Package: longtable 2020/01/07 v4.13 Multi-page Table package (DPC)
@@ -394,16 +398,16 @@ Package: longtable 2020/01/07 v4.13 Multi-page Table package (DPC)
 \LTright=\skip54
 \LTpre=\skip55
 \LTpost=\skip56
-\LTchunksize=\count294
+\LTchunksize=\count297
 \LTcapwidth=\dimen163
 \LT@head=\box52
 \LT@firsthead=\box53
 \LT@foot=\box54
 \LT@lastfoot=\box55
-\LT@cols=\count295
-\LT@rows=\count296
-\c@LT@tables=\count297
-\c@LT@chunks=\count298
+\LT@cols=\count298
+\LT@rows=\count299
+\c@LT@tables=\count300
+\c@LT@chunks=\count301
 \LT@p@ftn=\toks23
 )
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/booktabs/booktabs.sty
@@ -418,17 +422,17 @@ Package: booktabs 2020/01/12 v1.61803398 Publication quality tables
 \cmidrulesep=\dimen171
 \cmidrulekern=\dimen172
 \defaultaddspace=\dimen173
-\@cmidla=\count299
-\@cmidlb=\count300
+\@cmidla=\count302
+\@cmidlb=\count303
 \@aboverulesep=\dimen174
 \@belowrulesep=\dimen175
-\@thisruleclass=\count301
-\@lastruleclass=\count302
+\@thisruleclass=\count304
+\@lastruleclass=\count305
 \@thisrulewidth=\dimen176
 )
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/etoolbox/etoolbox.sty
 Package: etoolbox 2020/10/05 v2.5k e-TeX tools for LaTeX (JAW)
-\etb@tempcnta=\count303
+\etb@tempcnta=\count306
 )
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/mdwtools/footnote.sty
 Package: footnote 1997/01/28 1.13 Save footnotes around boxes
@@ -462,16 +466,16 @@ Package: setspace 2011/12/19 v6.7a set line spacing
 ) (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/lineno/lineno.sty
 Package: lineno 2005/11/02 line numbers on paragraphs v4.41
 Invalid UTF-8 byte or sequence at line 296 replaced by U+FFFD.
-\linenopenalty=\count304
+\linenopenalty=\count307
 \output=\toks24
-\linenoprevgraf=\count305
+\linenoprevgraf=\count308
 \linenumbersep=\dimen180
 \linenumberwidth=\dimen181
-\c@linenumber=\count306
-\c@pagewiselinenumber=\count307
-\c@LN@truepage=\count308
-\c@internallinenumber=\count309
-\c@internallinenumbers=\count310
+\c@linenumber=\count309
+\c@pagewiselinenumber=\count310
+\c@LN@truepage=\count311
+\c@internallinenumber=\count312
+\c@internallinenumbers=\count313
 \quotelinenumbersep=\dimen182
 \bframerule=\dimen183
 \bframesep=\dimen184
@@ -479,7 +483,7 @@ Invalid UTF-8 byte or sequence at line 296 replaced by U+FFFD.
 LaTeX Info: Redefining \\ on input line 3056.
 ) (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/float/float.sty
 Package: float 2001/11/08 v1.3d Float enhancements (AL)
-\c@float@type=\count311
+\c@float@type=\count314
 \float@exts=\toks25
 \float@box=\box58
 \@float@everytoks=\toks26
@@ -497,8 +501,8 @@ Package: caption3 2020/10/21 v2.2e caption3 kernel (AR)
 \caption@hangindent=\dimen191
 Package caption Info: Standard document class detected.
 )
-\c@caption@flags=\count312
-\c@continuedfloat=\count313
+\c@caption@flags=\count315
+\c@continuedfloat=\count316
 Package caption Info: float package is loaded.
 Package caption Info: hyperref package is loaded.
 Package caption Info: longtable package is loaded.
@@ -512,7 +516,7 @@ Package chngcntr Info: \counterwithout already defined.
 (chngcntr)             Quitting chngcntr on input line 21.
 )
 \@float@every@codechunk=\toks27
-\c@codechunk=\count314
+\c@codechunk=\count317
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/tools/array.sty
 Package: array 2020/10/01 v2.5c Tabular extension package (FMi)
 \col@sep=\dimen192
@@ -526,13 +530,13 @@ Package: array 2020/10/01 v2.5c Tabular extension package (FMi)
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/multirow/multirow.sty
 Package: multirow 2021/01/02 v2.6 Span multiple rows of a table
 \multirow@colwidth=\skip59
-\multirow@cntb=\count315
+\multirow@cntb=\count318
 \multirow@dima=\skip60
 \bigstrutjot=\dimen194
 ) (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/wrapfig/wrapfig.sty
 \wrapoverhang=\dimen195
 \WF@size=\dimen196
-\c@WF@wrappedlines=\count316
+\c@WF@wrappedlines=\count319
 \WF@box=\box62
 \WF@everypar=\toks29
 Package: wrapfig 2003/01/31  v 3.6
@@ -556,16 +560,16 @@ Package: tabu 2019/01/11 v2.9 - flexible LaTeX tabulars (FC+tabu-fixed)
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/varwidth/varwidth.sty
 Package: varwidth 2009/03/30 ver 0.92;  Variable-width minipages
 \@vwid@box=\box63
-\sift@deathcycles=\count317
+\sift@deathcycles=\count320
 \@vwid@loff=\dimen197
 \@vwid@roff=\dimen198
 )
-\c@taburow=\count318
-\tabu@nbcols=\count319
-\tabu@cnt=\count320
-\tabu@Xcol=\count321
-\tabu@alloc=\count322
-\tabu@nested=\count323
+\c@taburow=\count321
+\tabu@nbcols=\count322
+\tabu@cnt=\count323
+\tabu@Xcol=\count324
+\tabu@alloc=\count325
+\tabu@nested=\count326
 \tabu@target=\dimen199
 \tabu@spreadtarget=\dimen256
 \tabu@naturalX=\dimen257
@@ -605,7 +609,7 @@ Package: trimspaces 2009/09/17 v1.1 Trim spaces around a token list
 \UL@skip=\skip64
 \UL@hook=\toks33
 \UL@height=\dimen264
-\UL@pe=\count324
+\UL@pe=\count327
 \UL@pixel=\dimen265
 \ULC@box=\box71
 Package: ulem 2019/11/18
@@ -614,50 +618,45 @@ Package: ulem 2019/11/18
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/makecell/makecell.sty
 Package: makecell 2009/08/03 V0.1e Managing of Tab Column Heads and Cells
 \rotheadsize=\dimen267
-\c@nlinenum=\count325
+\c@nlinenum=\count328
 \TeXr@lab=\toks34
-)
-
-LaTeX Warning: Unused global option(s):
-    [preprint].
-
-(./Manual_Generador.aux)
+) (./Manual_Generador.aux)
 \openout1 = `Manual_Generador.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 136.
-LaTeX Font Info:    ... okay on input line 136.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 136.
-LaTeX Font Info:    ... okay on input line 136.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 136.
-LaTeX Font Info:    ... okay on input line 136.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 136.
-LaTeX Font Info:    ... okay on input line 136.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 136.
-LaTeX Font Info:    ... okay on input line 136.
-LaTeX Font Info:    Checking defaults for TU/lmr/m/n on input line 136.
-LaTeX Font Info:    ... okay on input line 136.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 136.
-LaTeX Font Info:    ... okay on input line 136.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 136.
-LaTeX Font Info:    ... okay on input line 136.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 136.
-LaTeX Font Info:    ... okay on input line 136.
-LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 136.
-LaTeX Font Info:    ... okay on input line 136.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 137.
+LaTeX Font Info:    ... okay on input line 137.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 137.
+LaTeX Font Info:    ... okay on input line 137.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 137.
+LaTeX Font Info:    ... okay on input line 137.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 137.
+LaTeX Font Info:    ... okay on input line 137.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 137.
+LaTeX Font Info:    ... okay on input line 137.
+LaTeX Font Info:    Checking defaults for TU/lmr/m/n on input line 137.
+LaTeX Font Info:    ... okay on input line 137.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 137.
+LaTeX Font Info:    ... okay on input line 137.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 137.
+LaTeX Font Info:    ... okay on input line 137.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 137.
+LaTeX Font Info:    ... okay on input line 137.
+LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 137.
+LaTeX Font Info:    ... okay on input line 137.
 LaTeX Font Info:    Overwriting math alphabet `\mathrm' in version `normal'
-(Font)                  OT1/lmr/m/n --> TU/lmr/m/n on input line 136.
+(Font)                  OT1/lmr/m/n --> TU/lmr/m/n on input line 137.
 LaTeX Font Info:    Overwriting math alphabet `\mathit' in version `normal'
-(Font)                  OT1/lmr/m/it --> TU/lmr/m/it on input line 136.
+(Font)                  OT1/lmr/m/it --> TU/lmr/m/it on input line 137.
 LaTeX Font Info:    Overwriting math alphabet `\mathbf' in version `normal'
-(Font)                  OT1/lmr/bx/n --> TU/lmr/bx/n on input line 136.
+(Font)                  OT1/lmr/bx/n --> TU/lmr/bx/n on input line 137.
 LaTeX Font Info:    Overwriting math alphabet `\mathsf' in version `normal'
-(Font)                  OT1/lmss/m/n --> TU/lmss/m/n on input line 136.
+(Font)                  OT1/lmss/m/n --> TU/lmss/m/n on input line 137.
 LaTeX Font Info:    Overwriting math alphabet `\mathsf' in version `bold'
-(Font)                  OT1/lmss/bx/n --> TU/lmss/bx/n on input line 136.
+(Font)                  OT1/lmss/bx/n --> TU/lmss/bx/n on input line 137.
 LaTeX Font Info:    Overwriting math alphabet `\mathtt' in version `normal'
-(Font)                  OT1/lmtt/m/n --> TU/lmtt/m/n on input line 136.
+(Font)                  OT1/lmtt/m/n --> TU/lmtt/m/n on input line 137.
 LaTeX Font Info:    Overwriting math alphabet `\mathtt' in version `bold'
-(Font)                  OT1/lmtt/m/n --> TU/lmtt/bx/n on input line 136.
+(Font)                  OT1/lmtt/m/n --> TU/lmtt/bx/n on input line 137.
 
 Package fontspec Info: latinmodern-math scale = 0.9999970497384594.
 
@@ -686,7 +685,7 @@ pt=math;language=dflt;"
 (fontspec)             - 'bold small caps'  (b/sc) with NFSS spec.: 
 
 LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(0)/m/n' will be
-(Font)              scaled to size 12.0pt on input line 136.
+(Font)              scaled to size 12.0pt on input line 137.
 
 Package fontspec Info: latinmodern-math scale = 0.9999970497384594.
 
@@ -725,18 +724,18 @@ pt=math;language=dflt;"
 (fontspec)             - 'bold small caps'  (b/sc) with NFSS spec.: 
 
 LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(1)/m/n' will be
-(Font)              scaled to size 12.0pt on input line 136.
+(Font)              scaled to size 12.0pt on input line 137.
 LaTeX Font Info:    Encoding `OT1' has changed to `TU' for symbol font
-(Font)              `operators' in the math version `normal' on input line 136.
+(Font)              `operators' in the math version `normal' on input line 137.
 
 LaTeX Font Info:    Overwriting symbol font `operators' in version `normal'
 (Font)                  OT1/lmr/m/n --> TU/latinmodern-math.otf(1)/m/n on input
- line 136.
+ line 137.
 LaTeX Font Info:    Encoding `OT1' has changed to `TU' for symbol font
-(Font)              `operators' in the math version `bold' on input line 136.
+(Font)              `operators' in the math version `bold' on input line 137.
 LaTeX Font Info:    Overwriting symbol font `operators' in version `bold'
 (Font)                  OT1/lmr/bx/n --> TU/latinmodern-math.otf(1)/b/n on inpu
-t line 136.
+t line 137.
 
 Package fontspec Info: latinmodern-math scale = 0.9999970497384594.
 
@@ -823,15 +822,15 @@ t=math;language=dflt;"
 (fontspec)             \fontdimen 21\font =0pt\relax 
 
 LaTeX Font Info:    Encoding `OMS' has changed to `TU' for symbol font
-(Font)              `symbols' in the math version `normal' on input line 136.
+(Font)              `symbols' in the math version `normal' on input line 137.
 LaTeX Font Info:    Overwriting symbol font `symbols' in version `normal'
 (Font)                  OMS/lmsy/m/n --> TU/latinmodern-math.otf(2)/m/n on inpu
-t line 136.
+t line 137.
 LaTeX Font Info:    Encoding `OMS' has changed to `TU' for symbol font
-(Font)              `symbols' in the math version `bold' on input line 136.
+(Font)              `symbols' in the math version `bold' on input line 137.
 LaTeX Font Info:    Overwriting symbol font `symbols' in version `bold'
 (Font)                  OMS/lmsy/b/n --> TU/latinmodern-math.otf(2)/b/n on inpu
-t line 136.
+t line 137.
 
 Package fontspec Info: latinmodern-math scale = 0.9999970497384594.
 
@@ -901,17 +900,17 @@ pt=math;language=dflt;"
 
 LaTeX Font Info:    Encoding `OMX' has changed to `TU' for symbol font
 (Font)              `largesymbols' in the math version `normal' on input line 1
-36.
+37.
 LaTeX Font Info:    Overwriting symbol font `largesymbols' in version `normal'
 (Font)                  OMX/lmex/m/n --> TU/latinmodern-math.otf(3)/m/n on inpu
-t line 136.
+t line 137.
 LaTeX Font Info:    Encoding `OMX' has changed to `TU' for symbol font
-(Font)              `largesymbols' in the math version `bold' on input line 136
+(Font)              `largesymbols' in the math version `bold' on input line 137
 .
 LaTeX Font Info:    Overwriting symbol font `largesymbols' in version `bold'
 (Font)                  OMX/lmex/m/n --> TU/latinmodern-math.otf(3)/b/n on inpu
-t line 136.
-Package hyperref Info: Link coloring OFF on input line 136.
+t line 137.
+Package hyperref Info: Link coloring OFF on input line 137.
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/hyperref/nameref.sty
 Package: nameref 2019/09/16 v2.46 Cross-referencing by name of section
 
@@ -922,11 +921,11 @@ Package: refcount 2019/12/15 v3.6 Data extraction from label references (HO)
 itlestring.sty
 Package: gettitlestring 2019/12/15 v1.6 Cleanup title references (HO)
 )
-\c@section@level=\count326
+\c@section@level=\count329
 )
-LaTeX Info: Redefining \ref on input line 136.
-LaTeX Info: Redefining \pageref on input line 136.
-LaTeX Info: Redefining \nameref on input line 136.
+LaTeX Info: Redefining \ref on input line 137.
+LaTeX Info: Redefining \pageref on input line 137.
+LaTeX Info: Redefining \nameref on input line 137.
 (./Manual_Generador.out) (./Manual_Generador.out)
 \@outlinefile=\write4
 \openout4 = `Manual_Generador.out'.
@@ -970,34 +969,34 @@ Package caption Info: threeparttable package is loaded.
 Package caption Info: wrapfig package is loaded.
 Package caption Info: End \AtBeginDocument code.
 LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(1)/m/n' will be
-(Font)              scaled to size 14.4pt on input line 138.
+(Font)              scaled to size 14.4pt on input line 139.
 LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(1)/m/n' will be
-(Font)              scaled to size 10.0pt on input line 138.
+(Font)              scaled to size 10.0pt on input line 139.
 LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(1)/m/n' will be
-(Font)              scaled to size 7.0pt on input line 138.
+(Font)              scaled to size 7.0pt on input line 139.
 LaTeX Font Info:    Trying to load font information for OML+lmm on input line 1
-38.
+39.
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/lm/omllmm.fd
 File: omllmm.fd 2009/10/30 v1.6 Font defs for Latin Modern
 )
 LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(2)/m/n' will be
-(Font)              scaled to size 14.4013pt on input line 138.
+(Font)              scaled to size 14.4013pt on input line 139.
 LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(2)/m/n' will be
-(Font)              scaled to size 10.00092pt on input line 138.
+(Font)              scaled to size 10.00092pt on input line 139.
 LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(2)/m/n' will be
-(Font)              scaled to size 7.00064pt on input line 138.
+(Font)              scaled to size 7.00064pt on input line 139.
 LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(3)/m/n' will be
-(Font)              scaled to size 14.39845pt on input line 138.
+(Font)              scaled to size 14.39845pt on input line 139.
 LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(3)/m/n' will be
-(Font)              scaled to size 9.99893pt on input line 138.
+(Font)              scaled to size 9.99893pt on input line 139.
 LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(3)/m/n' will be
-(Font)              scaled to size 6.99925pt on input line 138.
-LaTeX Font Info:    Trying to load font information for U+msa on input line 138
+(Font)              scaled to size 6.99925pt on input line 139.
+LaTeX Font Info:    Trying to load font information for U+msa on input line 139
 .
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/amsfonts/umsa.fd
 File: umsa.fd 2013/01/14 v3.01 AMS symbols A
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 138
+LaTeX Font Info:    Trying to load font information for U+msb on input line 139
 .
 (/Users/alessiobocco/Library/TinyTeX/texmf-dist/tex/latex/amsfonts/umsb.fd
 File: umsb.fd 2013/01/14 v3.01 AMS symbols B
@@ -1024,16 +1023,17 @@ LaTeX Font Info:    Font shape `TU/latinmodern-math.otf(3)/m/n' will be
 \tf@toc=\write5
 \openout5 = `Manual_Generador.toc'.
 
-[2] [3] [4]
+[2] [3]
 File: /Users/alessiobocco/weather-generator-1/workshop/docs/figures/local_clima
 te_weather.png Graphic file (type bmp)
 </Users/alessiobocco/weather-generator-1/workshop/docs/figures/local_climate_we
 ather.png>
-[5]
+[4]
 File: /Users/alessiobocco/weather-generator-1/workshop/docs/figures/serie_estac
 ionaria.png Graphic file (type bmp)
 </Users/alessiobocco/weather-generator-1/workshop/docs/figures/serie_estacionar
 ia.png>
+[5]
 File: /Users/alessiobocco/weather-generator-1/workshop/docs/figures/serie_pesud
 ohistorica.png Graphic file (type bmp)
 </Users/alessiobocco/weather-generator-1/workshop/docs/figures/serie_pesudohist
@@ -1042,254 +1042,357 @@ File: /Users/alessiobocco/weather-generator-1/workshop/docs/figures/serie_condi
 cionada.png Graphic file (type bmp)
 </Users/alessiobocco/weather-generator-1/workshop/docs/figures/serie_condiciona
 da.png>
-[6]
 File: /Users/alessiobocco/weather-generator-1/workshop/docs/figures/datos_grill
 ados.png Graphic file (type bmp)
 </Users/alessiobocco/weather-generator-1/workshop/docs/figures/datos_grillados.
 png>
-[7]
+[6]
 File: /Users/alessiobocco/weather-generator-1/workshop/docs/figures/tipos_model
 os.png Graphic file (type bmp)
 </Users/alessiobocco/weather-generator-1/workshop/docs/figures/tipos_modelos.pn
 g>
-[8]
+[7]
 LaTeX Font Info:    Font shape `TU/lmtt/bx/n' in size <12> not available
-(Font)              Font shape `TU/lmtt/b/n' tried instead on input line 273.
-[9]
+(Font)              Font shape `TU/lmtt/b/n' tried instead on input line 271.
+[8]
 File: Manual_Generador_files/figure-latex/relaciones-no-lineales-1.pdf Graphic 
 file (type pdf)
 <use Manual_Generador_files/figure-latex/relaciones-no-lineales-1.pdf>
-[10]
 File: Manual_Generador_files/figure-latex/ajuste-lineal-1.pdf Graphic file (typ
 e pdf)
 <use Manual_Generador_files/figure-latex/ajuste-lineal-1.pdf>
-[11] [12]
+[9] [10]
 File: Manual_Generador_files/figure-latex/residuos-lineal-1.pdf Graphic file (t
 ype pdf)
 <use Manual_Generador_files/figure-latex/residuos-lineal-1.pdf>
-[13]
+[11]
 File: Manual_Generador_files/figure-latex/ajuste-gam-1.pdf Graphic file (type p
 df)
 <use Manual_Generador_files/figure-latex/ajuste-gam-1.pdf>
-[14] [15] [16]
+[12] [13]
 File: Manual_Generador_files/figure-latex/residuos-gam-1.pdf Graphic file (type
  pdf)
 <use Manual_Generador_files/figure-latex/residuos-gam-1.pdf>
-[17]
+[14]
 File: ./docs/figures/modelos.png Graphic file (type bmp)
 <./docs/figures/modelos.png>
-[18] [19] [20] [21]
+[15] [16]
+File: ./docs/figures/efecto_tipo-dia-lluvioso.png Graphic file (type bmp)
+<./docs/figures/efecto_tipo-dia-lluvioso.png>
+[17]
 File: ./docs/figures/ruido_precipitacion.png Graphic file (type bmp)
 <./docs/figures/ruido_precipitacion.png>
-[22]
+[18]
 File: ./docs/figures/ruido_temperatura.png Graphic file (type bmp)
 <./docs/figures/ruido_temperatura.png>
-[23]
+[19]
 File: ./docs/figures/random_field_precipitacion.png Graphic file (type bmp)
 <./docs/figures/random_field_precipitacion.png>
+[20]
 File: ./docs/figures/random_field_temperature.png Graphic file (type bmp)
 <./docs/figures/random_field_temperature.png>
-[24] [25]
+[21]
 File: ./docs/figures/diagrama-flujo.png Graphic file (type bmp)
 <./docs/figures/diagrama-flujo.png>
-[26] [27] [28]
-Underfull \hbox (badness 1931) in paragraph at lines 700--701
+[22] [23] [24]
+Underfull \hbox (badness 1931) in paragraph at lines 735--736
 []\TU/lmr/m/n/12 Los datos meteorológicos se dividen en dos archivos separados:
  \TU/lmtt/m/n/12 stations.csv \TU/lmr/m/n/12 y
  []
 
-[29]
-Overfull \hbox (9.58504pt too wide) in paragraph at lines 728--735
+[25]
+Overfull \hbox (9.58504pt too wide) in paragraph at lines 763--770
  [][] 
  []
 
-[30] [31] [32] [33] [34] [35] [36]
+[26] [27] [28] [29] [30]
 File: Manual_Generador_files/figure-latex/diagnostico-modelo-local-ind-1.pdf Gr
 aphic file (type pdf)
 <use Manual_Generador_files/figure-latex/diagnostico-modelo-local-ind-1.pdf>
-[37] [38] [39] [40] [41] [42] [43] [44] [45]
+[31] [32] [33] [34] [35] [36]
 File: Manual_Generador_files/figure-latex/campo-temp-ind-1.pdf Graphic file (ty
 pe pdf)
 <use Manual_Generador_files/figure-latex/campo-temp-ind-1.pdf>
-[46] [47] [48]
+[37] [38]
 File: Manual_Generador_files/figure-latex/temp-ind-1.pdf Graphic file (type pdf
 )
 <use Manual_Generador_files/figure-latex/temp-ind-1.pdf>
-[49] [50] [51]
+[39] [40]
 File: Manual_Generador_files/figure-latex/seasonal-prcp-ind-1.pdf Graphic file 
 (type pdf)
 <use Manual_Generador_files/figure-latex/seasonal-prcp-ind-1.pdf>
-[52] [53] [54] [55] [56]
+[41] [42] [43] [44]
 File: Manual_Generador_files/figure-latex/diagnostico-modelo-local-seasonal-ind
 -1.pdf Graphic file (type pdf)
 <use Manual_Generador_files/figure-latex/diagnostico-modelo-local-seasonal-ind-
 1.pdf>
-[57] [58] [59] [60] [61] [62] [63]
+[45] [46] [47] [48] [49]
 File: Manual_Generador_files/figure-latex/temp-seasonal-1.pdf Graphic file (typ
 e pdf)
 <use Manual_Generador_files/figure-latex/temp-seasonal-1.pdf>
-[64] [65] [66]
+[50] [51] [52]
 File: Manual_Generador_files/figure-latex/mapa-estaciones-1-1.pdf Graphic file 
 (type pdf)
 <use Manual_Generador_files/figure-latex/mapa-estaciones-1-1.pdf>
-[67]
-Overfull \hbox (18.32077pt too wide) in paragraph at lines 2027--2027
+[53]
+Overfull \hbox (18.32077pt too wide) in paragraph at lines 2073--2073
 []\TU/lmtt/m/n/12 ##  [1]    86330    86350    86360    86430    86440    86460
     86490    86560[] 
  []
 
-[68]
+[54]
 File: Manual_Generador_files/figure-latex/seasonal-prcp-uy-1.pdf Graphic file (
 type pdf)
 <use Manual_Generador_files/figure-latex/seasonal-prcp-uy-1.pdf>
-[69] [70] [71] [72] [73] [74] [75] [76] [77]
-
-LaTeX Warning: Reference `campo-temp-uy-local' on page 78 undefined on input li
-ne 2367.
-
-[78] [79]
+[55] [56] [57] [58] [59] [60] [61]
 File: Manual_Generador_files/figure-latex/campo-temp-uy-local-1.pdf Graphic fil
 e (type pdf)
 <use Manual_Generador_files/figure-latex/campo-temp-uy-local-1.pdf>
-[80] [81]
-Underfull \hbox (badness 2503) in paragraph at lines 2478--2479
-[]\TU/lmr/m/n/12 Se observa que la función \TU/lmtt/m/n/12 spatial_calibrate \T
-U/lmr/m/n/12 tiene los mismos argumentos que
- []
-
-[82] [83]
-Overfull \hbox (24.64479pt too wide) in paragraph at lines 2594--2594
+[62] [63]
+File: Manual_Generador_files/figure-latex/mapa-estaciones-2-1.pdf Graphic file 
+(type pdf)
+<use Manual_Generador_files/figure-latex/mapa-estaciones-2-1.pdf>
+[64] [65] [66]
+Overfull \hbox (24.64479pt too wide) in paragraph at lines 2669--2669
 []\TU/lmtt/m/n/12 ##     latitude, d = c(1, 2), bs = c("re", "tp"), k = length(
 unique_stations)) +[] 
  []
 
 
-Overfull \hbox (24.64479pt too wide) in paragraph at lines 2594--2594
+Overfull \hbox (24.64479pt too wide) in paragraph at lines 2669--2669
 []\TU/lmtt/m/n/12 ##     latitude, d = c(1, 2), bs = c("cc", "tp"), k = length(
 unique_stations)) +[] 
  []
 
 
-Overfull \hbox (49.3648pt too wide) in paragraph at lines 2594--2594
+Overfull \hbox (49.3648pt too wide) in paragraph at lines 2669--2669
 []\TU/lmtt/m/n/12 ##     te(SX1, SN1, longitude, latitude, d = c(2, 2), k = len
 gth(unique_stations)) +[] 
  []
 
 
-Overfull \hbox (49.3648pt too wide) in paragraph at lines 2594--2594
+Overfull \hbox (49.3648pt too wide) in paragraph at lines 2669--2669
 []\TU/lmtt/m/n/12 ##     te(SX2, SN2, longitude, latitude, d = c(2, 2), k = len
 gth(unique_stations)) +[] 
  []
 
 
-Overfull \hbox (49.3648pt too wide) in paragraph at lines 2594--2594
+Overfull \hbox (49.3648pt too wide) in paragraph at lines 2669--2669
 []\TU/lmtt/m/n/12 ##     te(SX3, SN3, longitude, latitude, d = c(2, 2), k = len
 gth(unique_stations)) +[] 
  []
 
 
-Overfull \hbox (37.00482pt too wide) in paragraph at lines 2594--2594
+Overfull \hbox (37.00482pt too wide) in paragraph at lines 2669--2669
 []\TU/lmtt/m/n/12 ##     te(SX4, SN4, longitude, latitude, d = c(2, 2), k = len
 gth(unique_stations))[] 
  []
 
-[84]
-Overfull \hbox (24.58496pt too wide) in paragraph at lines 2594--2594
+
+Overfull \hbox (24.58496pt too wide) in paragraph at lines 2669--2669
 []\TU/lmtt/m/n/12 ## te(tmax_prev,tmin_prev,longitude,latitude) 76.902  86.484 
 1267.40  <2e-16 ***[] 
  []
 
 
-Overfull \hbox (24.5969pt too wide) in paragraph at lines 2594--2594
+Overfull \hbox (24.5969pt too wide) in paragraph at lines 2669--2669
 []\TU/lmtt/m/n/12 ## te(type_day,longitude,latitude)            27.680  29.000 
  161.22  <2e-16 ***[] 
  []
 
 
-Overfull \hbox (24.62091pt too wide) in paragraph at lines 2594--2594
+Overfull \hbox (24.62091pt too wide) in paragraph at lines 2669--2669
 []\TU/lmtt/m/n/12 ## te(type_day_prev,longitude,latitude)       14.703  15.000 
  726.24  <2e-16 ***[] 
  []
 
 
-Overfull \hbox (24.60883pt too wide) in paragraph at lines 2594--2594
+Overfull \hbox (24.60883pt too wide) in paragraph at lines 2669--2669
 []\TU/lmtt/m/n/12 ## te(doy,longitude,latitude)                 47.907 195.000 
   77.44  <2e-16 ***[] 
  []
 
 
-Overfull \hbox (24.62085pt too wide) in paragraph at lines 2594--2594
+Overfull \hbox (24.62085pt too wide) in paragraph at lines 2669--2669
 []\TU/lmtt/m/n/12 ## te(SX1,SN1,longitude,latitude)             18.355  23.456 
   75.14  <2e-16 ***[] 
  []
 
 
-Overfull \hbox (24.59685pt too wide) in paragraph at lines 2594--2594
+Overfull \hbox (24.59685pt too wide) in paragraph at lines 2669--2669
 []\TU/lmtt/m/n/12 ## te(SX2,SN2,longitude,latitude)              6.005   6.009 
  184.32  <2e-16 ***[] 
  []
 
 
-Overfull \hbox (24.59685pt too wide) in paragraph at lines 2594--2594
+Overfull \hbox (24.59685pt too wide) in paragraph at lines 2669--2669
 []\TU/lmtt/m/n/12 ## te(SX3,SN3,longitude,latitude)             30.642  36.395 
   48.54  <2e-16 ***[] 
  []
 
 
-Overfull \hbox (24.57285pt too wide) in paragraph at lines 2594--2594
+Overfull \hbox (24.57285pt too wide) in paragraph at lines 2669--2669
 []\TU/lmtt/m/n/12 ## te(SX4,SN4,longitude,latitude)              6.002   6.004 
  193.99  <2e-16 ***[] 
  []
 
-[85]
+[67]
 File: Manual_Generador_files/figure-latex/unnamed-chunk-58-1.pdf Graphic file (
 type pdf)
 <use Manual_Generador_files/figure-latex/unnamed-chunk-58-1.pdf>
-[86] [87]
-
-LaTeX Warning: Reference `fig:cgrilla-regular' on page 88 undefined on input li
-ne 2641.
-
-[88]
+[68] [69]
 File: Manual_Generador_files/figure-latex/grilla-regular-1.pdf Graphic file (ty
 pe pdf)
 <use Manual_Generador_files/figure-latex/grilla-regular-1.pdf>
-[89] [90] [91]
+[70] [71]
 File: Manual_Generador_files/figure-latex/grilla-prcp-seasonal-1.pdf Graphic fi
 le (type pdf)
 <use Manual_Generador_files/figure-latex/grilla-prcp-seasonal-1.pdf>
-[92] [93]
+[72] [73]
 File: Manual_Generador_files/figure-latex/grilla-tmax-seasonal-1.pdf Graphic fi
 le (type pdf)
 <use Manual_Generador_files/figure-latex/grilla-tmax-seasonal-1.pdf>
-[94] [95] [96] [97] [98] [99]
-File: Manual_Generador_files/figure-latex/unnamed-chunk-66-1.pdf Graphic file (
-type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-66-1.pdf>
-[100] [101] [102]
-Overfull \hbox (43.1849pt too wide) in paragraph at lines 3039--3039
-[]\TU/lmtt/m/n/12 ## Warning: attribute variables are assumed to be spatially c
-onstant throughout all[] 
+[74] [75] [76] [77] [78]
+File: Manual_Generador_files/figure-latex/grilla-tmax-tiempo-1.pdf Graphic file
+ (type pdf)
+<use Manual_Generador_files/figure-latex/grilla-tmax-tiempo-1.pdf>
+[79] [80] [81]
+File: Manual_Generador_files/figure-latex/prcp_grilla-uy-1.pdf Graphic file (ty
+pe pdf)
+<use Manual_Generador_files/figure-latex/prcp_grilla-uy-1.pdf>
+[82] [83] [84] [85]
+Overfull \hbox (24.64479pt too wide) in paragraph at lines 3344--3344
+[]\TU/lmtt/m/n/12 ##     latitude, d = c(1, 2), bs = c("re", "tp"), k = length(
+unique_stations)) +[] 
  []
 
-[103]
-File: Manual_Generador_files/figure-latex/unnamed-chunk-68-1.pdf Graphic file (
+
+Overfull \hbox (24.64479pt too wide) in paragraph at lines 3344--3344
+[]\TU/lmtt/m/n/12 ##     latitude, d = c(1, 2), bs = c("cc", "tp"), k = length(
+unique_stations)) +[] 
+ []
+
+
+Overfull \hbox (49.3648pt too wide) in paragraph at lines 3344--3344
+[]\TU/lmtt/m/n/12 ##     te(SX1, SN1, longitude, latitude, d = c(2, 2), k = len
+gth(unique_stations)) +[] 
+ []
+
+
+Overfull \hbox (49.3648pt too wide) in paragraph at lines 3344--3344
+[]\TU/lmtt/m/n/12 ##     te(SX2, SN2, longitude, latitude, d = c(2, 2), k = len
+gth(unique_stations)) +[] 
+ []
+
+
+Overfull \hbox (49.3648pt too wide) in paragraph at lines 3344--3344
+[]\TU/lmtt/m/n/12 ##     te(SX3, SN3, longitude, latitude, d = c(2, 2), k = len
+gth(unique_stations)) +[] 
+ []
+
+
+Overfull \hbox (37.00482pt too wide) in paragraph at lines 3344--3344
+[]\TU/lmtt/m/n/12 ##     te(SX4, SN4, longitude, latitude, d = c(2, 2), k = len
+gth(unique_stations))[] 
+ []
+
+
+Overfull \hbox (24.58496pt too wide) in paragraph at lines 3344--3344
+[]\TU/lmtt/m/n/12 ## te(tmax_prev,tmin_prev,longitude,latitude) 76.902  86.484 
+1267.40  <2e-16 ***[] 
+ []
+
+
+Overfull \hbox (24.5969pt too wide) in paragraph at lines 3344--3344
+[]\TU/lmtt/m/n/12 ## te(type_day,longitude,latitude)            27.680  29.000 
+ 161.22  <2e-16 ***[] 
+ []
+
+
+Overfull \hbox (24.62091pt too wide) in paragraph at lines 3344--3344
+[]\TU/lmtt/m/n/12 ## te(type_day_prev,longitude,latitude)       14.703  15.000 
+ 726.24  <2e-16 ***[] 
+ []
+
+
+Overfull \hbox (24.60883pt too wide) in paragraph at lines 3344--3344
+[]\TU/lmtt/m/n/12 ## te(doy,longitude,latitude)                 47.907 195.000 
+  77.44  <2e-16 ***[] 
+ []
+
+
+Overfull \hbox (24.62085pt too wide) in paragraph at lines 3344--3344
+[]\TU/lmtt/m/n/12 ## te(SX1,SN1,longitude,latitude)             18.355  23.456 
+  75.14  <2e-16 ***[] 
+ []
+
+
+Overfull \hbox (24.59685pt too wide) in paragraph at lines 3344--3344
+[]\TU/lmtt/m/n/12 ## te(SX2,SN2,longitude,latitude)              6.005   6.009 
+ 184.32  <2e-16 ***[] 
+ []
+
+
+Overfull \hbox (24.59685pt too wide) in paragraph at lines 3344--3344
+[]\TU/lmtt/m/n/12 ## te(SX3,SN3,longitude,latitude)             30.642  36.395 
+  48.54  <2e-16 ***[] 
+ []
+
+
+Overfull \hbox (24.57285pt too wide) in paragraph at lines 3344--3344
+[]\TU/lmtt/m/n/12 ## te(SX4,SN4,longitude,latitude)              6.002   6.004 
+ 193.99  <2e-16 ***[] 
+ []
+
+[86]
+File: Manual_Generador_files/figure-latex/unnamed-chunk-73-1.pdf Graphic file (
 type pdf)
-<use Manual_Generador_files/figure-latex/unnamed-chunk-68-1.pdf>
-[104] [105] (./Manual_Generador.aux)
+<use Manual_Generador_files/figure-latex/unnamed-chunk-73-1.pdf>
+[87] [88]
+Overfull \hbox (432.52484pt too wide) in paragraph at lines 3435--3435
+[]\TU/lmtt/m/n/12 ## Reading layer `ine_loc11_pt' from data source `/Users/ales
+siobocco/weather-generator-1/workshop/ine_loc11_pt.shp' using driver `ESRI Shap
+efile'[] 
+ []
+
+File: Manual_Generador_files/figure-latex/localidades-uy-1.pdf Graphic file (ty
+pe pdf)
+<use Manual_Generador_files/figure-latex/localidades-uy-1.pdf>
+[89] [90] [91]
+File: Manual_Generador_files/figure-latex/locations-prcp-seasonal-1.pdf Graphic
+ file (type pdf)
+<use Manual_Generador_files/figure-latex/locations-prcp-seasonal-1.pdf>
+[92]
+File: Manual_Generador_files/figure-latex/localidades-tmax-seasonal-1.pdf Graph
+ic file (type pdf)
+<use Manual_Generador_files/figure-latex/localidades-tmax-seasonal-1.pdf>
+[93] [94] [95] [96] [97]
+File: Manual_Generador_files/figure-latex/locations-tmax-tiempo-1.pdf Graphic f
+ile (type pdf)
+<use Manual_Generador_files/figure-latex/locations-tmax-tiempo-1.pdf>
+[98] [99]
+
+LaTeX Warning: Reference `fig:prcp-localidades-uy' on page 100 undefined on inp
+ut line 3811.
+
+[100]
+File: Manual_Generador_files/figure-latex/prcp-localidades-uy-1.pdf Graphic fil
+e (type pdf)
+<use Manual_Generador_files/figure-latex/prcp-localidades-uy-1.pdf>
+[101] [102] (./Manual_Generador.aux)
 
 LaTeX Warning: There were undefined references.
 
 Package rerunfilecheck Info: File `Manual_Generador.out' has not changed.
-(rerunfilecheck)             Checksum: 0FB6E3946681A2CBC9CAA5738A837101;3906.
+(rerunfilecheck)             Checksum: D6C21A6F719AD0A4E20EF22C4E0A2B73;5273.
  ) 
 Here is how much of TeX's memory you used:
- 20323 strings out of 479218
- 366087 string characters out of 5873659
- 821081 words of memory out of 5000000
- 39549 multiletter control sequences out of 15000+600000
- 409997 words of font info for 83 fonts, out of 8000000 for 9000
+ 20399 strings out of 479212
+ 369874 string characters out of 5873537
+ 828278 words of memory out of 5000000
+ 39624 multiletter control sequences out of 15000+600000
+ 409981 words of font info for 81 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
- 94i,10n,118p,1681b,560s stack positions out of 5000i,500n,10000p,200000b,80000s
+ 98i,10n,122p,1706b,560s stack positions out of 5000i,500n,10000p,200000b,80000s
 
-Output written on Manual_Generador.pdf (105 pages).
+Output written on Manual_Generador.pdf (102 pages).

@@ -2,7 +2,7 @@
 % Please edit documentation in R/simulate_local.R
 \name{local_simulation}
 \alias{local_simulation}
-\title{Simulates new weather trajectories in stations}
+\title{Simulates new weather series over weather stations used in the fitting stage.}
 \usage{
 local_simulation(
   model,
@@ -17,17 +17,38 @@ local_simulation(
 )
 }
 \arguments{
-\item{model}{A gamwgen model.}
+\item{model}{A gamwgen model fitted with local_calibrate.}
 
-\item{simulation_locations}{a sf object with the points at which weather should be simulated.
-If not set, the locations used to fit the model will be used.}
+\item{simulation_locations}{a sf object with the points  where the time series are to be
+simulated. If not set, the locations used to fit the model will be used.}
 
-\item{start_date}{a start date in text format (will be converted using as.Date) or a date object.}
+\item{start_date}{a start date in text format (will be converted using as.Date) or a date object.
+This date indicates the date where the simulation starts.}
 
-\item{end_date}{an end date in text format (will be converted using as.Date) or a date object.}
+\item{end_date}{an end date in text format (will be converted using as.Date) or a date object.
+This date indicates the date where the simulation ends}
 
-\item{control}{a gamwgen simulation control list.}
+\item{control}{a gamwgen simulation control list. This list is the object returned
+by local_simulation_control.}
+
+\item{output_folder}{a string with the path where the resultes will be stored.}
+
+\item{output_filename}{a string with the name of the output file. The
+output formar is a text file (.csv).}
+
+\item{seasonal_covariates}{a data frame with the seasonal aggregated variables.It could be
+the output of the summarise_seasonal_climate or data frame created by the user.
+The data frame should have five columns: station_id, a numeric variable
+corresponding to each weather station; year, a numeric variable corresponding
+to each year in the simulation period; season, a numeric variable corresponding to
+each season (1 for summer, 2 for autumn, 3 for winter and 4 for spring); seasonal_prcp,
+ a numeric variable with the aggregated seasonal sum for precipitation;
+ seasonal_tmax, a numeric variable with the aggregated seasonal mean for maximum
+ temperature and seasonal_tmin, a numeric variable with the aggregated seasonal mean
+ for minimum temperature.}
 }
 \description{
-Simulates new weather trajectories.
+This function generates synthetic weather series on locations that
+were used to fit the models. Each location is considered independent unless it is
+specified in the control function.
 }
