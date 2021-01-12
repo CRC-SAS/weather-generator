@@ -243,24 +243,24 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
     # English: Add covariables if necesary
     if (!is.null(seasonal_covariates))
         models_data <- models_data %>%
-            # Español: Agregar covariables estacionales a station_climate
-            # English: Add seasonal climate to station_climate
-            dplyr::left_join(seasonal_covariates,
-                             by = c("station_id", "year", "season")) %>%
-            # Español: Crear covariables estacionales en el formato necesario
-            # English: Create seasonal covariates in the needed format
-            dplyr::mutate(ST1 = if_else(season == 1, seasonal_prcp, 0),
-                          ST2 = if_else(season == 2, seasonal_prcp, 0),
-                          ST3 = if_else(season == 3, seasonal_prcp, 0),
-                          ST4 = if_else(season == 4, seasonal_prcp, 0),
-                          SN1 = if_else(season == 1, seasonal_tmin, 0),
-                          SN2 = if_else(season == 2, seasonal_tmin, 0),
-                          SN3 = if_else(season == 3, seasonal_tmin, 0),
-                          SN4 = if_else(season == 4, seasonal_tmin, 0),
-                          SX1 = if_else(season == 1, seasonal_tmax, 0),
-                          SX2 = if_else(season == 2, seasonal_tmax, 0),
-                          SX3 = if_else(season == 3, seasonal_tmax, 0),
-                          SX4 = if_else(season == 4, seasonal_tmax, 0))
+        # Español: Agregar covariables estacionales a station_climate
+        # English: Add seasonal climate to station_climate
+        dplyr::left_join(seasonal_covariates,
+                         by = c("station_id", "year", "season")) %>%
+        # Español: Crear covariables estacionales en el formato necesario
+        # English: Create seasonal covariates in the needed format
+        dplyr::mutate(ST1 = if_else(season == 1, seasonal_prcp, 0),
+                      ST2 = if_else(season == 2, seasonal_prcp, 0),
+                      ST3 = if_else(season == 3, seasonal_prcp, 0),
+                      ST4 = if_else(season == 4, seasonal_prcp, 0),
+                      SN1 = if_else(season == 1, seasonal_tmin, 0),
+                      SN2 = if_else(season == 2, seasonal_tmin, 0),
+                      SN3 = if_else(season == 3, seasonal_tmin, 0),
+                      SN4 = if_else(season == 4, seasonal_tmin, 0),
+                      SX1 = if_else(season == 1, seasonal_tmax, 0),
+                      SX2 = if_else(season == 2, seasonal_tmax, 0),
+                      SX3 = if_else(season == 3, seasonal_tmax, 0),
+                      SX4 = if_else(season == 4, seasonal_tmax, 0))
     # Español: Calcular el tiempo total para agregar las covariables
     # English: Compute total time to add covariables
     tiempo.add_covariates <- proc.time() - t
@@ -306,313 +306,313 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
 
 
     t.m <- proc.time()
-    models <- foreach::foreach(station = unique_stations, .multicombine = T, .packages = c('dplyr', 'foreach'),
+    models <- foreach::foreach(station = unique_stations, .multicombine = T, .packages = c('dplyr', 'foreach', 'sf'),
                                .options.snow = list(progress = progress_pb), .verbose = verbose) %dopar% {
 
-        station_climate <- models_data %>%
-            dplyr::filter(station_id == station) %>%
-            dplyr::mutate(prcp_occ_residuals = NA_real_,
-                          tmax_residuals = NA_real_,
-                          tmin_residuals = NA_real_)
+                                   station_climate <- models_data %>%
+                                       dplyr::filter(station_id == station) %>%
+                                       dplyr::mutate(prcp_occ_residuals = NA_real_,
+                                                     tmax_residuals = NA_real_,
+                                                     tmin_residuals = NA_real_)
 
 
-        ##########################################
-        ## Español: Ajustar el modelo de ocurrencia de precipitación.
-        ## English: Fit model for precipitation occurrence.
+                                   ##########################################
+                                   ## Español: Ajustar el modelo de ocurrencia de precipitación.
+                                   ## English: Fit model for precipitation occurrence.
 
-        ################################################
-        # Progress Bar (for non parallel execution) ----
-        if(nworkers == 1)
-            pb$tick(0, tokens = list(c = which(unique_stations == station), what = "prcp_occ", stn = station))
+                                   ################################################
+                                   # Progress Bar (for non parallel execution) ----
+                                   if(nworkers == 1)
+                                       pb$tick(0, tokens = list(c = which(unique_stations == station), what = "prcp_occ", stn = station))
 
-        # Español: Remover NAs
-        # English: Remove NAs
-        prcp_occ_fit_noNA_cols <- c('prcp_occ', 'prcp_occ_prev', 'doy', 'time', 'row_num')
-        if (!is.null(seasonal_covariates))
-            prcp_occ_fit_noNA_cols <- append(prcp_occ_fit_noNA_cols, c('ST1', 'ST2', 'ST3', 'ST4'))
-        prcp_occ_indexes <- station_climate %>%
-            tidyr::drop_na(tidyselect::all_of(prcp_occ_fit_noNA_cols)) %>%
-            dplyr::pull(row_num)
+                                   # Español: Remover NAs
+                                   # English: Remove NAs
+                                   prcp_occ_fit_noNA_cols <- c('prcp_occ', 'prcp_occ_prev', 'doy', 'time', 'row_num')
+                                   if (!is.null(seasonal_covariates))
+                                       prcp_occ_fit_noNA_cols <- append(prcp_occ_fit_noNA_cols, c('ST1', 'ST2', 'ST3', 'ST4'))
+                                   prcp_occ_indexes <- station_climate %>%
+                                       tidyr::drop_na(tidyselect::all_of(prcp_occ_fit_noNA_cols)) %>%
+                                       dplyr::pull(row_num)
 
-        # Español: Crear formula
-        # English: Create formula
-        prcp_occ_fm <- prcp_occ ~ s(type_day_prev, bs = 're') +
-            #s(time, bs = 'gp', k = 100) +
-            s(doy, bs = 'cc', k = 20)
+                                   # Español: Crear formula
+                                   # English: Create formula
+                                   prcp_occ_fm <- prcp_occ ~ s(type_day_prev, bs = 're') +
+                                       #s(time, bs = 'gp', k = 100) +
+                                       s(doy, bs = 'cc', k = 20)
 
-        # Español: Si es necesario, agregar covariables a la formula
-        # English: If necesary, add covariates to the formula
-        if (!is.null(seasonal_covariates)) {
-            prcp_occ_cov <- models_data %>% dplyr::select(dplyr::matches('ST\\d')) %>% names
-            prcp_occ_cov_fm_str <- paste("s(", prcp_occ_cov, ",",
-                                         "bs = c('tp' ), k = 20)", collapse = " + ")
-            prcp_occ_cov_fm     <- stats::as.formula(paste('~ . +', prcp_occ_cov_fm_str))
+                                   # Español: Si es necesario, agregar covariables a la formula
+                                   # English: If necesary, add covariates to the formula
+                                   if (!is.null(seasonal_covariates)) {
+                                       prcp_occ_cov <- models_data %>% dplyr::select(dplyr::matches('ST\\d')) %>% names
+                                       prcp_occ_cov_fm_str <- paste("s(", prcp_occ_cov, ",",
+                                                                    "bs = c('tp' ), k = 20)", collapse = " + ")
+                                       prcp_occ_cov_fm     <- stats::as.formula(paste('~ . +', prcp_occ_cov_fm_str))
 
-            prcp_occ_fm     <- stats::update(prcp_occ_fm, prcp_occ_cov_fm )
-        }
+                                       prcp_occ_fm     <- stats::update(prcp_occ_fm, prcp_occ_cov_fm )
+                                   }
 
-        t <- proc.time()
+                                   t <- proc.time()
 
-        # Español: Ajustar el GAM
-        # English: Fit the GAM
-        prcp_occ_fit <- mgcv::bam(formula = prcp_occ_fm,
-                                  data = station_climate[prcp_occ_indexes,],
-                                  family = stats::binomial(probit),
-                                  method = 'fREML',
-                                  cluster = if(clusterized_gam) cluster else NULL,
-                                  control = list(nthreads = control$avbl_cores))
-        tiempo.prcp_occ_fit <- proc.time() - t
+                                   # Español: Ajustar el GAM
+                                   # English: Fit the GAM
+                                   prcp_occ_fit <- mgcv::bam(formula = prcp_occ_fm,
+                                                             data = station_climate[prcp_occ_indexes,],
+                                                             family = stats::binomial(probit),
+                                                             method = 'fREML',
+                                                             cluster = if(clusterized_gam) cluster else NULL,
+                                                             control = list(nthreads = control$avbl_cores))
+                                   tiempo.prcp_occ_fit <- proc.time() - t
 
-        # Español: Se agregan las residuos para poder ajustar la componente meterológica
-        # English: Residues are added to fit the meteorological component
-        station_climate$prcp_occ_residuals <- NA
-        station_climate$prcp_occ_residuals[prcp_occ_indexes] <- residuals(prcp_occ_fit, type = 'response')
+                                   # Español: Se agregan las residuos para poder ajustar la componente meterológica
+                                   # English: Residues are added to fit the meteorological component
+                                   station_climate$prcp_occ_residuals <- NA
+                                   station_climate$prcp_occ_residuals[prcp_occ_indexes] <- residuals(prcp_occ_fit, type = 'response')
 
-        # Español: Se agregan datos de control
-        # English: Control data is added
-        prcp_occ_fit[["fitted_station"]] <- station
-        prcp_occ_fit[["dates_used_fitting"]] <- station_climate[prcp_occ_indexes, ] %>%
-            dplyr::pull(date)
-        prcp_occ_fit[["residuals_tibble"]]   <- station_climate[prcp_occ_indexes, ] %>%
-            dplyr::select(date, residual = prcp_occ_residuals)
-        prcp_occ_fit[["execution_time"]]     <- tiempo.prcp_occ_fit
-        # End of prcp_occ fit
+                                   # Español: Se agregan datos de control
+                                   # English: Control data is added
+                                   prcp_occ_fit[["fitted_station"]] <- station
+                                   prcp_occ_fit[["dates_used_fitting"]] <- station_climate[prcp_occ_indexes, ] %>%
+                                       dplyr::pull(date)
+                                   prcp_occ_fit[["residuals_tibble"]]   <- station_climate[prcp_occ_indexes, ] %>%
+                                       dplyr::select(date, residual = prcp_occ_residuals)
+                                   prcp_occ_fit[["execution_time"]]     <- tiempo.prcp_occ_fit
+                                   # End of prcp_occ fit
 
-        ## Fit model for precipitation occurrence.
-        #########################################
-
-
-        ################################################
-        # Progress Bar (for non parallel execution) ----
-        if(nworkers == 1)
-            pb$tick(30, tokens = list(c = which(unique_stations == station), what = "prcp_occ", stn = station))
-
-        ################################################
-        # Progress Bar (for non parallel execution) ----
-        if(nworkers == 1)
-            pb$tick(0, tokens = list(c = which(unique_stations == station), what = "prcp_amt", stn = station))
+                                   ## Fit model for precipitation occurrence.
+                                   #########################################
 
 
-        #######################################
-        ## Español: Ajustar el modelo de montos de precipitación
-        ## English: Fit model for precipitation amounts.
+                                   ################################################
+                                   # Progress Bar (for non parallel execution) ----
+                                   if(nworkers == 1)
+                                       pb$tick(30, tokens = list(c = which(unique_stations == station), what = "prcp_occ", stn = station))
 
-        # Español: Remove NAs
-        # English: Remove NAs
-        prcp_amt_fit_noNA_cols <- c('prcp_amt', 'prcp_occ_prev', 'doy', 'time', 'row_num')
-        if (!is.null(seasonal_covariates))
-            prcp_amt_fit_noNA_cols <- append(prcp_amt_fit_noNA_cols, c('ST1', 'ST2', 'ST3', 'ST4'))
-        gamma_indexes <- station_climate %>%
-            tidyr::drop_na(tidyselect::all_of(prcp_amt_fit_noNA_cols)) %>%
-            dplyr::pull(row_num)
-
-        # Español: Crear formula
-        # English: Create formula
-        prcp_amt_fm <- prcp_amt ~ s(prcp_occ_prev, bs = 're')
-
-        # Español: Si es necesario, agregar covariables a la formula
-        # English: If necesary, add covariates to the formula
-        if (!is.null(seasonal_covariates)) {
-            prcp_amt_cov <- models_data %>% dplyr::select(dplyr::matches('seasonal_prcp')) %>% names
-            prcp_amt_cov_str     <- paste("s(", prcp_amt_cov, ",",
-                                          "bs = c('tp' ), k = 20)")
-            prcp_amt_cov_fm     <- stats::as.formula(paste('~ . +', prcp_amt_cov_str))
-            # prcp_amt_cov_fm <- ~ . + ST1 + ST2 + ST3 + ST4
-            prcp_amt_fm         <- stats::update( prcp_amt_fm, prcp_amt_cov_fm )
-        }
-
-        # Español: Ajustar el GAM
-        # English: Fit the GAM
-        prcp_amt_fit <- foreach::foreach(m = 1:12, .multicombine = T, .packages = c('dplyr')) %dopar% {
-            t <- proc.time()
-            prcp_amt_fit <- mgcv::bam(formula = prcp_amt_fm,
-                                      data = station_climate[gamma_indexes,] %>%
-                                          dplyr::filter(as.logical(prcp_occ) & month == m),
-                                      family = stats::Gamma(link = log),
-                                      method = 'fREML',
-                                      cluster = if(clusterized_gam) cluster else NULL,
-                                      control = list(nthreads = control$avbl_cores))
-            tiempo.prcp_amt_fit <- proc.time() - t
-
-            # Español: Se agregan datos de control
-            # English: Control data is added
-            prcp_amt_fit[["fitted_station"]] <- station
-            prcp_amt_fit[["dates_used_fitting"]] <- station_climate[gamma_indexes, ] %>%
-                dplyr::filter(as.logical(prcp_occ) & month == m) %>%
-                dplyr::pull(date)
-            prcp_amt_fit[["execution_time"]]     <- tiempo.prcp_amt_fit
-            # End of prcp_amt fit
-
-            return (prcp_amt_fit)
-        }
-
-        ## Fit model for precipitation amounts.
-        #######################################
+                                   ################################################
+                                   # Progress Bar (for non parallel execution) ----
+                                   if(nworkers == 1)
+                                       pb$tick(0, tokens = list(c = which(unique_stations == station), what = "prcp_amt", stn = station))
 
 
-        ################################################
-        # Progress Bar (for non parallel execution) ----
-        if(nworkers == 1)
-            pb$tick(20, tokens = list(c = which(unique_stations == station), what = "prcp_amt", stn = station))
+                                   #######################################
+                                   ## Español: Ajustar el modelo de montos de precipitación
+                                   ## English: Fit model for precipitation amounts.
 
-        ################################################
-        # Progress Bar (for non parallel execution) ----
-        if(nworkers == 1)
-            pb$tick(0, tokens = list(c = which(unique_stations == station), what = "tmax", stn = station))
+                                   # Español: Remove NAs
+                                   # English: Remove NAs
+                                   prcp_amt_fit_noNA_cols <- c('prcp_amt', 'prcp_occ_prev', 'doy', 'time', 'row_num')
+                                   if (!is.null(seasonal_covariates))
+                                       prcp_amt_fit_noNA_cols <- append(prcp_amt_fit_noNA_cols, c('ST1', 'ST2', 'ST3', 'ST4'))
+                                   gamma_indexes <- station_climate %>%
+                                       tidyr::drop_na(tidyselect::all_of(prcp_amt_fit_noNA_cols)) %>%
+                                       dplyr::pull(row_num)
 
+                                   # Español: Crear formula
+                                   # English: Create formula
+                                   prcp_amt_fm <- prcp_amt ~ s(prcp_occ_prev, bs = 're')
 
-        ################################
-        ## Español: Ajustar el modelo de temperatura máxima
-        ## English: Fit model for maximum temperature.
+                                   # Español: Si es necesario, agregar covariables a la formula
+                                   # English: If necesary, add covariates to the formula
+                                   if (!is.null(seasonal_covariates)) {
+                                       prcp_amt_cov <- models_data %>% dplyr::select(dplyr::matches('seasonal_prcp')) %>% names
+                                       prcp_amt_cov_str     <- paste("s(", prcp_amt_cov, ",",
+                                                                     "bs = c('tp' ), k = 20)")
+                                       prcp_amt_cov_fm     <- stats::as.formula(paste('~ . +', prcp_amt_cov_str))
+                                       # prcp_amt_cov_fm <- ~ . + ST1 + ST2 + ST3 + ST4
+                                       prcp_amt_fm         <- stats::update( prcp_amt_fm, prcp_amt_cov_fm )
+                                   }
 
-        # Español: Remove NAs
-        # English: Remove NAs
-        tmax_fit_noNA_cols <- c('tmax', 'tmax_prev', 'tmin_prev', 'prcp_occ', 'prcp_occ_prev', 'row_num')
-        if (!is.null(seasonal_covariates))
-            tmax_fit_noNA_cols <- append(tmax_fit_noNA_cols, c('seasonal_tmax', 'seasonal_tmin'))
-        tmax_indexes <- station_climate %>%
-            tidyr::drop_na(tidyselect::all_of(tmax_fit_noNA_cols)) %>%
-            dplyr::pull(row_num)
-        # Fit model for max temperature.
+                                   # Español: Ajustar el GAM
+                                   # English: Fit the GAM
+                                   prcp_amt_fit <- foreach::foreach(m = 1:12, .multicombine = T, .packages = c('dplyr', 'sf')) %dopar% {
+                                       t <- proc.time()
+                                       prcp_amt_fit <- mgcv::bam(formula = prcp_amt_fm,
+                                                                 data = station_climate[gamma_indexes,] %>%
+                                                                     dplyr::filter(as.logical(prcp_occ) & month == m),
+                                                                 family = stats::Gamma(link = log),
+                                                                 method = 'fREML',
+                                                                 cluster = if(clusterized_gam) cluster else NULL,
+                                                                 control = list(nthreads = control$avbl_cores))
+                                       tiempo.prcp_amt_fit <- proc.time() - t
 
-        # Español: Crear formula
-        # English: Create formula
-        tmax_fm <- tmax ~ s(tmax_prev, tmin_prev, k = 50) +
-            s(prcp_occ, bs = "re") +
-            s(prcp_occ_prev, bs = "re") +
-            #s(time, bs = 'gp', k = 100) +
-            s(doy, bs = "cc", k = 30)
+                                       # Español: Se agregan datos de control
+                                       # English: Control data is added
+                                       prcp_amt_fit[["fitted_station"]] <- station
+                                       prcp_amt_fit[["dates_used_fitting"]] <- station_climate[gamma_indexes, ] %>%
+                                           dplyr::filter(as.logical(prcp_occ) & month == m) %>%
+                                           dplyr::pull(date)
+                                       prcp_amt_fit[["execution_time"]]     <- tiempo.prcp_amt_fit
+                                       # End of prcp_amt fit
 
-        # Español: Si es necesario, agregar covariables a la formula
-        # English: If necesary, add covariates to the formula
-        if (!is.null(seasonal_covariates)) {
-            tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
-            tmin_cov <- models_data %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
-            tmax_cov_fm_str <- paste("s(", tmax_cov, ", ", tmin_cov, ",",
-                                     "k = 20)", collapse = " + ")
-            tmax_cov_fm     <- stats::as.formula(paste('~ . +', tmax_cov_fm_str))
-            tmax_fm         <- stats::update( tmax_fm, tmax_cov_fm )
-        }
+                                       return (prcp_amt_fit)
+                                   }
 
-        # Español: Ajustar el GAM
-        # English: Fit the GAM
-        t <- proc.time()
-        tmax_fit <- mgcv::bam(formula = tmax_fm,
-                              data = station_climate[tmax_indexes,],
-                              method = 'fREML',
-                              cluster = if(clusterized_gam) cluster else NULL,
-                              control = list(nthreads = control$avbl_cores))
-        tiempo.tmax_fit <- proc.time() - t
-
-        # Español: Se agregan las residuos para poder ajustar la componente meterológica
-        # English: Residues are added to fit the meteorological component
-        station_climate$tmax_residuals <- NA
-        station_climate$tmax_residuals[tmax_indexes] <- residuals(tmax_fit, type = 'response')
-
-        # Español: Se agregan datos de control
-        # English: Control data is added
-        tmax_fit[["fitted_station"]] <- station
-        tmax_fit[["dates_used_fitting"]] <- station_climate[tmax_indexes, ] %>%
-            dplyr::pull(date)
-        tmax_fit[["residuals_tibble"]]   <- station_climate[tmax_indexes, ] %>%
-            dplyr::select(date, residual = tmax_residuals)
-        tmax_fit[["execution_time"]]     <- tiempo.tmax_fit
-        # End of tx fit
-
-        ## Fit model for max temperature.
-        ################################
+                                   ## Fit model for precipitation amounts.
+                                   #######################################
 
 
-        ################################################
-        # Progress Bar (for non parallel execution) ----
-        if(nworkers == 1)
-            pb$tick(20, tokens = list(c = which(unique_stations == station), what = "tmax", stn = station))
+                                   ################################################
+                                   # Progress Bar (for non parallel execution) ----
+                                   if(nworkers == 1)
+                                       pb$tick(20, tokens = list(c = which(unique_stations == station), what = "prcp_amt", stn = station))
 
-        ################################################
-        # Progress Bar (for non parallel execution) ----
-        if(nworkers == 1)
-            pb$tick(0, tokens = list(c = which(unique_stations == station), what = "tmin", stn = station))
+                                   ################################################
+                                   # Progress Bar (for non parallel execution) ----
+                                   if(nworkers == 1)
+                                       pb$tick(0, tokens = list(c = which(unique_stations == station), what = "tmax", stn = station))
 
 
-        #################################
-        ## Español: Ajustar el modelo de temperatura mínima.
-        ## English: Fit model for min temperature.
+                                   ################################
+                                   ## Español: Ajustar el modelo de temperatura máxima
+                                   ## English: Fit model for maximum temperature.
 
-        # Español: Remove NAs
-        # English: Remove NAs
-        tmin_fit_noNA_cols <- c('tmin', 'tmax_prev', 'tmin_prev', 'prcp_occ', 'prcp_occ_prev', 'row_num')
-        if (!is.null(seasonal_covariates))
-            tmin_fit_noNA_cols <- append(tmin_fit_noNA_cols, c('seasonal_tmax', 'seasonal_tmin'))
-        tmin_indexes <- station_climate %>%
-            tidyr::drop_na(tidyselect::all_of(tmin_fit_noNA_cols)) %>%
-            dplyr::pull(row_num)
+                                   # Español: Remove NAs
+                                   # English: Remove NAs
+                                   tmax_fit_noNA_cols <- c('tmax', 'tmax_prev', 'tmin_prev', 'prcp_occ', 'prcp_occ_prev', 'row_num')
+                                   if (!is.null(seasonal_covariates))
+                                       tmax_fit_noNA_cols <- append(tmax_fit_noNA_cols, c('seasonal_tmax', 'seasonal_tmin'))
+                                   tmax_indexes <- station_climate %>%
+                                       tidyr::drop_na(tidyselect::all_of(tmax_fit_noNA_cols)) %>%
+                                       dplyr::pull(row_num)
+                                   # Fit model for max temperature.
 
-        # Español: Crear formula
-        # English: Create formula
-        tmin_fm <- tmin ~ s(tmax_prev, tmin_prev, k = 50) +
-            s(prcp_occ, bs = "re") +
-            s(prcp_occ_prev, bs = "re") +
-            #s(time, bs = 'gp', k = 100) +
-            s(doy, bs = "cc", k = 30)
+                                   # Español: Crear formula
+                                   # English: Create formula
+                                   tmax_fm <- tmax ~ s(tmax_prev, tmin_prev, k = 50) +
+                                       s(prcp_occ, bs = "re") +
+                                       s(prcp_occ_prev, bs = "re") +
+                                       #s(time, bs = 'gp', k = 100) +
+                                       s(doy, bs = "cc", k = 30)
 
-        # Español: Si es necesario, agregar covariables a la formula
-        # English: If necesary, add covariates to the formula
-        if (!is.null(seasonal_covariates)) {
-            tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
-            tmin_cov <- models_data %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
-            tmin_cov_fm_str <- paste("s(", tmax_cov, ", ", tmin_cov, ",",
-                                     "k = 20)", collapse = " + ")
-            tmin_cov_fm     <- stats::as.formula(paste('~ . +', tmin_cov_fm_str))
-            tmin_fm         <- stats::update( tmin_fm, tmin_cov_fm )
-        }
+                                   # Español: Si es necesario, agregar covariables a la formula
+                                   # English: If necesary, add covariates to the formula
+                                   if (!is.null(seasonal_covariates)) {
+                                       tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
+                                       tmin_cov <- models_data %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
+                                       tmax_cov_fm_str <- paste("s(", tmax_cov, ", ", tmin_cov, ",",
+                                                                "k = 20)", collapse = " + ")
+                                       tmax_cov_fm     <- stats::as.formula(paste('~ . +', tmax_cov_fm_str))
+                                       tmax_fm         <- stats::update( tmax_fm, tmax_cov_fm )
+                                   }
 
-        # Español: Ajustar el GAM
-        # English: Fit the GAM
-        t <- proc.time()
-        tmin_fit <- mgcv::bam(formula = tmin_fm,
-                              data = station_climate[tmin_indexes,],
-                              method = 'fREML',
-                              cluster = if(clusterized_gam) cluster else NULL,
-                              control = list(nthreads = control$avbl_cores))
-        tiempo.tmin_fit <- proc.time() - t
+                                   # Español: Ajustar el GAM
+                                   # English: Fit the GAM
+                                   t <- proc.time()
+                                   tmax_fit <- mgcv::bam(formula = tmax_fm,
+                                                         data = station_climate[tmax_indexes,],
+                                                         method = 'fREML',
+                                                         cluster = if(clusterized_gam) cluster else NULL,
+                                                         control = list(nthreads = control$avbl_cores))
+                                   tiempo.tmax_fit <- proc.time() - t
 
-        # Español: Se agregan las residuos para poder ajustar la componente meterológica
-        # English: Residues are added to fit the meteorological component
-        station_climate$tmin_residuals <- NA
-        station_climate$tmin_residuals[tmin_indexes] <- residuals(tmin_fit, type = 'response')
+                                   # Español: Se agregan las residuos para poder ajustar la componente meterológica
+                                   # English: Residues are added to fit the meteorological component
+                                   station_climate$tmax_residuals <- NA
+                                   station_climate$tmax_residuals[tmax_indexes] <- residuals(tmax_fit, type = 'response')
 
-        # Español: Se agregan datos de control
-        # English: Control data is added
-        tmin_fit[["fitted_station"]] <- station
-        tmin_fit[["dates_used_fitting"]] <- station_climate[tmin_indexes, ] %>%
-            dplyr::pull(date)
-        tmin_fit[["residuals_tibble"]]   <- station_climate[tmin_indexes, ] %>%
-            dplyr::select(date, residual = tmin_residuals)
-        tmin_fit[["execution_time"]]     <- tiempo.tmin_fit
-        # End of tn fit
+                                   # Español: Se agregan datos de control
+                                   # English: Control data is added
+                                   tmax_fit[["fitted_station"]] <- station
+                                   tmax_fit[["dates_used_fitting"]] <- station_climate[tmax_indexes, ] %>%
+                                       dplyr::pull(date)
+                                   tmax_fit[["residuals_tibble"]]   <- station_climate[tmax_indexes, ] %>%
+                                       dplyr::select(date, residual = tmax_residuals)
+                                   tmax_fit[["execution_time"]]     <- tiempo.tmax_fit
+                                   # End of tx fit
 
-        ################################################
-        # Progress Bar (for non parallel execution) ----
-        if(nworkers == 1)
-            pb$tick(20, tokens = list(c = which(unique_stations == station), what = "tmin", stn = station))
+                                   ## Fit model for max temperature.
+                                   ################################
 
-        # Español: Creación de un data frame con los residuos (componente meterológico)
-        # English: Creation of a data frame with the residuals (meteorological component)
-        residues <- station_climate %>%
-            dplyr::select(station_id, date, dplyr::ends_with("residuals"), type_day)
 
-        # Español: Retornar resultados como lista
-        # English: Return the results as a list
-        return_list <- list(station_id = station,
-                            residuals = residues,
-                            fitted_models  = list(prcp_occ_fit = prcp_occ_fit,
-                                                  prcp_amt_fit = prcp_amt_fit,
-                                                  tmax_fit = tmax_fit,
-                                                  tmin_fit = tmin_fit))
+                                   ################################################
+                                   # Progress Bar (for non parallel execution) ----
+                                   if(nworkers == 1)
+                                       pb$tick(20, tokens = list(c = which(unique_stations == station), what = "tmax", stn = station))
 
-        return(return_list)
+                                   ################################################
+                                   # Progress Bar (for non parallel execution) ----
+                                   if(nworkers == 1)
+                                       pb$tick(0, tokens = list(c = which(unique_stations == station), what = "tmin", stn = station))
 
-    }
+
+                                   #################################
+                                   ## Español: Ajustar el modelo de temperatura mínima.
+                                   ## English: Fit model for min temperature.
+
+                                   # Español: Remove NAs
+                                   # English: Remove NAs
+                                   tmin_fit_noNA_cols <- c('tmin', 'tmax_prev', 'tmin_prev', 'prcp_occ', 'prcp_occ_prev', 'row_num')
+                                   if (!is.null(seasonal_covariates))
+                                       tmin_fit_noNA_cols <- append(tmin_fit_noNA_cols, c('seasonal_tmax', 'seasonal_tmin'))
+                                   tmin_indexes <- station_climate %>%
+                                       tidyr::drop_na(tidyselect::all_of(tmin_fit_noNA_cols)) %>%
+                                       dplyr::pull(row_num)
+
+                                   # Español: Crear formula
+                                   # English: Create formula
+                                   tmin_fm <- tmin ~ s(tmax_prev, tmin_prev, k = 50) +
+                                       s(prcp_occ, bs = "re") +
+                                       s(prcp_occ_prev, bs = "re") +
+                                       #s(time, bs = 'gp', k = 100) +
+                                       s(doy, bs = "cc", k = 30)
+
+                                   # Español: Si es necesario, agregar covariables a la formula
+                                   # English: If necesary, add covariates to the formula
+                                   if (!is.null(seasonal_covariates)) {
+                                       tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
+                                       tmin_cov <- models_data %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
+                                       tmin_cov_fm_str <- paste("s(", tmax_cov, ", ", tmin_cov, ",",
+                                                                "k = 20)", collapse = " + ")
+                                       tmin_cov_fm     <- stats::as.formula(paste('~ . +', tmin_cov_fm_str))
+                                       tmin_fm         <- stats::update( tmin_fm, tmin_cov_fm )
+                                   }
+
+                                   # Español: Ajustar el GAM
+                                   # English: Fit the GAM
+                                   t <- proc.time()
+                                   tmin_fit <- mgcv::bam(formula = tmin_fm,
+                                                         data = station_climate[tmin_indexes,],
+                                                         method = 'fREML',
+                                                         cluster = if(clusterized_gam) cluster else NULL,
+                                                         control = list(nthreads = control$avbl_cores))
+                                   tiempo.tmin_fit <- proc.time() - t
+
+                                   # Español: Se agregan las residuos para poder ajustar la componente meterológica
+                                   # English: Residues are added to fit the meteorological component
+                                   station_climate$tmin_residuals <- NA
+                                   station_climate$tmin_residuals[tmin_indexes] <- residuals(tmin_fit, type = 'response')
+
+                                   # Español: Se agregan datos de control
+                                   # English: Control data is added
+                                   tmin_fit[["fitted_station"]] <- station
+                                   tmin_fit[["dates_used_fitting"]] <- station_climate[tmin_indexes, ] %>%
+                                       dplyr::pull(date)
+                                   tmin_fit[["residuals_tibble"]]   <- station_climate[tmin_indexes, ] %>%
+                                       dplyr::select(date, residual = tmin_residuals)
+                                   tmin_fit[["execution_time"]]     <- tiempo.tmin_fit
+                                   # End of tn fit
+
+                                   ################################################
+                                   # Progress Bar (for non parallel execution) ----
+                                   if(nworkers == 1)
+                                       pb$tick(20, tokens = list(c = which(unique_stations == station), what = "tmin", stn = station))
+
+                                   # Español: Creación de un data frame con los residuos (componente meterológico)
+                                   # English: Creation of a data frame with the residuals (meteorological component)
+                                   residues <- station_climate %>%
+                                       dplyr::select(station_id, date, dplyr::ends_with("residuals"), type_day)
+
+                                   # Español: Retornar resultados como lista
+                                   # English: Return the results as a list
+                                   return_list <- list(station_id = station,
+                                                       residuals = residues,
+                                                       fitted_models  = list(prcp_occ_fit = prcp_occ_fit,
+                                                                             prcp_amt_fit = prcp_amt_fit,
+                                                                             tmax_fit = tmax_fit,
+                                                                             tmin_fit = tmin_fit))
+
+                                   return(return_list)
+
+                               }
 
 
     ##############
