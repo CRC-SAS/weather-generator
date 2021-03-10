@@ -115,7 +115,8 @@ not_spatially_correlated_random_field_noise_temperature <- function(simulation_p
 
     # Crear objeto sf
     campo <- simulation_points %>%
-        dplyr::left_join(campos_simulados, by = "station_id") %>%
+        sf::st_join(., campos_simulados) %>%
+        #dplyr::left_join(campos_simulados, by = "station_id") %>%
         dplyr::rename(tmax_residuals = tmax_noise, tmin_residuals = tmin_noise) %>%
         dplyr::select(tmax_residuals, tmin_residuals)
 
@@ -134,7 +135,7 @@ not_spatially_correlated_random_field_noise_prcp <- function(simulation_points, 
 
     # Crear objeto sf
     campo <- simulation_points %>%
-        sf::st_join(.) %>%
+        sf::st_join(., campos_simulados) %>%
         #dplyr::left_join(campos_simulados, by = "station_id") %>%
         dplyr::select(prcp_residuals)
 
