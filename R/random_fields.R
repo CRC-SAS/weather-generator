@@ -134,7 +134,8 @@ not_spatially_correlated_random_field_noise_prcp <- function(simulation_points, 
 
     # Crear objeto sf
     campo <- simulation_points %>%
-        dplyr::left_join(campos_simulados, by = "station_id") %>%
+        sf::st_join(.) %>%
+        #dplyr::left_join(campos_simulados, by = "station_id") %>%
         dplyr::select(prcp_residuals)
 
     return (campo)
