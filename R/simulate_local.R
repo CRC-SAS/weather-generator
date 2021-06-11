@@ -105,7 +105,7 @@ local_simulation <- function(model, simulation_locations, start_date, end_date,
     if(sf::st_crs(simulation_locations) != sf::st_crs(model$crs_used_to_fit)) {
         simulation_locations <- simulation_locations %>%
             sf::st_transform(sf::st_crs(model$crs_used_to_fit))
-        warning('The crs used to fit and the crs of simulation_locations are not equals. ',
+        warning('The crs used to fit and the crs of simulation_locations are the same. ',
                 'Se transforma simulation_locations al crs {del ajuste}')
     }
 
