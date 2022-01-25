@@ -53,7 +53,7 @@ rm(input.stations)
 
 input.data <- paste0(config$dir$base, "/input/", config$input.file, ".csv")
 simulated_climate <- read.csv(input.data) %>%
-  dplyr::select (realization, station_id, point_id, date, tmax, tmin, prcp = prcp_amt)
+  dplyr::select (realization, station_id, point_id, date, tmax, tmin, prcp)
 
 #netcdf.file <- paste0(config$dir$base, "/input/", config$input.file, ".nc")
 
@@ -1097,9 +1097,10 @@ stations <- stations %>%
 # son las mismas 
 fit_stations <- stations
 
-
+# Definicion del umbral de lluvia
 umbral.lluvia = config$umbral.precipitacion
 
+# Definir directorio de salida
 output.dir    <-  "./output/"
 realizaciones   <- BuscarRealizaciones(simulated_climate = simulated_climate, stations)
 simulaciones  <- realizaciones$simulaciones

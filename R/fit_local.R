@@ -103,8 +103,15 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
     if (!is.null(seasonal_covariates)) {
         climate_control <- climate %>% dplyr::distinct(station_id, year = as.integer(lubridate::year(date)),
                                                        season = lubridate::quarter(date, fiscal_start = 12))
-        seasnl_cov_ctrl <- seasonal_covariates %>% dplyr::distinct(station_id, year, season)
-        if (!dplyr::all_equal(climate_control, seasnl_cov_ctrl))
+        seasnl_cov_ctrl <- seasonal_covariates %>% dplyr::distinct(station_id, year, season) %>%
+            as.data.frame()  %>%
+            dplyr::mutate(covered = TRUE)
+
+        comparison <- climate_control %>%
+            dplyr::left_join(seasnl_cov_ctrl, by = c('station_id', 'year', 'season')) %>%
+            dplyr::mutate(covered = if_else(is.na(covered), FALSE, TRUE))
+
+        if (!all(comparison$covered))
             stop("Years in climate and years in seasonal_covariates don't match!")
     }
 
@@ -336,16 +343,16 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
 
                                    # Español: Crear formula
                                    # English: Create formula
-                                   prcp_occ_fm <- prcp_occ ~ s(type_day_prev, bs = 're') +
+                                   prcp_occ_fm <- prcp_occ ~ type_day_prev +
                                        #s(time, bs = 'gp', k = 100) +
-                                       s(doy, bs = 'cc', k = 20)
+                                       s(doy, bs = 'cc')
 
                                    # Español: Si es necesario, agregar covariables a la formula
                                    # English: If necesary, add covariates to the formula
                                    if (!is.null(seasonal_covariates)) {
                                        prcp_occ_cov <- models_data %>% dplyr::select(dplyr::matches('ST\\d')) %>% names
                                        prcp_occ_cov_fm_str <- paste("s(", prcp_occ_cov, ",",
-                                                                    "bs = c('tp' ), k = 20)", collapse = " + ")
+                                                                    "bs = c('tp' ))", collapse = " + ")
                                        prcp_occ_cov_fm     <- stats::as.formula(paste('~ . +', prcp_occ_cov_fm_str))
 
                                        prcp_occ_fm     <- stats::update(prcp_occ_fm, prcp_occ_cov_fm )
@@ -408,7 +415,8 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
 
                                    # Español: Crear formula
                                    # English: Create formula
-                                   prcp_amt_fm <- prcp_amt ~ s(prcp_occ_prev, bs = 're')
+                                   #prcp_amt_fm <- prcp_amt ~ s(prcp_occ_prev, bs = 're')
+                                   prcp_amt_fm <- prcp_amt ~ prcp_occ_prev
 
                                    # Español: Si es necesario, agregar covariables a la formula
                                    # English: If necesary, add covariates to the formula
@@ -477,19 +485,18 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
 
                                    # Español: Crear formula
                                    # English: Create formula
-                                   tmax_fm <- tmax ~ s(tmax_prev, tmin_prev, k = 50) +
-                                       s(prcp_occ, bs = "re") +
-                                       s(prcp_occ_prev, bs = "re") +
+                                   tmax_fm <- tmax ~ s(tmax_prev, tmin_prev) +
+                                       prcp_occ +
+                                       prcp_occ_prev +
                                        #s(time, bs = 'gp', k = 100) +
-                                       s(doy, bs = "cc", k = 30)
+                                       s(doy, bs = "cc")
 
                                    # Español: Si es necesario, agregar covariables a la formula
                                    # English: If necesary, add covariates to the formula
                                    if (!is.null(seasonal_covariates)) {
                                        tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
                                        tmin_cov <- models_data %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
-                                       tmax_cov_fm_str <- paste("s(", tmax_cov, ", ", tmin_cov, ",",
-                                                                "k = 20)", collapse = " + ")
+                                       tmax_cov_fm_str <- paste("s(", tmax_cov, ", ", tmin_cov, ")", collapse = " + ")
                                        tmax_cov_fm     <- stats::as.formula(paste('~ . +', tmax_cov_fm_str))
                                        tmax_fm         <- stats::update( tmax_fm, tmax_cov_fm )
                                    }
@@ -549,19 +556,18 @@ local_calibrate <- function(climate, stations, seasonal_covariates = NULL,
 
                                    # Español: Crear formula
                                    # English: Create formula
-                                   tmin_fm <- tmin ~ s(tmax_prev, tmin_prev, k = 50) +
-                                       s(prcp_occ, bs = "re") +
-                                       s(prcp_occ_prev, bs = "re") +
+                                   tmin_fm <- tmin ~ s(tmax_prev, tmin_prev) +
+                                       prcp_occ +
+                                       prcp_occ_prev +
                                        #s(time, bs = 'gp', k = 100) +
-                                       s(doy, bs = "cc", k = 30)
+                                       s(doy, bs = "cc")
 
                                    # Español: Si es necesario, agregar covariables a la formula
                                    # English: If necesary, add covariates to the formula
                                    if (!is.null(seasonal_covariates)) {
                                        tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
                                        tmin_cov <- models_data %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
-                                       tmin_cov_fm_str <- paste("s(", tmax_cov, ", ", tmin_cov, ",",
-                                                                "k = 20)", collapse = " + ")
+                                       tmin_cov_fm_str <- paste("s(", tmax_cov, ", ", tmin_cov, ")", collapse = " + ")
                                        tmin_cov_fm     <- stats::as.formula(paste('~ . +', tmin_cov_fm_str))
                                        tmin_fm         <- stats::update( tmin_fm, tmin_cov_fm )
                                    }
