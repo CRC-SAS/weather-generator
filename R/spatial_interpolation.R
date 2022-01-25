@@ -108,35 +108,31 @@ interpolate_covariates <- function(simulation_points, seasonal_covariates, model
                 sf::as_Spatial()
 
             # Valores interpolados de ocurrencia
-            datos_interpolados_prcp <-
-                automap::autoKrige(seasonal_prcp~longitude+latitude,
-                                   interpolacion.valores.iniciales.sp,
-                                   simulation_points.sp,
-                                   debug.level = 0) %>%
-                sf::st_as_sf(x = .$krige_output, crs = sf::st_crs(simulation_points)) %>%
+            datos_interpolados_prcp <- automap::autoKrige(seasonal_prcp ~
+                                                              longitude + latitude, interpolacion.valores.iniciales.sp,
+                                                          simulation_points.sp, debug.level = 0) %>%
+                tibble::as_tibble(x = .$krige_output) %>%
                 dplyr::mutate(var1.pred = if_else(var1.pred < 0, 0, var1.pred)) %>%
-                dplyr::select(seasonal_prcp = var1.pred)
-
+                dplyr::select(seasonal_prcp = var1.pred,
+                              longitude = coords.x1, latitude = coords.x2)
 
             # Valores interpolados de temperatura máxima
-            datos_interpolados_tmax <-
-                automap::autoKrige(seasonal_tmax~longitude+latitude,
-                                   interpolacion.valores.iniciales.sp,
-                                   simulation_points.sp,
-                                   debug.level = 0) %>%
-                sf::st_as_sf(x = .$krige_output, crs = sf::st_crs(simulation_points)) %>%
-                dplyr::select(seasonal_tmax = var1.pred)
-
+            datos_interpolados_tmax <- automap::autoKrige(seasonal_tmax ~
+                                                              longitude + latitude, interpolacion.valores.iniciales.sp,
+                                                          simulation_points.sp, debug.level = 0)  %>%
+                tibble::as_tibble(x = .$krige_output) %>%
+                dplyr::mutate(var1.pred = if_else(var1.pred < 0, 0, var1.pred)) %>%
+                dplyr::select(seasonal_tmax = var1.pred,
+                              longitude = coords.x1, latitude = coords.x2)
 
             # Valores interpolados de temperatura mínima
-            datos_interpolados_tmin <-
-                automap::autoKrige(seasonal_tmin~longitude+latitude,
-                                   interpolacion.valores.iniciales.sp,
-                                   simulation_points.sp,
-                                   debug.level = 0) %>%
-                sf::st_as_sf(x = .$krige_output, crs = sf::st_crs(simulation_points)) %>%
-                dplyr::select(seasonal_tmin = var1.pred)
-
+            datos_interpolados_tmin <- automap::autoKrige(seasonal_tmin ~
+                                                              longitude + latitude, interpolacion.valores.iniciales.sp,
+                                                          simulation_points.sp, debug.level = 0)  %>%
+                tibble::as_tibble(x = .$krige_output) %>%
+                dplyr::mutate(var1.pred = if_else(var1.pred < 0, 0, var1.pred)) %>%
+                dplyr::select(seasonal_tmin = var1.pred,
+                              longitude = coords.x1, latitude = coords.x2)
 
             # Crear data frame con los valores interpolados
             # Este df hay que unirlo a la grilla de simulación para cada día de la simulacion
