@@ -100,14 +100,16 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
     # English: It is verified that the covariates are enough to cover
     # all dates in the climate data frame
     if (!is.null(seasonal_covariates)) {
-        climate_control <- climate %>% dplyr::distinct(station_id,
-                                                       year = as.integer(lubridate::year(date)), season = lubridate::quarter(date,
-                                                                                                                             fiscal_start = 12))
-        seasnl_cov_ctrl <- seasonal_covariates %>% dplyr::distinct(station_id,
-                                                                   year, season) %>% as.data.frame() %>% dplyr::mutate(covered = TRUE)
-        comparison <- climate_control %>% dplyr::left_join(seasnl_cov_ctrl,
-                                                           by = c("station_id", "year", "season")) %>% dplyr::mutate(covered = if_else(is.na(covered),
-                                                                                                                                       FALSE, TRUE))
+        climate_control <- climate %>% dplyr::distinct(station_id, year = as.integer(lubridate::year(date)),
+                                                       season = lubridate::quarter(date, fiscal_start = 12))
+        seasnl_cov_ctrl <- seasonal_covariates %>% dplyr::distinct(station_id, year, season) %>%
+            as.data.frame()  %>%
+            dplyr::mutate(covered = TRUE)
+
+        comparison <- climate_control %>%
+            dplyr::left_join(seasnl_cov_ctrl, by = c('station_id', 'year', 'season')) %>%
+            dplyr::mutate(covered = if_else(is.na(covered), FALSE, TRUE))
+
         if (!all(comparison$covered))
             stop("Years in climate and years in seasonal_covariates don't match!")
     }
