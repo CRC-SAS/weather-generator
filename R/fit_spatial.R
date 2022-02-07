@@ -224,22 +224,22 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
         models_data <- models_data %>%
         # Español: Agregar covariables estacionales a station_climate
         # English: Add seasonal climate to station_climate
-            dplyr::left_join(seasonal_covariates,
-                             by = c("station_id", "year", "season")) %>%
+        dplyr::left_join(seasonal_covariates,
+                         by = c("station_id", "year", "season")) %>%
         # Español: Crear covariables estacionales en el formato necesario
         # English: Create seasonal covariates in the needed format
-            dplyr::mutate(ST1 = if_else(season == 1, seasonal_prcp, 0),
-                          ST2 = if_else(season == 2, seasonal_prcp, 0),
-                          ST3 = if_else(season == 3, seasonal_prcp, 0),
-                          ST4 = if_else(season == 4, seasonal_prcp, 0),
-                          SN1 = if_else(season == 1, seasonal_tmin, 0),
-                          SN2 = if_else(season == 2, seasonal_tmin, 0),
-                          SN3 = if_else(season == 3, seasonal_tmin, 0),
-                          SN4 = if_else(season == 4, seasonal_tmin, 0),
-                          SX1 = if_else(season == 1, seasonal_tmax, 0),
-                          SX2 = if_else(season == 2, seasonal_tmax, 0),
-                          SX3 = if_else(season == 3, seasonal_tmax, 0),
-                          SX4 = if_else(season == 4, seasonal_tmax, 0))
+        dplyr::mutate(ST1 = if_else(season == 1, seasonal_prcp, 0),
+                      ST2 = if_else(season == 2, seasonal_prcp, 0),
+                      ST3 = if_else(season == 3, seasonal_prcp, 0),
+                      ST4 = if_else(season == 4, seasonal_prcp, 0),
+                      SN1 = if_else(season == 1, seasonal_tmin, 0),
+                      SN2 = if_else(season == 2, seasonal_tmin, 0),
+                      SN3 = if_else(season == 3, seasonal_tmin, 0),
+                      SN4 = if_else(season == 4, seasonal_tmin, 0),
+                      SX1 = if_else(season == 1, seasonal_tmax, 0),
+                      SX2 = if_else(season == 2, seasonal_tmax, 0),
+                      SX3 = if_else(season == 3, seasonal_tmax, 0),
+                      SX4 = if_else(season == 4, seasonal_tmax, 0))
     # Español: Calcular el tiempo total para agregar las covariables
     # English: Compute total time to add covariables
     tiempo.add_covariates <- proc.time() - t
@@ -305,15 +305,15 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
 
     # Español: Crear formula
     # English: Create formula
-    prcp_occ_fm <- prcp_occ ~ te(type_day_prev, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations)) +
-        te(longitude, latitude, doy, d = c(2, 1), bs = c("tp", "cc"), k = length(unique_stations))
+    prcp_occ_fm <- prcp_occ ~ te(type_day_prev, longitude, latitude, d = c(1, 2), bs = c('re', 'tp')) +
+        te(longitude, latitude, doy, d = c(2, 1), bs = c("tp", "cc"))
 
     # Español: Si es necesario, agregar covariables a la formula
     # English: If necesary, add covariates to the formula
     if (!is.null(seasonal_covariates)) {
         prcp_occ_cov <- models_data %>% dplyr::select(dplyr::matches('ST\\d')) %>% names
         prcp_occ_cov_fm_str <- paste("te(", prcp_occ_cov, ", longitude, latitude, d = c(1, 2), ",
-                                     "bs = c('tp' , 'tp'), k = length(unique_stations))", collapse = " + ")
+                                     "bs = c('tp' , 'tp'))", collapse = " + ")
         prcp_occ_cov_fm     <- stats::as.formula(paste('~ . +', prcp_occ_cov_fm_str))
         # prcp_occ_cov_fm <- ~ . +
         #     te(ST1, longitude, latitude, d =c(1, 2), bs = c(“tp” , “tp”), k = length(unique_stations))
@@ -332,8 +332,12 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
                               family = stats::binomial(probit),
                               method = "fREML",
                               cluster = cluster,
-                              control = list(nthreads = control$avbl_cores))
+                              control = list(nthreads = control$avbl_cores),
+                              gc.level = 2)
     tiempo.prcp_occ_fit <- proc.time() - t
+
+    # Limpiar memoria
+    gc()
 
     # Español: Se agregan las residuos para poder ajustar la componente meterológica
     # English: Residues are added to fit the meteorological component
@@ -376,12 +380,12 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
 
     # Español: Crear formula
     # English: Create formula
-    prcp_amt_fm <- prcp_amt ~ te(type_day_prev, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations))
+    prcp_amt_fm <- prcp_amt ~ te(type_day_prev, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'))
 
     # Español: Si es necesario, agregar covariables a la formula
     # English: If necesary, add covariates to the formula
     if (!is.null(seasonal_covariates)) {
-        prcp_amt_cov_fm     <- ~ . + te(seasonal_prcp, longitude, latitude, d = c(1, 2), bs = c('tp', 'tp'), k = length(unique_stations))
+        prcp_amt_cov_fm     <- ~ . + te(seasonal_prcp, longitude, latitude, d = c(1, 2), bs = c('tp', 'tp'))
         prcp_amt_fm         <- stats::update( prcp_amt_fm, prcp_amt_cov_fm )
     }
 
@@ -392,13 +396,14 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
         .x = 1:12,
         .f = function(m) {
             t <- proc.time()
-            prcp_amt_fit_partial <- mgcv::gam(formula = prcp_amt_fm,
+            prcp_amt_fit_partial <- mgcv::bam(formula = prcp_amt_fm,
                                               data = models_data[gamma_indexes,] %>%
                                                   dplyr::filter(as.logical(prcp_occ) & month == m),
                                               family = stats::Gamma(link = log),
                                               method = 'REML',
                                               cluster = cluster,
-                                              control = list(nthreads = control$avbl_cores))
+                                              control = list(nthreads = control$avbl_cores),
+                                              gc.level = 2)
             tiempo.prcp_amt_fit_partial <- proc.time() - t
 
             # Español: Se agregan datos de control
@@ -442,18 +447,18 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
 
     # Español: Crear formula
     # English: Create formula
-    tmax_fm <- tmax ~ te(tmax_prev, tmin_prev, longitude, latitude, d = c(2, 2), k = length(unique_stations)) +
-        te(type_day, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations)) +
-        te(type_day_prev, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations)) +
-        te(doy, longitude, latitude, d = c(1, 2), bs = c('cc', 'tp'), k = length(unique_stations))
+    tmax_fm <- tmax ~ te(tmax_prev, tmin_prev, longitude, latitude, d = c(2, 2)) +
+        te(type_day, longitude, latitude, d = c(1, 2), bs = c('re', 'tp')) +
+        te(type_day_prev, longitude, latitude, d = c(1, 2), bs = c('re', 'tp')) +
+        te(doy, longitude, latitude, d = c(1, 2), bs = c('cc', 'tp'))
 
     # Español: Si es necesario, agregar covariables a la formula
     # English: If necesary, add covariates to the formula
     if (!is.null(seasonal_covariates)) {
         tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
         tmin_cov <- models_data %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
-        tmax_cov_fm_str <- paste("te(", tmax_cov, ", ", tmin_cov, ", longitude, latitude, d = c(2, 2), ",
-                                 "k = length(unique_stations))", collapse = " + ")
+        tmax_cov_fm_str <- paste("te(", tmax_cov, ", ", tmin_cov, ", longitude, latitude, d = c(2, 2))",
+                                 collapse = " + ")
         tmax_cov_fm     <- stats::as.formula(paste('~ . +', tmax_cov_fm_str))
         # tmax_cov_fm <- ~ . +
         #     te(SX1, SN1, longitude, latitude, d = c(2, 2), k = length(unique_stations)) +
@@ -470,8 +475,12 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
                           data = models_data[tmax_indexes,],
                           method = "fREML",
                           cluster = cluster,
-                          control = list(nthreads = control$avbl_cores))
+                          control = list(nthreads = control$avbl_cores),
+                          gc.level = 2)
     tiempo.tmax_fit <- proc.time() - t
+
+    # Limpiar memoria
+    gc()
 
     # Español: Se agregan las residuos para poder ajustar la componente meterológica
     # English: Residues are added to fit the meteorological component
@@ -514,18 +523,18 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
 
     # Español: Crear formula
     # English: Create formula
-    tmin_fm <- tmin ~ te(tmax_prev, tmin_prev, longitude, latitude, d = c(2, 2), k = length(unique_stations)) +
-        te(type_day, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations)) +
-        te(type_day_prev, longitude, latitude, d = c(1, 2), bs = c('re', 'tp'), k = length(unique_stations)) +
-        te(doy, longitude, latitude, d = c(1, 2), bs = c('cc', 'tp'), k = length(unique_stations))
+    tmin_fm <- tmin ~ te(tmin_prev, tmax_prev, longitude, latitude, d = c(2, 2)) +
+        te(type_day, longitude, latitude, d = c(1, 2), bs = c('re', 'tp')) +
+        te(type_day_prev, longitude, latitude, d = c(1, 2), bs = c('re', 'tp')) +
+        te(doy, longitude, latitude, d = c(1, 2), bs = c('cc', 'tp'))
 
     # Español: Si es necesario, agregar covariables a la formula
     # English: If necesary, add covariates to the formula
     if (!is.null(seasonal_covariates)) {
         tmax_cov <- models_data %>% dplyr::select(dplyr::matches('SX\\d')) %>% names
         tmin_cov <- models_data %>% dplyr::select(dplyr::matches('SN\\d')) %>% names
-        tmin_cov_fm_str <- paste("te(", tmax_cov, ", ", tmin_cov, ", longitude, latitude, d = c(2, 2), ",
-                                 "k = length(unique_stations))", collapse = " + ")
+        tmin_cov_fm_str <- paste("te(", tmin_cov, ", ", tmax_cov, ", longitude, latitude, d = c(2, 2)) ",
+                                 collapse = " + ")
         tmin_cov_fm     <- stats::as.formula(paste('~ . +', tmin_cov_fm_str))
         # tmin_cov_fm <- ~ . +
         #     te(SX1, SN1, longitude, latitude, d = c(2, 2), k = length(unique_stations)) +
@@ -542,8 +551,12 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
                           data = models_data[tmin_indexes,],
                           method = "fREML",
                           cluster = cluster,
-                          control = list(nthreads = control$avbl_cores))
+                          control = list(nthreads = control$avbl_cores),
+                          gc.level = 2)
     tiempo.tmin_fit <- proc.time() - t
+
+    # Limpiar memoria
+    gc()
 
     # Español: Se agregan las residuos para poder ajustar la componente meterológica
     # English: Residues are added to fit the meteorological component
@@ -677,7 +690,7 @@ spatial_calibrate <- function(climate, stations, seasonal_covariates = NULL,
     pb$terminate()
 
 
-     ## Remive luster for mgcv
+    ## Remive luster for mgcv
     if (!is.null(cluster))
         parallel::stopCluster(cluster)
 
