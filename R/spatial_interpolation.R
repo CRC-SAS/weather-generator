@@ -138,13 +138,14 @@ interpolate_covariates <- function(simulation_points, seasonal_covariates, model
             # Este df hay que unirlo a la grilla de simulación para cada día de la simulacion
             # para la union tenemos las coordenadas, anos y estaciones.
             datos_interpolados_prcp_tmax_tmin <- simulation_points %>%
+                sf::st_set_geometry(NULL) %>%
                 dplyr::select(longitude, latitude) %>%
-                sf::st_join(datos_interpolados_prcp, by = c("longitude", "latitude")) %>%
-                sf::st_join(datos_interpolados_tmax, by = c("longitude", "latitude")) %>%
-                sf::st_join(datos_interpolados_tmin, by = c("longitude", "latitude")) %>%
+                dplyr::left_join(datos_interpolados_prcp, by = c("longitude", "latitude")) %>%
+                dplyr::left_join(datos_interpolados_tmax, by = c("longitude", "latitude")) %>%
+                dplyr::left_join(datos_interpolados_tmin, by = c("longitude", "latitude")) %>%
                 dplyr::mutate(year = !!year, season = !!season) %>%
-                dplyr::select(year, season, seasonal_prcp, seasonal_tmax, seasonal_tmin, longitude, latitude) %>%
-                sf::st_drop_geometry() %>% tibble::as_tibble()
+                dplyr::select(year, season, seasonal_prcp, seasonal_tmax, seasonal_tmin, longitude, latitude)  %>%
+                tibble::as_tibble()
 
             return(datos_interpolados_prcp_tmax_tmin)
         }
