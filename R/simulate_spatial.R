@@ -378,7 +378,8 @@ spatial_simulation <- function(model, simulation_locations, start_date, end_date
     ## Español: Se obtiene los valores al día previo del comienzo de la simulación
     ## English: Obtaining values for the day before the simulation start day
     start_date_prev_day_climatology <-
-        gamwgen:::get_start_climatology(model, simulation_points, start_date, control)
+        gamwgen:::get_start_climatology(model, simulation_points, start_date, control) %>%
+        sf::st_transform(sf::st_crs(simulation_points))
 
 
     ######################################################################################
