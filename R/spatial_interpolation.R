@@ -139,9 +139,9 @@ interpolate_covariates <- function(simulation_points, seasonal_covariates, model
             # para la union tenemos las coordenadas, anos y estaciones.
             datos_interpolados_prcp_tmax_tmin <- simulation_points %>%
                 dplyr::select(longitude, latitude) %>%
-                sf::st_join(datos_interpolados_prcp) %>%
-                sf::st_join(datos_interpolados_tmax) %>%
-                sf::st_join(datos_interpolados_tmin) %>%
+                sf::st_join(datos_interpolados_prcp, by = c("longitude", "latitude")) %>%
+                sf::st_join(datos_interpolados_tmax, by = c("longitude", "latitude")) %>%
+                sf::st_join(datos_interpolados_tmin, by = c("longitude", "latitude")) %>%
                 dplyr::mutate(year = !!year, season = !!season) %>%
                 dplyr::select(year, season, seasonal_prcp, seasonal_tmax, seasonal_tmin, longitude, latitude) %>%
                 sf::st_drop_geometry() %>% tibble::as_tibble()
